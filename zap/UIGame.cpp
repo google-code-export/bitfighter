@@ -1390,6 +1390,22 @@ F32 ConvertCharToFloat(const char * in){
 	if(negative) out = -out;
 	return out;
 }
+S32 ConvertCharToSignedInt(const char * in){
+	S32 out=0;
+	bool negative=false;
+	S32 i=0;
+	char c = in[0];
+	while(c != 0){
+		if(c >= '0' && c <= '9'){
+				out = out * 10 + (c - '0');
+		}else if(c == '-')
+			negative=true;
+		i++;
+		c = in[i];
+	}
+	if(negative) out = -out;
+	return out;
+}
 
 
 // Process a command entered at the chat prompt
@@ -1606,7 +1622,7 @@ bool GameUserInterface::processCommand(Vector<string> &words)
          gc->c2sEngineerDeployObject(EngineeredForceField);
       else
          displayMessage(gCmdChatColor, "!!! Engf only works on levels where Engineer Module is allowed");
-   }
+   } 
    else if(words[0] == "engt")
    {
       GameType *gt = gClientGame->getGameType();
