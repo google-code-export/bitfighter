@@ -114,7 +114,7 @@ void LoadoutHelper::render()
 
    Vector<LoadoutItem> *list = getList(mCurrentIndex);
 
-   for(S32 i = 0; i < list->size(); i++)
+   for(U32 i = 0; i < (U32)list->size(); i++)
    {
       bool selected = false;
 
@@ -133,7 +133,6 @@ void LoadoutHelper::render()
             if(mWeapon[j] == i)
                selected = true;
       }
-
 
       // Draw key controls for selecting loadout items
 
