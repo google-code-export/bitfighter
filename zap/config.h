@@ -160,7 +160,11 @@ struct IniSettings      // With defaults specified
 
    bool enableExperimentalAimMode;  // True if we want to show an aim vector in joystick mode
 
+   bool allowGetMap;                // allow '/GetMap' command
    bool allowDataConnections;       // Specify whether data connections are allowed on this computer
+
+   U32 minSleepTimeDedicatedServer;
+   U32 minSleepTimeClient;
 
    InputMode inputMode;             // Joystick or Keyboard
    string masterAddress;            // Default address of our master server
@@ -241,6 +245,9 @@ struct IniSettings      // With defaults specified
       verboseHelpMessages = true;        // If true, we'll show more handholding messages
       showKeyboardKeys = true;           // True if we show the keyboard shortcuts in joystick mode
       allowDataConnections = false;      // Disabled unless explicitly enabled for security reasons -- most users won't need this
+
+      minSleepTimeDedicatedServer = 10;
+      minSleepTimeClient = 10;
 
       inputMode = Keyboard;              // Joystick or Keyboard
       masterAddress = "IP:67.18.11.66:25955";   // Default address of our master server
