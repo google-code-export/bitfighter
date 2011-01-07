@@ -85,6 +85,7 @@ void GameConnection::initialize()
    mNext = mPrev = this;
    setTranslatesStrings();
    mInCommanderMap = false;
+	mIsRobot = false;
    mIsAdmin = false;
    mIsLevelChanger = false;
    mIsBusy = false;
@@ -189,6 +190,18 @@ bool GameConnection::onlyClientIs(GameConnection *client)
 }
 
 
+// Loop through the client list, return first (and hopefully only!) match
+// runs on server
+//GameConnection *GameConnection::findClient(const Nonce &clientId)
+//{
+//   for(GameConnection *walk = GameConnection::getClientList(); walk; walk = walk->getNextClient())
+//      if(*walk->getClientId() == clientId)
+//         return walk;
+//
+//   return NULL;
+//}
+
+
 GameConnection *GameConnection::getNextClient()
 {
    if(mNext == &gClientList)
@@ -209,6 +222,52 @@ void GameConnection::setClientRef(ClientRef *theRef)
 ClientRef *GameConnection::getClientRef()
 {
    return mClientRef;
+}
+
+
+TNL_IMPLEMENT_RPC(GameConnection, c2sRequestCurrentLevel, (), (), NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirClientToServer, 1)
+{
+   if(!isAdmin())  // Should have been checked on client; should never get here
+   {
+      return;
+   }
+
+   const char *filename = gServerGame->getCurrentLevelFileName().getString();
+   
+   // Initialize on the server to start sending requested file -- will return OK if everything is set up right
+   DataSender::SenderStatus stat = gServerGame->dataSender.initialize(this, filename, LEVEL_TYPE);
+
+   if(stat != DataSender::OK)
+   {
+      const char *msg = DataConnection::getErrorMessage(stat, filename).c_str();
+
+      logprintf(LogConsumer::LogError, "%s", msg);
+      s2rCommandComplete();
+      return;
+   }
+}
+
+// << DataSendable >>
+// Send a chunk of the file -- this gets run on the receiving end       
+TNL_IMPLEMENT_RPC(GameConnection, s2rSendLine, (StringPtr line), (line), 
+                  NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirAny, 1)
+{
+   if(gGameUserInterface.mOutputFile.is_open())
+      gGameUserInterface.mOutputFile.write(line.getString(), strlen(line.getString()));
+   // else... what?
+}
+
+
+// << DataSendable >>
+// When sender is finished, it sends a commandComplete message
+TNL_IMPLEMENT_RPC(GameConnection, s2rCommandComplete, (), (), 
+                  NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirAny, 1)
+{
+   if(gGameUserInterface.mOutputFile.is_open())
+   {
+      gGameUserInterface.mOutputFile.close();
+      gGameUserInterface.displayMessage(ColorNuclearGreen, "Level download complete.");
+   }
 }
 
 
@@ -380,7 +439,6 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, (StringPtr param, RangedU32<0, Ga
                                                 strcmp(param.getString(), "") ? "set" : "cleared", types[type]);
    }
 
-
    // Update our in-memory copies of the param
    if(type == (U32)LevelChangePassword)
       gLevelChangePassword = param.getString();
@@ -527,12 +585,20 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sAdminPlayerAction,
             s2cDisplayMessage(ColorAqua, SFXNone, nokick);
             return;
          }
-         ConnectionParameters &p = theClient->getConnectionParameters();
-         if(p.mIsArranged)
-            gServerGame->getNetInterface()->banHost(p.mPossibleAddresses[0], BanDuration);      // Banned for 30 seconds
-         gServerGame->getNetInterface()->banHost(theClient->getNetAddress(), BanDuration);      // Banned for 30 seconds
+			if(theClient->isEstablished())     //Robot don't have established connections.
+			{
+            ConnectionParameters &p = theClient->getConnectionParameters();
+            if(p.mIsArranged)
+               gServerGame->getNetInterface()->banHost(p.mPossibleAddresses[0], BanDuration);      // Banned for 30 seconds
+            gServerGame->getNetInterface()->banHost(theClient->getNetAddress(), BanDuration);      // Banned for 30 seconds
+            theClient->disconnect(ReasonKickedByAdmin, "");
+			}
 
-         theClient->disconnect(ReasonKickedByAdmin, "");
+			for(S32 i = 0; i < Robot::robots.size(); i++)
+			{
+				if(Robot::robots[i]->getName() == theClient->getClientName())
+					delete Robot::robots[i];
+			}	
          break;
       }
    default:
@@ -970,6 +1036,29 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSetServerAlertVolume, (S8 vol), (vol), NetC
 }
 
 
+extern void updateClientChangedName(GameConnection *,StringTableEntry);  //in masterConnection.cpp
+
+// Client connect to master after joining game server, get authentication fail,
+// then client have changed name to non-reserved, or entered password.
+TNL_IMPLEMENT_RPC(GameConnection, c2sRenameClient, (StringTableEntry newName), (newName), NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirClientToServer, 2)
+{
+	StringTableEntry oldName = getClientName();
+	setClientName(StringTableEntry(""));       //avoid unique self
+	StringTableEntry uniqueName = GameConnection::makeUnique(newName.getString()).c_str();  //new name
+	setClientName(oldName);                   //restore name to properly get it updated to clients.
+	setClientNameNonUnique(newName);          //for correct authentication
+	setAuthenticated(false);         //don't underline anymore because of rename
+   mIsVerified = false;             //Reset all verified to false.
+   mClientNeedsToBeVerified = false;
+   mClientClaimsToBeVerified = false;
+
+	if(oldName != uniqueName)  //different?
+	{
+		updateClientChangedName(this,uniqueName);
+	}
+}
+
+
 extern void GetMapData(S32 FileSize, S32 Position, const char * Data);  //in gametype.cpp
 
 TNL_IMPLEMENT_RPC(GameConnection, s2cGetMapData,
@@ -1066,7 +1155,8 @@ bool GameConnection::readConnectRequest(BitStream *stream, NetConnection::Termin
 
    name[len] = 0;    // Terminate string properly
 
-   mClientName = name;
+   mClientName = makeUnique(name).c_str();  // Unique name
+	mClientNameNonUnique = name;             // For authentication non-unique name
 
    mClientId.read(stream);
    mIsVerified = false;
@@ -1074,10 +1164,6 @@ bool GameConnection::readConnectRequest(BitStream *stream, NetConnection::Termin
 
    requestAuthenticationVerificationFromMaster();
 
-   // Not sure, but I think uniquing should happen after verification; if player connects twice, we want
-   // to ensure their name is legit both times, but want to show the altered name so as to distinguish the two.
-   // Probably need to test this scenario to make sure it works as it should.
-   mClientName = makeUnique(mClientName.getString()).c_str();
    return true;
 }
 
@@ -1094,7 +1180,7 @@ void GameConnection::requestAuthenticationVerificationFromMaster()
    MasterServerConnection *masterConn = gServerGame->getConnectionToMaster();
 
    if(masterConn && masterConn->isEstablished() && mClientClaimsToBeVerified)
-      masterConn->requestAuthentication(mClientName, mClientId);              // Ask master if client name/id match and are authenticated
+      masterConn->requestAuthentication(mClientNameNonUnique, mClientId);              // Ask master if client name/id match and are authenticated
 }
 
 
