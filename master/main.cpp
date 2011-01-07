@@ -507,6 +507,19 @@ public:
    }
 
 
+   MasterServerConnection *findClient(Nonce &clientId)   // Should be const, but that won't compile for reasons not yet determined!!
+   {
+      if(!clientId.isValid())
+         return NULL;
+
+      for(MasterServerConnection *walk = gClientList.mNext; walk != &gClientList; walk = walk->mNext)
+         if(walk->mPlayerId == clientId)
+            return walk;
+
+      return NULL;
+   }
+
+
    // Write a current count of clients/servers for display on a website, using JSON format
    // This gets updated whenver we gain or lose a server, at most every REWRITE_TIME ms
    static void writeClientServerList_JSON()
@@ -587,6 +600,7 @@ public:
    }
    */
 
+   bool isAuthenticated() { return mAuthenticated; }
 
    // This is called when a client wishes to arrange a connection with a server
    TNL_DECLARE_RPC_OVERRIDE(c2mRequestArrangedConnection, (U32 requestId, IPAddress remoteAddress, IPAddress internalAddress,
@@ -812,7 +826,7 @@ public:
    }
 
 
-   // Send player statistics to the master server
+   // Send player statistics to the master server     ==> deprecated
    TNL_DECLARE_RPC_OVERRIDE(s2mSendPlayerStatistics, (StringTableEntry playerName, 
                                                       U16 kills, U16 deaths, U16 suicides, Vector<U16> shots, Vector<U16> hits))
    {
@@ -828,7 +842,7 @@ public:
       logprintf(LogConsumer::StatisticsFilter, "PLAYER\t%s\t%d\t%d\t%d\t%d\t%d", playerName.getString(), kills, deaths, suicides, totalShots, totalHits);
    }
 
-      // Send player statistics to the master server
+   // Send player statistics to the master server     ==> deprecated as of 015
    TNL_DECLARE_RPC_OVERRIDE(s2mSendPlayerStatistics_2, (StringTableEntry playerName, StringTableEntry teamName, 
                                                         U16 kills, U16 deaths, U16 suicides, Vector<U16> shots, Vector<U16> hits))
    {
@@ -840,11 +854,40 @@ public:
          totalHits += hits[i];
       }
 
-      // PLAYER | stats version | name | team | kills | deaths | suicides | shots | hits 
+      // PLAYER | stats version (2) | name | team | kills | deaths | suicides | shots | hits 
       logprintf(LogConsumer::StatisticsFilter, "PLAYER\t2\t%s\t%s\t%d\t%d\t%d\t%d\t%d", playerName.getString(), teamName.getString(), kills, deaths, suicides, totalShots, totalHits);
    }
 
-   // Send game statistics to the master server
+
+   // Send player statistics to the master server
+   TNL_DECLARE_RPC_OVERRIDE(s2mSendPlayerStatistics_3, (StringTableEntry playerName, Vector<U8> id, bool isBot, 
+                                                        StringTableEntry teamName, S32 score,
+                                                        U16 kills, U16 deaths, U16 suicides, Vector<U16> shots, Vector<U16> hits))
+   {
+      Nonce clientId(id);
+
+      MasterServerConnection *client = findClient(clientId);
+
+      bool authenticated = (client && client->isAuthenticated());
+
+      S32 totalShots = 0;
+      S32 totalHits = 0;
+
+      for(S32 i = 0; i < shots.size(); i++)
+      {
+         totalShots += shots[i];
+         totalHits += hits[i];
+      }
+
+      // PLAYER | stats version (3) | name | authenticated | isBot | team | score | kills | deaths | suicides | shots | hits 
+      logprintf(LogConsumer::StatisticsFilter, "PLAYER\t3\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d", 
+               playerName.getString(), authenticated ? "true" : "false", isBot ? "true" : "false", 
+               teamName.getString(), score, kills, deaths, suicides, 
+               totalShots, totalHits);
+   }
+
+
+   // Send game statistics to the master server  ==> Deprecated
    TNL_DECLARE_RPC_OVERRIDE(s2mSendGameStatistics, (StringTableEntry gameType, StringTableEntry levelName, 
                                                     RangedU32<0,MAX_PLAYERS> players, S16 timeInSecs))
    {
@@ -857,7 +900,7 @@ public:
    }
 
 
-      // Send game statistics to the master server
+   // Send game statistics to the master server   ==> Deprecated starting in 015
    TNL_DECLARE_RPC_OVERRIDE(s2mSendGameStatistics_2, (StringTableEntry gameType, StringTableEntry levelName, 
                                                       Vector<StringTableEntry> teams, Vector<S32> teamScores,
                                                       Vector<RangedU32<0,256> > colorR, Vector<RangedU32<0,256> > colorG, Vector<RangedU32<0,256> > colorB, 
@@ -866,15 +909,37 @@ public:
       string timestr = itos(timeInSecs / 60) + ":";
       timestr += ((timeInSecs % 60 < 10) ? "0" : "") + itos(timeInSecs % 60);
 
-      // GAME | stats version | GameType | time | level name | teams | players | time
+      // GAME | stats version (2) | GameType | time | level name | teams | players | time
       logprintf(LogConsumer::StatisticsFilter, "GAME\t2\t%s\t%s\t%s\t%d\t%d\t%s", 
-                    getTimeStamp().c_str(), gameType.getString(), levelName.getString(), teams.size(), players.value, timestr.c_str() );
+                     getTimeStamp().c_str(), gameType.getString(), levelName.getString(), teams.size(), players.value, timestr.c_str() );
 
-      // TEAM | stats version | team name | score | R | G |B
+      // TEAM | stats version (2) | team name | score | R | G |B
       for(S32 i = 0; i < teams.size(); i++)
-         logprintf("TEAM\t2\t%s\t%d\t%d\t%d\t%d", teams[i].getString(), teamScores[i], (U32)colorR[i], (U32)colorG[i], (U32)colorB[i]);
+         logprintf(LogConsumer::StatisticsFilter, "TEAM\t2\t%s\t%d\t%d\t%d\t%d", 
+                     teams[i].getString(), teamScores[i], (U32)colorR[i], (U32)colorG[i], (U32)colorB[i]);
    }
 
+
+   // Send game statistics to the master server   ==> Current as of 015
+   TNL_DECLARE_RPC_OVERRIDE(s2mSendGameStatistics_3, (U32 gameVersion, StringTableEntry gameType, bool teamGame, 
+                                                      StringTableEntry levelName, 
+                                                      Vector<StringTableEntry> teams, Vector<S32> teamScores,
+                                                      Vector<RangedU32<0,256> > colorR, Vector<RangedU32<0,256> > colorG, Vector<RangedU32<0,256> > colorB, 
+                                                      RangedU32<0,MAX_PLAYERS> players, RangedU32<0,MAX_PLAYERS> bots, S16 timeInSecs))
+   {
+      string timestr = itos(timeInSecs / 60) + ":";
+      timestr += ((timeInSecs % 60 < 10) ? "0" : "") + itos(timeInSecs % 60);
+
+      // GAME | stats version (3) | GameVersion | GameType | teamGame (true/false) | time | level name | teams | players | bots | time
+      logprintf(LogConsumer::StatisticsFilter, "GAME\t3\t%d\t%s\t%s\t%s\t%s\t%d\t%d\t%s", 
+                     gameVersion, getTimeStamp().c_str(), gameType.getString(), teamGame ? "true" : "false", levelName.getString(), 
+                     teams.size(), players.value, bots.value, timestr.c_str() );
+
+      // TEAM | stats version (3) | team name | score | R | G |B
+      for(S32 i = 0; i < teams.size(); i++)
+         logprintf(LogConsumer::StatisticsFilter, "TEAM\t3\t%s\t%d\t%d\t%d\t%d", 
+                     teams[i].getString(), teamScores[i], (U32)colorR[i], (U32)colorG[i], (U32)colorB[i]);
+   }
 
    // Game server wants to know if user name has been verified
    TNL_DECLARE_RPC_OVERRIDE(s2mRequestAuthentication, (Vector<U8> id, StringTableEntry name))
@@ -891,7 +956,7 @@ public:
 
             // If server just restarted, clients will need to reauthenticate, and that may take some time.
             // We'll give them 90 seconds.
-            else if(Platform::getRealMilliseconds() - gServerStartTime < 90000)      
+            else if(Platform::getRealMilliseconds() - gServerStartTime < 90 * 1000)      
                status = AuthenticationStatusTryAgainLater;             
             else
                status = AuthenticationStatusUnauthenticatedName;
@@ -902,6 +967,7 @@ public:
    }
 
 
+   // TODO: Replace this with the ones in stringUtils
    // From http://www.codeproject.com/KB/stl/stdstringtrim.aspx
    void trim(string &str)
    {
