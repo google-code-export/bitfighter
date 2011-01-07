@@ -980,7 +980,9 @@ static void nameAndPasswordAcceptCallback(U32 unused)
 
    gClientGame->setReadyToConnectToMaster(true);
    seedRandomNumberGenerator(gClientInfo.name);
-   gClientInfo.id.getRandom();                    // Generate a player ID
+   //gClientInfo.id.getRandom();          // Generate a player ID - messes up with the rename and Authentication
+	if(gClientGame->getConnectionToServer())                 // Rename while in game server, if connected
+		gClientGame->getConnectionToServer()->c2sRenameClient(gClientInfo.name);
 }
 
 
@@ -1077,7 +1079,6 @@ static void startHostingCallback(U32 unused)
    initHostGame(Address(IPProtocol, Address::Any, 28000), levelList, false);
 }
 
-
 void HostMenuUserInterface::setupMenus()
 {
    menuItems.deleteAndClear();
@@ -1098,6 +1099,7 @@ void HostMenuUserInterface::setupMenus()
    menuItems.push_back(new EditableMenuItem("CONNECTION PASSWORD:",   gServerPassword,      "<Anyone can connect>",       
                                             "", MAX_PASSWORD_LENGTH, KEY_C));
 
+   menuItems.push_back(new YesNoMenuItem("ALLOW MAP DOWNLOADS", gIniSettings.allowGetMap, NULL, "", KEY_M));
    //menuItems.push_back(new EditableMenuItem("PORT:",                  "28000",              "Use default of 28000", 
    //                                         "", 10, KEY_P));
 }
@@ -1120,6 +1122,7 @@ void HostMenuUserInterface::saveSettings()
    gLevelChangePassword = gIniSettings.levelChangePassword = menuItems[OPT_LVL_PASS]->getValueForWritingToLevelFile();
    gAdminPassword       = gIniSettings.adminPassword       = menuItems[OPT_ADMIN_PASS]->getValueForWritingToLevelFile();    
    gServerPassword      = gIniSettings.serverPassword      = menuItems[OPT_PASS]->getValueForWritingToLevelFile();
+   gIniSettings.allowGetMap                                = menuItems[OPT_GETMAP]->getValueForWritingToLevelFile() == "yes";
 
    saveSettingsToINI();
 }

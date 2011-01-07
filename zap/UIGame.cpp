@@ -46,6 +46,7 @@
 #include "input.h"
 #include "config.h"
 #include "loadoutSelect.h"
+#include "gameNetInterface.h"
 
 #include "md5wrapper.h"          // For submission of passwords
 
@@ -1361,6 +1362,8 @@ static void changeServerNameDescr(GameConnection *gc, GameConnection::ParamType 
 }
 
 
+extern ClientInfo gClientInfo;
+
 // Process a command entered at the chat prompt
 // Make sure any commands listed here are also included in mChatCmds for auto-completion purposes...
 // Returns true if command was handled (even if it was bogus); returning false will cause command to be passed on to the server
@@ -1551,7 +1554,7 @@ bool GameUserInterface::processCommand(Vector<string> &words)
       else
          suspendGame();    // Do the deed
    }
-   else if(words[0] == "linewidth")            // Add time to the game
+   else if(words[0] == "linewidth")
    {
       F32 linewidth;
       if(words.size() < 2 || words[1] == "")
@@ -1570,7 +1573,37 @@ bool GameUserInterface::processCommand(Vector<string> &words)
          glLineWidth(gDefaultLineWidth);    //make this change happen instantly
       }
    }
+   else if(words[0] == "linesmooth")
+   {
+      gIniSettings.useLineSmoothing = !gIniSettings.useLineSmoothing;
+      if(gIniSettings.useLineSmoothing)
+      {
+         glEnable(GL_LINE_SMOOTH);
+         glEnable(GL_BLEND);
+      }else
+      {
+         glDisable(GL_LINE_SMOOTH);
+         glDisable(GL_BLEND);
+      }
+   }
+   else if(words[0] == "getmap")
+   {
+      if(gClientGame->getConnectionToServer()->isLocalConnection())   
+         displayMessage(gCmdChatColor, "!!! Can't get download levels from a local server");
+      else
+      {
+         const char *filename = "downloaded.level";
+         mOutputFile.open(filename);
 
+         if(!mOutputFile.is_open())
+            logprintf("Problem opening file %s for writing", filename);
+         else
+         {
+            Address addr = gClientGame->getConnectionToServer()->getNetAddress();
+            gClientGame->getConnectionToServer()->c2sRequestCurrentLevel();
+         }
+      }
+   }
    else if(words[0] == "engf" || words[0] == "engt")
    {
       Ship *ship = dynamic_cast<Ship *>(gClientGame->getConnectionToServer()->getControlObject());
@@ -1605,7 +1638,6 @@ void GameUserInterface::populateChatCmdList()
    mChatCmds.push_back("/admin");
    mChatCmds.push_back("/dcoords");
    mChatCmds.push_back("/dzones");
-   mChatCmds.push_back("/kick");
    mChatCmds.push_back("/levpass");
    mChatCmds.push_back("/mvol");
    mChatCmds.push_back("/next");
@@ -1615,10 +1647,15 @@ void GameUserInterface::populateChatCmdList()
    mChatCmds.push_back("/vvol");
    mChatCmds.push_back("/suspend");
    mChatCmds.push_back("/linewidth");
+   mChatCmds.push_back("/linesmooth");
+
+   // Server commands
    mChatCmds.push_back("/settime");
    mChatCmds.push_back("/setscore");
+   mChatCmds.push_back("/getmap");
 
    // Administrative commands
+   mChatCmds.push_back("/kick");
    mChatCmds.push_back("/shutdown");
    mChatCmds.push_back("/servvol");
    mChatCmds.push_back("/setlevpass");

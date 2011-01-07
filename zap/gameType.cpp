@@ -549,7 +549,7 @@ void GameType::renderInterfaceOverlay(bool scoreboardVisible)
                glVertex2f(xr, yt + teamAreaHeight);
             glEnd();
 
-            UserInterface::drawString(xl + 40, yt + 2, 30, getTeamName(i));
+            UserInterface::drawString(xl + 40, yt + 2, 30, getTeamName(i).getString());
             UserInterface::drawStringf(xr - 140, yt + 2, 30, "%d", mTeams[i].getScore());
          }
 
@@ -1235,12 +1235,20 @@ void GameType::spawnShip(GameConnection *theClient)
 
    Point spawnPoint = getSpawnPoint(teamIndex);
 
+	if(theClient->isRobot())
+	{
+		Robot *robot = (Robot *) theClient->getControlObject();
+      robot->setOwner(theClient);
+		robot->setTeam(teamIndex);
+		spawnRobot(robot);
+	}else
+	{
    //                     Player's name, team, and spawning location
-   Ship *newShip = new Ship(cl->name, theClient->isAuthenticated(), teamIndex, spawnPoint);
-
-   theClient->setControlObject(newShip);
-   newShip->setOwner(theClient);
-   newShip->addToGame(getGame());
+      Ship *newShip = new Ship(cl->name, theClient->isAuthenticated(), teamIndex, spawnPoint);
+      theClient->setControlObject(newShip);
+      newShip->setOwner(theClient);
+      newShip->addToGame(getGame());
+	}
 
    if(isSpawnWithLoadoutGame() || !levelHasLoadoutZone())
       setClientShipLoadout(cl, theClient->getLoadout());     // Set loadout if this is a SpawnWithLoadout type of game, or there is no loadout zone
@@ -1479,13 +1487,35 @@ void GameType::queryItemsOfInterest()
 }
 
 
+// Team in range?    Currently not used.
+// Could use it for processArguments, but out of range will be UNKNOWN name and should not cause any errors.
+bool GameType::checkTeamRange(S32 team){
+	return (team < mTeams.size() && team >= -2);
+}
+
+// Zero teams will crash.
+bool GameType::makeSureTeamCountIsNotZero()
+{
+	if(mTeams.size() == 0) {
+		Team team;
+		team.setName("Missing Team");
+		team.color.r = 0;
+		team.color.g = 0;
+		team.color.b = 1;
+		mTeams.push_back(team);
+		return true;
+	}
+	return false;
+}
+
+
 extern Color gNeutralTeamColor;
 extern Color gHostileTeamColor;
 
 // This method can be overridden by other game types that handle colors differently
 Color GameType::getTeamColor(S32 team)
 {
-   if(team == -1 || team >= mTeams.size())
+   if(team == -1 || team >= mTeams.size() || team < -2)
       return gNeutralTeamColor;
    else if(team == -2)
       return gHostileTeamColor;
@@ -1505,17 +1535,19 @@ S32 GameType::getTeam(const char *playerName)
 }
 
 
-const char *GameType::getTeamName(S32 team)
+//There is a bigger need to use StringTableEntry and not const char *
+//    mainly to prevent errors on CTF neutral flag and out of range team number.
+StringTableEntry GameType::getTeamName(S32 team)
 {
    
    if(team >= 0 && team < mTeams.size())
-      return mTeams[team].getName().getString();
+      return mTeams[team].getName();
    else if(team == -2)
-      return "Hostile";
+      return StringTableEntry("Hostile");
    else if(team == -1)
-      return "Neutral";
+      return StringTableEntry("Neutral");
    else
-      return "UNKNOWN";
+      return StringTableEntry("UNKNOWN");
 }
 
 
@@ -1708,7 +1740,7 @@ void GameType::updateScore(Ship *ship, ScoringEvent scoringEvent, S32 data)
 
    TNLAssert(ship, "Ship is null in updateScore!!");
 
-   if(!ship->isRobot() && ship->getControllingClient())
+   if(ship->getControllingClient())
       cl = ship->getControllingClient()->getClientRef();  // Get client reference for ships...
 
    updateScore(cl, ship->getTeam(), scoringEvent, data);
@@ -1746,7 +1778,7 @@ void GameType::updateScore(ClientRef *player, S32 team, ScoringEvent scoringEven
    if(isTeamGame())
    {
       // Just in case...  completely superfluous, gratuitous check
-      if(team < 0)
+      if(team < 0 || team >= mTeams.size())
          return;
 
       S32 points = getEventScore(TeamScore, scoringEvent, data);
@@ -2111,6 +2143,22 @@ void GameType::serverRemoveClient(GameConnection *theClient)
    s2cRemoveClient(theClient->getClientName());
 }
 
+//extern void updateClientChangedName(GameConnection *,StringTableEntry);  //in masterConnection.cpp
+
+// Server notifies clients that a player has changed name
+GAMETYPE_RPC_S2C(GameType, s2cRenameClient, (StringTableEntry oldName, StringTableEntry newName), (oldName, newName))
+{
+   for(S32 i = 0; i < mClientList.size(); i++)
+   {
+      if(mClientList[i]->name == oldName)
+      {
+         mClientList[i]->name = newName;
+         break;
+      }
+   }
+   gGameUserInterface.displayMessage(Color(0.6f, 0.6f, 0.8f), "%s changed to %s", oldName.getString(), newName.getString());
+}
+
 // Server notifies clients that a player has left the game
 GAMETYPE_RPC_S2C(GameType, s2cRemoveClient, (StringTableEntry name), (name))
 {
@@ -2171,9 +2219,9 @@ GAMETYPE_RPC_S2C(GameType, s2cClientJoinedTeam,
    // TODO: Better place to get current player's name?  This may fail if users have same name, and system has changed it
    // been corrected by the server.
    if(gClientGame->getGameType()->mLocalClient && name == gClientGame->getGameType()->mLocalClient->name)      
-      gGameUserInterface.displayMessage(Color(0.6f, 0.6f, 0.8f), "You have joined team %s.", getTeamName(teamIndex));
+      gGameUserInterface.displayMessage(Color(0.6f, 0.6f, 0.8f), "You have joined team %s.", getTeamName(teamIndex).getString());
    else
-      gGameUserInterface.displayMessage(Color(0.6f, 0.6f, 0.8f), "%s joined team %s.", name.getString(), getTeamName(teamIndex));
+      gGameUserInterface.displayMessage(Color(0.6f, 0.6f, 0.8f), "%s joined team %s.", name.getString(), getTeamName(teamIndex).getString());
 
    // Make this client forget about any mines or spybugs he knows about... it's a bit of a kludge to do this here,
    // but this RPC only runs when a player joins the game or changes teams, so this will never hurt, and we can
@@ -2244,9 +2292,9 @@ void GameType::onGhostAvailable(GhostConnection *theConnection)
 
    for(S32 i = 0; i < Robot::robots.size(); i++)
    {
-      s2cAddClient(Robot::robots[i]->getName(), false, false, true, false);
-      s2cClientJoinedTeam(Robot::robots[i]->getName(), Robot::robots[i]->getTeam());
-   }
+   //   s2cAddClient(Robot::robots[i]->getName(), false, false, true, false);
+   //   s2cClientJoinedTeam(Robot::robots[i]->getName(), Robot::robots[i]->getTeam());
+   }	
 
    // An empty list clears the barriers
    Vector<F32> v;
@@ -2390,7 +2438,7 @@ void GameType::processServerCommand(ClientRef *clientRef, const char *cmd, Vecto
 
    if(!stricmp(cmd, "settime"))
    {
-      if(!clientRef->isLevelChanger)
+      if(!clientRef->clientConnection->isLevelChanger())
          clientRef->clientConnection->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "!!! Need level change permission");
       else if(args.size() < 1)
          clientRef->clientConnection->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "!!! Enter time in minutes");
@@ -2416,7 +2464,7 @@ void GameType::processServerCommand(ClientRef *clientRef, const char *cmd, Vecto
    }
    else if(!stricmp(cmd, "setscore"))
    {
-     if(!clientRef->isLevelChanger)                         // Level changers and above
+     if(!clientRef->clientConnection->isLevelChanger())                         // Level changers and above
          clientRef->clientConnection->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "!!! Need level change permission");
      else if(args.size() < 1)
          clientRef->clientConnection->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "!!! Enter score limit");
@@ -2432,34 +2480,47 @@ void GameType::processServerCommand(ClientRef *clientRef, const char *cmd, Vecto
          }
      }
    }
-   //else if(!stricmp(cmd, "getmap"))
-   //{
-   //  // Might want to add an option to prevent /getmap
-   //  if(clientRef->clientConnection->isLocalConnection())
-   //      clientRef->clientConnection->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "!!! Can't use /getmap on a local connection");
-   //  else
-   //  {
-     //  S32 i = 0;
-     //  S32 s = 0;
-     //  S32 filesize = 0;
+   else if(!stricmp(cmd, "getmap"))
+   {
+     if(! gIniSettings.allowGetMap)
+         clientRef->clientConnection->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "!!! This server does not allow GetMap");
+     else if(clientRef->clientConnection->isLocalConnection())
+         clientRef->clientConnection->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "!!! Can't Get Map your own host.");
+     else
+     {
+       S32 i=0;
+       S32 s=0;
+       S32 filesize=0;
+       while(sFileData[filesize] != 0)   //find the file size.
+           filesize++;
+       while(sFileData[i] != 0)
+       {
+          if(i-s >= 254)
+          {
+             char c1 = sFileData[i];
+             sFileData[i] = 0;     //so it thinks it is a short string line
+             clientRef->clientConnection->s2cGetMapData(filesize, s, StringTableEntry(&sFileData[s]) );
+             sFileData[i] = c1;
+             s=i;
+          }
+          i++;
+       }
+       if(s < filesize) clientRef->clientConnection->s2cGetMapData(filesize, s, StringTableEntry(&sFileData[s]) );
+     }
+   }
+	/* /// Remove this command
+   else if(!stricmp(cmd, "rename") && args.size() >= 1)
+   {
+		//for testing, might want to remove this once it is fully working.
+		StringTableEntry oldName = clientRef->clientConnection->getClientName();
+		clientRef->clientConnection->setClientName(StringTableEntry(""));       //avoid unique self
+		StringTableEntry uniqueName = GameConnection::makeUnique(args[0].getString()).c_str();  //new name
+		clientRef->clientConnection->setClientName(oldName);                   //restore name to properly get it updated to clients.
 
-     //  while(sFileData[filesize] != 0)   // Find the file size
-     //      filesize++;
-     //  while(sFileData[i] != 0)
-     //  {
-     //     if(i-s >= 254)
-     //     {
-     //        char c1 = sFileData[i];
-     //        sFileData[i] = 0;     //so it thinks it is a short string line
-     //        clientRef->clientConnection->s2cGetMapData(filesize, s, StringTableEntry(&sFileData[s]) );
-     //        sFileData[i] = c1;
-     //        s=i;
-     //     }
-     //     i++;
-     //  }
-     //  if(s < filesize) clientRef->clientConnection->s2cGetMapData(filesize, s, StringTableEntry(&sFileData[s]) );
-     //}
-   //}
+		clientRef->clientConnection->setAuthenticated(false);         //don't underline anymore because of rename
+		updateClientChangedName(clientRef->clientConnection,uniqueName);
+   }
+	*/
    else
    {
       // Command not found, tell the client

@@ -57,6 +57,7 @@ XXX need to document timers, new luavec stuff XXX
 <li>Engineer module -- build turrets and forcefields by grabbing resources; activate with /engf or /engt; only works on levels containing line Specials Engineer
 <li>Armor module -- makes ship stronger but harder to control; always active, uses no energy (Experimental, may be removed in future version)
 <li>Upload/download resources (levels, levelgens, and bots) from remote server (if enabled, and you have the password) via cmd line parameters
+<li>Added /getmap command to allow anyone get a currently playing map, if server enabled it.
 </ul>
 <h4>User Interface</h4>
 <ul>
@@ -79,8 +80,10 @@ Specifying the extension is optional.
 <li>Max level size bumped up to 256K
 <li>Engineer module can no longer create crossing forcefields
 <li>Smooth lines option available with a setting in the INI
+<li>Added /linesmooth /linewidth command
 <li>Any team can spawn at a neutral spawn point
 <li>Added /setscore and /settime commands that set the score and game time for the current level
+<li>Added /getLevel command to download current level to local machine (currently requires admin access)
 <li>When running command from console (run <script>) any created items are now selected
 <li>Entering 0 time will create unlimited time games.  Just because you can doesn't mean you should!
 <li>Near instant display of bot nav zones with /dzones, but now only works on local hosts (i.e. when you are hosting in-process)
@@ -95,6 +98,9 @@ Specifying the extension is optional.
 <li>Ingame Bitfighter logo display issues corrected.  
 <li>Bitfighter logo now positioned almost exactly where the generating text is located, at all zooms and rotations <b>Note that if you have levels with the Bitfighter logo, it's position may have shifted!</b>
 <li>Fixed soccer sync problems
+<li>Fixed long loading and lag on level maps with lots of bot zones, /dzones will work only when hosting
+<li>Fixed crash on maps with: missing GameType, missing Team; FlagItem, Soccer and HuntersNexusObject on wrong GameType; out of range team number, Neutral flag in CTF.
+<li>Fixed Robots problems. Robots can now score, hold nexus and rabbit flags, and allow admin to kick robots or change robots team.
 </ul>
 */
 
@@ -698,10 +704,6 @@ void hostGame()
 }
 
 
-//in millisecs (10 millisecs = 100 fps) (using 1000 / delay = fps)
-U32 minimumSleepTimeClient=10; //lower means smoother and slightly reduce lag, but uses more CPU
-U32 minimumSleepTimeDedicatedServer=10; //lower reduce everyone lag, but uses more CPU.
-
 // This is the master idle loop that gets registered with GLUT and is called on every game tick.
 // This in turn calls the idle functions for all other objects in the game.
 void idle()
@@ -724,7 +726,8 @@ void idle()
    F64 timeElapsed = Platform::getHighPrecisionMilliseconds(currentTimer - lastTimer) + unusedFraction;
    U32 integerTime = U32(timeElapsed);
 
-   if((gDedicatedServer &&  integerTime >= (U32)minimumSleepTimeDedicatedServer) || ( (!gDedicatedServer) &&  integerTime >= (U32)minimumSleepTimeClient))
+   if((gDedicatedServer && integerTime >= gIniSettings.minSleepTimeDedicatedServer) || 
+            (!gDedicatedServer &&  integerTime >=(U32)gIniSettings.minSleepTimeClient))
    {
       lastTimer = currentTimer;
       unusedFraction = timeElapsed - integerTime;
@@ -770,17 +773,19 @@ void idle()
    // sleep(0) helps reduce the impact of OpenGL on windows.
    U32 sleepTime =  1; //integerTime< 8 ? 8-integerTime : 1;
 
-   if(gClientGame && integerTime >= minimumSleepTimeClient) {
-      sleepTime = 0;      // Live player at the console, but if we're running > 100 fps, we can affort a nap
-	  //if(integerTime < (U32)minimumSleepTimeClient) sleepTime = minimumSleepTimeClient - integerTime; // sleep a minimum of a value
+   if(gClientGame && integerTime >= gIniSettings.minSleepTimeClient) 
+   {
+      sleepTime = 0;      // Live player at the console, but if we're running > 100 fps, we can afford a nap
+	  //if(integerTime < gIniSettings.minSleepTimeClient) sleepTime = minimumSleepTimeClient - integerTime; // sleep a minimum of a value
    }
      
    // If there are no players, set sleepTime to 40 to further reduce impact on the server.
    // We'll only go into this longer sleep on dedicated servers when there are no players.
-   if(gDedicatedServer){
+   if(gDedicatedServer)
+   {
       //if(integerTime < (U32)minimumSleepTimeDedicatedServer) sleepTime = minimumSleepTimeDedicatedServer - integerTime; // sleep a minimum of 5.
       if(gServerGame->isSuspended())
-          sleepTime = 40; //the higher this number, the less accurate the ping is on server lobby when empty.
+          sleepTime = 40;     // The higher this number, the less accurate the ping is on server lobby when empty, but the less power consumed.
    }
 
    Platform::sleep(sleepTime);
@@ -1579,7 +1584,11 @@ void processStartupParams()
    if(!gDedicatedServer)
    {
       if(gIniSettings.name == "")
+      {
          gNameEntryUserInterface.activate();
+         seedRandomNumberGenerator(gIniSettings.lastName);
+         gClientInfo.id.getRandom();                           // Generate a player ID
+      }
       else
       {
          gMainMenuUserInterface.activate();
@@ -1655,7 +1664,7 @@ void processCmdLineParams(Vector<TNL::StringPtr> &theArgv)
             exitGame(1);
          }
 
-         bool sending = (!stricmp(theArgv[i].getString(), "-sendfile"));
+         bool sending = (!stricmp(theArgv[i].getString(), "-sendres"));
 
          Address address(theArgv[i+1].getString());
          if(!address.isValid())
@@ -1693,9 +1702,7 @@ void processCmdLineParams(Vector<TNL::StringPtr> &theArgv)
               
             netInterface->checkIncomingPackets();
             netInterface->processConnections();
-            
-            Sleep(1);               // Don't eat CPU power
-
+            Platform::sleep(1);              // Don't eat CPU power
             if((!started) && (!dataConn))
             {
                printf("Failed to connect");
