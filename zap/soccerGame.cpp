@@ -54,7 +54,7 @@ TNL_IMPLEMENT_NETOBJECT_RPC(SoccerGameType, s2cSoccerScoreMessage,
    if(clientName.isNull())    // Unknown player scored
    {
       if(teamIndexAdjusted >= 0)
-         msg = "A goal was scored on team " + string(mTeams[teamIndexAdjusted].getName().getString());
+         msg = "A goal was scored on team " + string(getTeamName(teamIndexAdjusted).getString());
       else if(teamIndexAdjusted == -1)
          msg = "A goal was scored on a neutral goal!";
       else if(teamIndexAdjusted == -2)
@@ -67,7 +67,7 @@ TNL_IMPLEMENT_NETOBJECT_RPC(SoccerGameType, s2cSoccerScoreMessage,
       if(isTeamGame())
       {
          if(teamIndexAdjusted >= 0)
-            msg = string(clientName.getString()) + " scored a goal on team " + string(mTeams[teamIndexAdjusted].getName().getString());
+            msg = string(clientName.getString()) + " scored a goal on team " + string(getTeamName(teamIndexAdjusted).getString());
          else if(teamIndexAdjusted == -1)
             msg = string(clientName.getString()) + " scored a goal on a neutral goal!";
          else if(teamIndexAdjusted == -2)
@@ -342,7 +342,9 @@ void SoccerBallItem::onAddedToGame(Game *theGame)
    //if(!isGhost())
    //   theGame->getGameType()->addItemOfInterest(this);
 
-   ((SoccerGameType *) theGame->getGameType())->setBall(this);
+   //((SoccerGameType *) theGame->getGameType())->setBall(this);
+   SoccerGameType * gt = dynamic_cast<SoccerGameType *>(theGame->getGameType());
+   if(gt) gt->setBall(this);
    getGame()->mObjectsLoaded++;
 }
 
@@ -351,7 +353,7 @@ void SoccerBallItem::onAddedToGame(Game *theGame)
 void SoccerBallItem::onItemDropped()
 {
 
-   if(mMount.isValid())
+   if(mMount.isValid() && !isGhost())   //Server only, to prevent desync
    {
       this->setActualPos(mMount->getActualPos()); 
       this->setActualVel(mMount->getActualVel() * 1.5);
@@ -394,6 +396,7 @@ void SoccerBallItem::idle(GameObject::IdleCallPath path)
 
    // If crash into something, the ball will hit first, so we want to make sure it has an up-to-date velocity vector
    if(isMounted())
+   if(mMount)      //client side NULL when the soccer is mounted to far away ship.
       mMoveState[ActualState].vel.set(mMount->getActualVel());
 }
 
@@ -458,11 +461,14 @@ bool SoccerBallItem::collide(GameObject *hitObject)
 
    if(hitObject->getObjectTypeMask() & (ShipType | RobotType))
    {
-      if(mLastPlayerTouch == hitObject && mDroppedTimer.getCurrent())      // Have to wait a bit after dropping to pick the ball back up!
-         return true;
+     if(mMount == hitObject)    // Sometimes we get collisions between ship and an already mounted soccer ball.
+        return false;  //false = don't hit self
 
-      if(mMount == hitObject)    // Sometimes we get collisions between ship and an already mounted soccer ball.
-         return true;
+    if(!isGhost())  //Server side
+    {
+      if(mLastPlayerTouch == hitObject && mDroppedTimer.getCurrent())      // Have to wait a bit after dropping to pick the ball back up!
+         return false;   //False - Go through soccer looks better while dropping, and allow better sync to client.
+
 
       mLastPlayerTouch = dynamic_cast<Ship *>(hitObject);
       mLastPlayerTouchTeam = mLastPlayerTouch->getTeam();      // Used to credit team if ship quits game before goal is scored
@@ -471,10 +477,12 @@ bool SoccerBallItem::collide(GameObject *hitObject)
 
       Ship *ship = dynamic_cast<Ship *>(hitObject);
       this->mountToShip(ship);
-
-      // If we're the client, and we just saw a ball pickup, we want to ask the server to confirm that.
-      if(isGhost() && getGame()->getGameType())
-         getGame()->getGameType()->c2sReaffirmMountItem(mItemId);
+    }else{ //client side
+         // Not needed
+         //if(getGame()->getGameType())
+         //   getGame()->getGameType()->c2sResendItemStatus(mItemId);
+         return false; //let server do the collision.
+    }
    }
    else if(hitObject->getObjectTypeMask() & GoalZoneType)      // SCORE!!!!
    {
@@ -484,8 +492,8 @@ bool SoccerBallItem::collide(GameObject *hitObject)
       {
          if(!isGhost())
          {
-            SoccerGameType *g = (SoccerGameType *) getGame()->getGameType();
-            g->scoreGoal(mLastPlayerTouch, mLastPlayerTouchName, mLastPlayerTouchTeam, goal->getTeam(), goal->mScore);
+            SoccerGameType *g = dynamic_cast<SoccerGameType *>(getGame()->getGameType());
+            if(g) g->scoreGoal(mLastPlayerTouch, mLastPlayerTouchName, mLastPlayerTouchTeam, goal->getTeam(), goal->mScore);
          }
 
          static const S32 POST_SCORE_HIATUS = 1500;

@@ -46,6 +46,7 @@
 #include "input.h"
 #include "config.h"
 #include "loadoutSelect.h"
+#include "gameNetInterface.h"
 
 #include "md5wrapper.h"          // For submission of passwords
 
@@ -56,8 +57,11 @@
 
 #include "oglconsole.h"          // Our console object
 
+#include "config.h"              // for Getmap level dir
+
 namespace Zap
 {
+extern ConfigDirectories gConfigDirs;          //in main.cpp for Getmap
 
 GameUserInterface gGameUserInterface;
 
@@ -111,8 +115,9 @@ GameUserInterface::GameUserInterface()
    mDisplayMessageTimer.setPeriod(DisplayMessageTimeout);    // Set the period of our message timeout timer
 
    populateChatCmdList();
-}
 
+   remoteLevelDownloadFilename = "downloaded.level";
+}
 
 
 void processGameConsoleCommand(OGLCONSOLE_Console console, char *cmd)
@@ -1326,9 +1331,9 @@ static void changePassword(GameConnection *gc, GameConnection::ParamType type, V
    {
       // Clear any saved password for this server
       if(type == GameConnection::LevelChangePassword)
-         gINI.DeleteValue("SavedLevelChangePasswords", gc->getServerName());
+         gINI.deleteKey("SavedLevelChangePasswords", gc->getServerName());
       else if(type == GameConnection::AdminPassword)
-         gINI.DeleteValue("SavedAdminPasswords", gc->getServerName());
+         gINI.deleteKey("SavedAdminPasswords", gc->getServerName());
    }
    else                    // Non-empty password
    {
@@ -1360,6 +1365,30 @@ static void changeServerNameDescr(GameConnection *gc, GameConnection::ParamType 
    gc->changeParam(allWords.c_str(), type);
 }
 
+
+static string makeFilenameFromString(const char *levelname)
+{
+	static char filename[MAX_FILE_NAME_LEN + 1];    // Leave room for terminating null
+
+	S32 i = 0;
+
+	while(i < MAX_FILE_NAME_LEN && levelname[i] != 0)
+	{
+      // Prevent invalid characters in file names
+		char c = levelname[i];     
+		if((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
+			filename[i]=c;
+		else
+			filename[i]='_';
+		i++;
+	}
+
+	filename[i] = 0;    // Null terminate
+	return filename;
+}
+
+
+extern ClientInfo gClientInfo;
 
 // Process a command entered at the chat prompt
 // Make sure any commands listed here are also included in mChatCmds for auto-completion purposes...
@@ -1494,7 +1523,10 @@ bool GameUserInterface::processCommand(Vector<string> &words)
    else if(words[0] == "dcoords")
       mDebugShowShipCoords = !mDebugShowShipCoords;
    else if(words[0] == "dzones")
+   {
        mDebugShowMeshZones = !mDebugShowMeshZones;
+       if(!gServerGame) displayMessage(gCmdChatColor, "!!! Zones can only be displayed on a local host");
+   }
    else if(words[0] == "svol")      // SFX volume
       setVolume(SfxVolumeType, words);
    else if(words[0] == "mvol")      // Music volume
@@ -1548,7 +1580,7 @@ bool GameUserInterface::processCommand(Vector<string> &words)
       else
          suspendGame();    // Do the deed
    }
-   else if(words[0] == "linewidth")            // Add time to the game
+   else if(words[0] == "linewidth")
    {
       F32 linewidth;
       if(words.size() < 2 || words[1] == "")
@@ -1567,7 +1599,49 @@ bool GameUserInterface::processCommand(Vector<string> &words)
          glLineWidth(gDefaultLineWidth);    //make this change happen instantly
       }
    }
+   else if(words[0] == "linesmooth")
+   {
+      gIniSettings.useLineSmoothing = !gIniSettings.useLineSmoothing;
+      if(gIniSettings.useLineSmoothing)
+      {
+         glEnable(GL_LINE_SMOOTH);
+         glEnable(GL_BLEND);
+      }else
+      {
+         glDisable(GL_LINE_SMOOTH);
+         glDisable(GL_BLEND);
+      }
+   }
+   else if(words[0] == "getmap")
+   {
+      if(gClientGame->getConnectionToServer()->isLocalConnection())
+         displayMessage(gCmdChatColor, "!!! Can't get download levels from a local server");
+      else
+      {
+         if(words.size() > 1 && words[1] != "")
+            remoteLevelDownloadFilename = words[1];
+			else
+            remoteLevelDownloadFilename = "Downloaded_" + makeFilenameFromString(gClientGame->getGameType() ? 
+                                                                        gClientGame->getGameType()->mLevelName.getString() : "Level");
+         // Add an extension if needed
+         if(remoteLevelDownloadFilename.find(".") == string::npos)
+            remoteLevelDownloadFilename += ".level";
 
+         // Make into a fully qualified file name
+         string fullFile = strictjoindir(gConfigDirs.levelDir, remoteLevelDownloadFilename);
+
+         // Prepare for writing
+         mOutputFile = fopen(fullFile.c_str(), "w");    // TODO: Writes empty file when server does not allow getmap.  Shouldn't.
+
+         if(!mOutputFile)
+         {
+            logprintf("Problem opening file %s for writing", fullFile.c_str());
+            displayMessage(gCmdChatColor, "!!! Problem opening file %s for writing", fullFile.c_str());
+         }
+         else
+            gClientGame->getConnectionToServer()->c2sRequestCurrentLevel();
+      }
+   }
    else if(words[0] == "engf" || words[0] == "engt")
    {
       Ship *ship = dynamic_cast<Ship *>(gClientGame->getConnectionToServer()->getControlObject());
@@ -1602,7 +1676,6 @@ void GameUserInterface::populateChatCmdList()
    mChatCmds.push_back("/admin");
    mChatCmds.push_back("/dcoords");
    mChatCmds.push_back("/dzones");
-   mChatCmds.push_back("/kick");
    mChatCmds.push_back("/levpass");
    mChatCmds.push_back("/mvol");
    mChatCmds.push_back("/next");
@@ -1612,10 +1685,15 @@ void GameUserInterface::populateChatCmdList()
    mChatCmds.push_back("/vvol");
    mChatCmds.push_back("/suspend");
    mChatCmds.push_back("/linewidth");
+   mChatCmds.push_back("/linesmooth");
+
+   // Server commands
    mChatCmds.push_back("/settime");
    mChatCmds.push_back("/setscore");
+   mChatCmds.push_back("/getmap");
 
    // Administrative commands
+   mChatCmds.push_back("/kick");
    mChatCmds.push_back("/shutdown");
    mChatCmds.push_back("/servvol");
    mChatCmds.push_back("/setlevpass");

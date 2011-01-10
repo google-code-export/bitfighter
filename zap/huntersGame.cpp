@@ -96,31 +96,32 @@ HuntersGameType::HuntersGameType() : GameType()
 }
 
 
-void HuntersGameType::addNexus(HuntersNexusObject *nexus)
-{
-   mNexus.push_back(nexus);
-}
-
 
 bool HuntersGameType::processArguments(S32 argc, const char **argv)
 {
    if(argc > 0)
    {
-      mGameTimer.reset(U32(atof(argv[0]) * 60 * 1000));     // Game time
+      mGameTimer.reset(U32(atof(argv[0]) * 60 * 1000));       // Game time
       if(argc > 1)
       {
-         mNexusReturnDelay = atoi(argv[1]) * 60 * 1000;     // Time until nexus opens
+         mNexusReturnDelay = S32(atof(argv[1]) * 60 * 1000);  // Time until nexus opens
          if(argc > 2)
          {
-            mNexusCapDelay = atoi(argv[2]) * 1000;          // Time nexus remains open
+            mNexusCapDelay = S32(atof(argv[2]) * 1000);       // Time nexus remains open
             if(argc > 3)
-               mWinningScore = atoi(argv[3]);               // Winning score
+               mWinningScore = atoi(argv[3]);                 // Winning score
          }
       }
    }
    mNexusReturnTimer.reset(mNexusReturnDelay);
 
    return true;
+}
+
+
+void HuntersGameType::addNexus(HuntersNexusObject *nexus)
+{
+   mNexus.push_back(nexus);
 }
 
 
@@ -188,9 +189,9 @@ void HuntersGameType::itemDropped(Ship *ship, Item *item)
 // Create some game-specific menu items for the GameParameters menu from the arguments processed above...
 void HuntersGameType::addGameSpecificParameterMenuItems(Vector<MenuItem *> &menuItems)
 {
-   menuItems.push_back(new CounterMenuItem("Game Time:", 8, 1, 1, 99, "mins", "", "Time game will last"));
-   menuItems.push_back(new CounterMenuItem("Time for Nexus to Open:", 1, 1, 1, 99, "mins", "", "Time it takes for the Nexus to open"));
-   menuItems.push_back(new CounterMenuItem("Time Nexus Remains Open:", 30, 1, 1, 99, "secs", "", "Time that the Nexus will remain open"));
+   menuItems.push_back(new TimeCounterMenuItem("Game Time:", 8 * 60, 99*60, "Unlimited", "Time game will last"));
+   menuItems.push_back(new TimeCounterMenuItem("Time for Nexus to Open:", 60, 99*60, "Never", "Time it takes for the Nexus to open"));
+   menuItems.push_back(new TimeCounterMenuItemSeconds("Time Nexus Remains Open:", 30, 99*60, "Always", "Time that the Nexus will remain open"));
    menuItems.push_back(new CounterMenuItem("Score to Win:", 5000, 100, 100, 20000, "points", "", "Game ends when one player or team gets this score"));
 }
 
@@ -366,7 +367,7 @@ extern Color gNexusOpenColor;
 extern Color gNexusClosedColor;
 
 #define NEXUS_STR mNexusIsOpen ?  "Nexus closes: " : "Nexus opens: "
-
+#define NEXUS_NEVER_STR mNexusIsOpen ? "Nexus never closes" : "Nexus never opens"
 
 void HuntersGameType::renderInterfaceOverlay(bool scoreboardVisible)
 {
@@ -378,9 +379,20 @@ void HuntersGameType::renderInterfaceOverlay(bool scoreboardVisible)
    U32 minsRemaining = timeLeft / (60000);
    U32 secsRemaining = (timeLeft - (minsRemaining * 60000)) / 1000;
 
-   UserInterface::drawStringf(gScreenInfo.getGameCanvasWidth() - UserInterface::horizMargin - 65 - UserInterface::getStringWidth(20, NEXUS_STR),
-                              gScreenInfo.getGameCanvasHeight() - UserInterface::vertMargin - 45, 
-                              20, "%s%02d:%02d", NEXUS_STR, minsRemaining, secsRemaining);
+   const S32 y = gScreenInfo.getGameCanvasHeight() - UserInterface::vertMargin - 45;
+   const S32 size = 20;
+
+   if(mNexusReturnTimer.getPeriod() == 0)
+   {
+      S32 x =  gScreenInfo.getGameCanvasWidth() - UserInterface::horizMargin - UserInterface::getStringWidth(size, NEXUS_NEVER_STR);
+      UserInterface::drawStringf(x, y, size, NEXUS_NEVER_STR);
+   }
+   else
+   {
+      S32 x =  gScreenInfo.getGameCanvasWidth() - UserInterface::horizMargin - 65 - UserInterface::getStringWidth(size, NEXUS_STR);
+      UserInterface::drawStringf(x, y, size, "%s%02d:%02d", NEXUS_STR, minsRemaining, secsRemaining);
+   }
+
 
    for(S32 i = 0; i < mYardSaleWaypoints.size(); i++)
       renderObjectiveArrow(mYardSaleWaypoints[i].pos, Color(1,1,1));
@@ -514,6 +526,9 @@ void HuntersFlagItem::dropFlags(U32 flags)
    if(!mMount.isValid())
       return;
 
+   if(isGhost())  //avoid problem with adding flag to client, when it doesn't really exist on server.
+      return;
+
    for(U32 i = 0; i < flags; i++)
       releaseFlag(getGame(), mMount->getActualPos(), mMount->getActualVel());
 
@@ -632,7 +647,8 @@ void HuntersNexusObject::onAddedToGame(Game *theGame)
    if(!isGhost())
       setScopeAlways();    // Always visible!
 
-   dynamic_cast<HuntersGameType *>( getGame()->getGameType() )->addNexus(this);
+   HuntersGameType *gt = dynamic_cast<HuntersGameType *>( getGame()->getGameType() );
+   if(gt) gt->addNexus(this);
    getGame()->mObjectsLoaded++;
 }
 
@@ -644,8 +660,9 @@ void HuntersNexusObject::idle(GameObject::IdleCallPath path)
 
 void HuntersNexusObject::render()
 {
-   HuntersGameType *theGameType = dynamic_cast<HuntersGameType *>(getGame()->getGameType());
-   renderNexus(mPolyBounds, mPolyFill, mCentroid, mLabelAngle, (theGameType && theGameType->mNexusIsOpen), theGameType->mZoneGlowTimer.getFraction());
+   GameType *gt = getGame()->getGameType();
+   HuntersGameType *theGameType = dynamic_cast<HuntersGameType *>(gt);
+   renderNexus(mPolyBounds, mPolyFill, mCentroid, mLabelAngle, (theGameType && theGameType->mNexusIsOpen), gt ? gt->mZoneGlowTimer.getFraction() : 0);
 }
 
 

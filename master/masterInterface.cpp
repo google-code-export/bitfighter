@@ -152,26 +152,47 @@ TNL_IMPLEMENT_RPC(MasterServerInterface, s2mSendPlayerStatistics,
    NetClassGroupMasterMask, RPCGuaranteedOrdered, RPCDirClientToServer, 3) {}
 
 
-// Send game statistics to the master server
-TNL_IMPLEMENT_RPC(MasterServerInterface, s2mSendGameStatistics, (StringTableEntry gameType, StringTableEntry levelName, 
-                                                                 RangedU32<0,MAX_PLAYERS> players, S16 time),
-   (gameType, levelName, players, time),
-   NetClassGroupMasterMask, RPCGuaranteedOrdered, RPCDirClientToServer, 3) {}
-
-
-
 TNL_IMPLEMENT_RPC(MasterServerInterface, s2mSendPlayerStatistics_2, 
    (StringTableEntry playerName, StringTableEntry teamName, U16 kills, U16 deaths, U16 suicides, Vector<U16> shots, Vector<U16> hits),
    (playerName, teamName, kills, deaths, suicides, shots, hits),
    NetClassGroupMasterMask, RPCGuaranteedOrdered, RPCDirClientToServer, 4) {}
 
+
+TNL_IMPLEMENT_RPC(MasterServerInterface, s2mSendPlayerStatistics_3, 
+   (StringTableEntry playerName, Vector<U8> id, bool isBot, StringTableEntry teamName, S32 score, U16 kills, U16 deaths, U16 suicides, 
+         Vector<U16> shots, Vector<U16> hits),
+   (playerName, id, isBot, teamName, score, kills, deaths, suicides, shots, hits),
+   NetClassGroupMasterMask, RPCGuaranteedOrdered, RPCDirClientToServer, 6) {}
+
+
+// Send game statistics to the master server
+TNL_IMPLEMENT_RPC(MasterServerInterface, s2mSendGameStatistics, (StringTableEntry gameType, StringTableEntry levelName, 
+                                                                 RangedU32<0,128> players, S16 time),
+   (gameType, levelName, players, time),
+   NetClassGroupMasterMask, RPCGuaranteedOrdered, RPCDirClientToServer, 3) {}
+
+
 TNL_IMPLEMENT_RPC(MasterServerInterface, s2mSendGameStatistics_2, (StringTableEntry gameType, StringTableEntry levelName,
                                                                    Vector<StringTableEntry> teams, Vector<S32> teamScores,
                                                                    Vector<RangedU32<0,256> > colorR, Vector<RangedU32<0,256> > colorG, 
                                                                    Vector<RangedU32<0,256> > colorB, 
-                                                                   RangedU32<0,MAX_PLAYERS> players, S16 time),
+                                                                   RangedU32<0,128> players, S16 time),
    (gameType, levelName, teams, teamScores, colorR, colorG, colorB, players, time),
    NetClassGroupMasterMask, RPCGuaranteedOrdered, RPCDirClientToServer, 4) {}
+
+
+TNL_IMPLEMENT_RPC(MasterServerInterface, s2mSendGameStatistics_3, (U32 gameVersion,
+                                                                   StringTableEntry gameType, bool teamGame, 
+                                                                   StringTableEntry levelName,
+                                                                   Vector<StringTableEntry> teams, Vector<S32> teamScores,
+                                                                   Vector<RangedU32<0,256> > colorR, Vector<RangedU32<0,256> > colorG, 
+                                                                   Vector<RangedU32<0,256> > colorB, 
+                                                                   RangedU32<0,MAX_PLAYERS> players, RangedU32<0,MAX_PLAYERS> bots,
+                                                                   S16 time),
+   (gameVersion, gameType, teamGame, levelName, teams, teamScores, colorR, colorG, colorB, players, bots, time),
+   NetClassGroupMasterMask, RPCGuaranteedOrdered, RPCDirClientToServer, 6) {}
+
+
 
 
 TNL_IMPLEMENT_RPC(MasterServerInterface, m2cSetAuthenticated, (RangedU32<0, AuthenticationStatusCount> authStatus, 
@@ -185,7 +206,4 @@ TNL_IMPLEMENT_RPC(MasterServerInterface, s2mRequestAuthentication, (Vector<U8> i
 TNL_IMPLEMENT_RPC(MasterServerInterface, m2sSetAuthenticated, (Vector<U8> id, StringTableEntry name,
                               RangedU32<0,AuthenticationStatusCount> status ), (id, name, status ),
                   NetClassGroupMasterMask, RPCGuaranteed, RPCDirServerToClient, 5) {}
-
-
-
 

@@ -57,6 +57,7 @@ XXX need to document timers, new luavec stuff XXX
 <li>Engineer module -- build turrets and forcefields by grabbing resources; activate with /engf or /engt; only works on levels containing line Specials Engineer
 <li>Armor module -- makes ship stronger but harder to control; always active, uses no energy (Experimental, may be removed in future version)
 <li>Upload/download resources (levels, levelgens, and bots) from remote server (if enabled, and you have the password) via cmd line parameters
+<li>Added /getmap command to allow anyone get a currently playing map, if server enabled it.
 </ul>
 <h4>User Interface</h4>
 <ul>
@@ -71,17 +72,26 @@ Scripts can be names .lua or .levelgen, and can be stored in either the levels f
 Specifying the extension is optional.
 </ul>
 
+<h4>Editor</h4>
+<ul>
+<li>When creating a new level, credits line is prepoluated with current player name (unless it's ChumpChange)
+<li>Max level size bumped up to 256K
+<li>Can place neutral spawnpoints: Any team can spawn at these
+<li>When running command from console (run <script>) any created items are now selected
+<li>Entering 0 time will create unlimited time games.  Just because you can doesn't mean you should!
+</ul>
+
 <h4>Misc</h4>
 <ul>
 <li>Passwords now stored in plaintext in the ini file; gives increase in convenience with only small decrease in security; still transmitted via hash
 <li>When master server is unreachable, server will remember recent game servers and will try to contact those
 <li>Can define multiple servers in the INI to always try contacting without assistance of the master
-<li>Max level size bumped up to 256K
 <li>Engineer module can no longer create crossing forcefields
 <li>Smooth lines option available with a setting in the INI
-<li>Any team can spawn at a neutral spawn point
+<li>Added /linesmooth /linewidth command
 <li>Added /setscore and /settime commands that set the score and game time for the current level
-<li>When running command from console (run <script>) any created items are now selected
+<li>Added /getLevel command to download current level to local machine (currently requires admin access)
+<li>Near instant display of bot nav zones with /dzones, but now only works on local hosts (i.e. when you are hosting in-process)
 </ul>
 
 
@@ -92,6 +102,10 @@ Specifying the extension is optional.
 <li>Fixed bug with verified names not appearing verified with arranged connection (i.e. most of the time)
 <li>Ingame Bitfighter logo display issues corrected.  
 <li>Bitfighter logo now positioned almost exactly where the generating text is located, at all zooms and rotations <b>Note that if you have levels with the Bitfighter logo, it's position may have shifted!</b>
+<li>Fixed soccer sync problems
+<li>Fixed long loading and lag on level maps with lots of bot zones, /dzones will work only when hosting
+<li>Fixed crash on maps with: missing GameType, missing Team; FlagItem, Soccer and HuntersNexusObject on wrong GameType; out of range team number, Neutral flag in CTF.
+<li>Fixed Robots problems. Robots can now score, hold nexus and rabbit flags, and allow admin to kick robots or change robots team.
 </ul>
 */
 
@@ -291,7 +305,7 @@ ClientInfo gClientInfo;          // Info about the client used for establishing 
 void GLUT_CB_reshape(int nw, int nh)
 {
    gZapJournal.reshape(nw, nh);
-}
+}                                            
 
 TNL_IMPLEMENT_JOURNAL_ENTRYPOINT(ZapJournal, reshape, (S32 newWidth, S32 newHeight), (newWidth, newHeight))
 {
@@ -695,10 +709,6 @@ void hostGame()
 }
 
 
-//in millisecs (10 millisecs = 100 fps) (using 1000 / delay = fps)
-U32 minimumSleepTimeClient=10; //lower means smoother and slightly reduce lag, but uses more CPU
-U32 minimumSleepTimeDedicatedServer=10; //lower reduce everyone lag, but uses more CPU.
-
 // This is the master idle loop that gets registered with GLUT and is called on every game tick.
 // This in turn calls the idle functions for all other objects in the game.
 void idle()
@@ -721,7 +731,8 @@ void idle()
    F64 timeElapsed = Platform::getHighPrecisionMilliseconds(currentTimer - lastTimer) + unusedFraction;
    U32 integerTime = U32(timeElapsed);
 
-   if((gDedicatedServer &&  integerTime >= (U32)minimumSleepTimeDedicatedServer) || ( (!gDedicatedServer) &&  integerTime >= (U32)minimumSleepTimeClient))
+   if((gDedicatedServer && integerTime >= gIniSettings.minSleepTimeDedicatedServer) || 
+            (!gDedicatedServer &&  integerTime >=(U32)gIniSettings.minSleepTimeClient))
    {
       lastTimer = currentTimer;
       unusedFraction = timeElapsed - integerTime;
@@ -767,17 +778,19 @@ void idle()
    // sleep(0) helps reduce the impact of OpenGL on windows.
    U32 sleepTime =  1; //integerTime< 8 ? 8-integerTime : 1;
 
-   if(gClientGame && integerTime >= minimumSleepTimeClient) {
-      sleepTime = 0;      // Live player at the console, but if we're running > 100 fps, we can affort a nap
-	  //if(integerTime < (U32)minimumSleepTimeClient) sleepTime = minimumSleepTimeClient - integerTime; // sleep a minimum of a value
+   if(gClientGame && integerTime >= gIniSettings.minSleepTimeClient) 
+   {
+      sleepTime = 0;      // Live player at the console, but if we're running > 100 fps, we can afford a nap
+	  //if(integerTime < gIniSettings.minSleepTimeClient) sleepTime = minimumSleepTimeClient - integerTime; // sleep a minimum of a value
    }
      
    // If there are no players, set sleepTime to 40 to further reduce impact on the server.
    // We'll only go into this longer sleep on dedicated servers when there are no players.
-   if(gDedicatedServer){
+   if(gDedicatedServer)
+   {
       //if(integerTime < (U32)minimumSleepTimeDedicatedServer) sleepTime = minimumSleepTimeDedicatedServer - integerTime; // sleep a minimum of 5.
       if(gServerGame->isSuspended())
-          sleepTime = 40; //the higher this number, the less accurate the ping is on server lobby when empty.
+          sleepTime = 40;     // The higher this number, the less accurate the ping is on server lobby when empty, but the less power consumed.
    }
 
    Platform::sleep(sleepTime);
@@ -875,7 +888,7 @@ FileLogConsumer gServerLog;       // We'll apply a filter later on, in main()
 void joinGame(Address remoteAddress, bool isFromMaster, bool local)
 {
    MasterServerConnection *connToMaster = gClientGame->getConnectionToMaster();
-   if(isFromMaster && connToMaster && connToMaster->getConnectionState() == NetConnection::Connected)     // Request an arranged connection
+   if(isFromMaster && connToMaster && connToMaster->getConnectionState() == NetConnection::Connected)     // Request arranged connection
    {
       connToMaster->requestArrangedConnection(remoteAddress);
       gGameUserInterface.activate();
@@ -888,10 +901,11 @@ void joinGame(Address remoteAddress, bool isFromMaster, bool local)
 
       if(local)   // We're a local client, running in the same process as the server... connect to that server
       {
-         // Stuff on client side, so interface will offer the correct options
+         // Stuff on client side, so interface will offer the correct options.
+         // Note that if we're local, the passed address is probably a dummy; check caller if important.
          gameConnection->connectLocal(gClientGame->getNetInterface(), gServerGame->getNetInterface());
-         gameConnection->setIsAdmin(true);          // Local connection is always admin
-         gameConnection->setIsLevelChanger(true);   // Local connection can always change levels
+         gameConnection->setIsAdmin(true);              // Local connection is always admin
+         gameConnection->setIsLevelChanger(true);       // Local connection can always change levels
 
          GameConnection *gc = dynamic_cast<GameConnection *>(gameConnection->getRemoteConnectionObject());
 
@@ -1575,7 +1589,11 @@ void processStartupParams()
    if(!gDedicatedServer)
    {
       if(gIniSettings.name == "")
+      {
          gNameEntryUserInterface.activate();
+         seedRandomNumberGenerator(gIniSettings.lastName);
+         gClientInfo.id.getRandom();                           // Generate a player ID
+      }
       else
       {
          gMainMenuUserInterface.activate();
@@ -1645,13 +1663,13 @@ void processCmdLineParams(Vector<TNL::StringPtr> &theArgv)
       if(!stricmp(theArgv[i].getString(), "-sendres") || !stricmp(theArgv[i].getString(), "-getres"))  
       {
          writeToConsole();
-         if(theArgv.size() < i + 4)     // Too few arguments
+         if(theArgv.size() <= i + 4)     // Too few arguments
          {
             printf("Usage: bitfighter %s <server address> <password> <file> <resource type>\n", theArgv[i].getString());
             exitGame(1);
          }
 
-         bool sending = (!stricmp(theArgv[i].getString(), "-sendfile"));
+         bool sending = (!stricmp(theArgv[i].getString(), "-sendres"));
 
          Address address(theArgv[i+1].getString());
          if(!address.isValid())
@@ -1689,9 +1707,17 @@ void processCmdLineParams(Vector<TNL::StringPtr> &theArgv)
               
             netInterface->checkIncomingPackets();
             netInterface->processConnections();
+            Platform::sleep(1);              // Don't eat CPU power
+            if((!started) && (!dataConn))
+            {
+               printf("Failed to connect");
+               started = true;      // Get out of this loop
+            }
          }
 
          delete netInterface;
+         delete dataConn;
+
          exitGame(0);
       }
 
@@ -1736,7 +1762,7 @@ void setupLogging()
    // Specify which events each logfile will listen for
    S32 events = LogConsumer::AllErrorTypes | LogConsumer::LogConnection | LogConsumer::LuaLevelGenerator | LogConsumer::LuaBotMessage;
 
-   gMainLog.init(joindir(gConfigDirs.logDir, "bitfighter.log"), "w");     
+   gMainLog.init(joindir(gConfigDirs.logDir, "bitfighter.log"), "w");
    //gMainLog.setMsgTypes(events);  ==> set from INI settings     
    gMainLog.logprintf("------ Bitfighter Log File ------");
 

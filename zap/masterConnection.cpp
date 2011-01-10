@@ -262,16 +262,38 @@ TNL_IMPLEMENT_RPC_OVERRIDE(MasterServerConnection, m2cSetAuthenticated,
 {
    if((AuthenticationStatus)authStatus.value == AuthenticationStatusAuthenticatedName)
    {
+      // Hmmm.... same info in two places...
       gClientInfo.name = correctedName.getString();
+      gIniSettings.name = correctedName.getString();  
+
       gClientInfo.authenticated = true;
+      if(gClientGame->getConnectionToServer())
+         gClientGame->getConnectionToServer()->c2sSetAuthenticated();
    }
    else 
       gClientInfo.authenticated = false;       
-
-   if(gClientGame->getConnectionToServer())
-      gClientGame->getConnectionToServer()->c2sSetAuthenticated();
 }
 
+
+//  Tell all clients name is changed, and update server side name
+// Game Server only
+void updateClientChangedName(GameConnection *gc, StringTableEntry newName){
+	GameType *gt = gServerGame->getGameType();
+	ClientRef *cr = gc->getClientRef();
+	logprintf(LogConsumer::LogConnection, "Name changed from %s to %s",gc->getClientName().getString(),newName.getString());
+	if(gt)
+	{
+		gt->s2cRenameClient(gc->getClientName(), newName);
+	}
+	gc->setClientName(newName);
+	cr->name = newName;
+	Ship *ship = dynamic_cast<Ship *>(gc->getControlObject());
+	if(ship)
+	{
+		ship->setName(newName);
+		ship->setMaskBits(Ship::AuthenticationMask);  //ship names will update with this bit
+	}
+}
 
 // Now we know that player with specified id has an approved name
 TNL_IMPLEMENT_RPC_OVERRIDE(MasterServerConnection, m2sSetAuthenticated, (Vector<U8> id, StringTableEntry name,
@@ -284,8 +306,24 @@ TNL_IMPLEMENT_RPC_OVERRIDE(MasterServerConnection, m2sSetAuthenticated, (Vector<
       {
          if(status == AuthenticationStatusAuthenticatedName)
          {
-            walk->setClientName(name);
             walk->setAuthenticated(true);
+            //auto-rename other non-Authenticated clients to avoid stealing the authenticated name.
+            for(GameConnection *walk2 = GameConnection::getClientList(); walk2; walk2 = walk2->getNextClient())
+            {
+               if(walk2->getClientName() == name && !walk2->isAuthenticated() )
+					{
+                  //walk2->setClientName(GameConnection::makeUnique(walk2->getClientName().getString()).c_str());
+						updateClientChangedName(walk2, GameConnection::makeUnique(walk2->getClientName().getString()).c_str());
+                          //makeUnique will think the name is in use by self, and rename it.
+
+					}
+            }
+				StringTableEntry oldName = walk->getClientName();
+				walk->setClientName(StringTableEntry(""));       //avoid unique self
+				StringTableEntry uniqueName = GameConnection::makeUnique(name.getString()).c_str();  //new name
+				walk->setClientName(oldName);                   //restore name to properly get it updated to clients.
+            if(walk->getClientName() != uniqueName)
+					updateClientChangedName(walk, uniqueName);
          }
          else if(status == AuthenticationStatusUnauthenticatedName)
          {  // braces needed
@@ -399,7 +437,10 @@ void MasterServerConnection::writeConnectRequest(BitStream *bstream)
 
 void MasterServerConnection::onConnectionEstablished()
 {
-   logprintf(LogConsumer::LogConnection, "%s established connection with Master Server", mIsGameServer ? "Server" : "Client");
+   if(mIsGameServer)        // Might want ServerFilter ?
+      logprintf(LogConsumer::ServerFilter, "Server established connection with Master Server");
+   else
+      logprintf(LogConsumer::LogConnection, "Client established connection with Master Server");
 }
 
 
@@ -416,7 +457,10 @@ void MasterServerConnection::onConnectTerminated(TerminationReason reason, const
          gErrorMsgUserInterface.setMessage(6, "speaking, you should never see this message again!");
          gErrorMsgUserInterface.activate();
 
-         gClientGame->setReadyToConnectToMaster(false);
+         if(gClientGame->getConnectionToServer())
+            gClientGame->setReadyToConnectToMaster(false);  //New ID might cause Authentication (underline name) problems if connected to game server...
+         else
+            gClientInfo.id.getRandom();                     //get another ID, if not connected to game server
          break;
 
       case NetConnection::ReasonBadLogin:

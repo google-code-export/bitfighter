@@ -47,17 +47,16 @@ class SavedMenuItem
 private:
    string mParamName;
    string mParamVal;
-   S32 mParamIVal;
+
 public:
    SavedMenuItem() { /* Unused */ }    // Default constructor
 
    SavedMenuItem(MenuItem *menuItem) { mParamName = menuItem->getText(); setValues(menuItem); }
 
-   void setValues(MenuItem *menuItem) { mParamVal = menuItem->getValue(); mParamIVal = menuItem->getIntValue(); }
+   void setValues(MenuItem *menuItem) { mParamVal = menuItem->getValueForWritingToLevelFile(); }
 
    string getParamName() { return mParamName; }
    string getParamVal() { return mParamVal; }
-   S32 getParamIVal() { return mParamIVal; }
 };
 
 ////////////////////////////////////
@@ -77,7 +76,7 @@ private:
    S32 mQuitItemIndex;               // Index of our quit item -- will vary depending on how many game-specific parameters there are
    S32 mGameSpecificParams;          // How many game specific parameters do we have?
 
-   string getParamVal(string paramName);      // Find value in our list of params
+   //string getParamVal(string paramName);      // Find value in our list of params
 
    virtual S32 getTextSize() { return 18; }
    virtual S32 getGap() { return 12; }

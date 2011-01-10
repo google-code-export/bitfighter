@@ -332,13 +332,15 @@ public:
    virtual void updateShipLoadout(GameObject *shipObject); // called from LoadoutZone when a Ship touches the zone
    void setClientShipLoadout(ClientRef *cl, const Vector<U32> &loadout);
 
+   bool checkTeamRange(S32 team);               // Team in range? Used for processing arguments.
+   bool makeSureTeamCountIsNotZero();           // Zero teams will crash.
    virtual Color getShipColor(Ship *s);         // Get the color of a ship
    virtual Color getTeamColor(S32 team);        // Get the color of a team, based on index
    Color getTeamColor(GameObject *theObject);   // Get the color of a team, based on object
 
    S32 getTeam(const char *playerName);         // Given a player, return their team
 
-   const char *getTeamName(S32 team);           // Return the name of the team
+   StringTableEntry getTeamName(S32 team);      // Return the name of the team
 
 
    // gameType flag methods for CTF, Rabbit, Football
@@ -376,6 +378,7 @@ public:
 
    TNL_DECLARE_RPC(s2cCanSwitchTeams, (bool allowed));
 
+   TNL_DECLARE_RPC(s2cRenameClient, (StringTableEntry oldName,StringTableEntry newName));
    TNL_DECLARE_RPC(s2cRemoveClient, (StringTableEntry clientName));
 
    // Not all of these actually used?
@@ -397,7 +400,10 @@ public:
    TNL_DECLARE_RPC(c2sAdvanceWeapon, ());
    TNL_DECLARE_RPC(c2sSelectWeapon, (RangedU32<0, ShipWeaponCount> index));
    TNL_DECLARE_RPC(c2sDropItem, ());
+
+   // These are used when the client sees something happen and wants a confirmation from the server
    TNL_DECLARE_RPC(c2sReaffirmMountItem, (U16 itemId));
+   TNL_DECLARE_RPC(c2sResendItemStatus, (U16 itemId));
 
    // Handle additional game-specific menu options for the client and the admin
    virtual void addClientGameMenuOptions(Vector<MenuItem *> &menuOptions);

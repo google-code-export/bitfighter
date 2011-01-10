@@ -52,6 +52,7 @@
 
 namespace Zap
 {
+extern  F32 getCurrentRating(GameConnection *conn);      //in game.cpp
 
 //RDW GCC needs this to be properly defined.  -- isn't this defined in gameType.h? -CE
 //GCC can't link without this definition.  One of the calls to min in
@@ -155,7 +156,7 @@ bool GameType::processArguments(S32 argc, const char **argv)
 // Create some game-specific menu items for the GameParameters menu
 void GameType::addGameSpecificParameterMenuItems(Vector<MenuItem *> &menuItems)
 {
-   menuItems.push_back(new CounterMenuItem("Game Time:", 8, 1, 1, 99, "mins", "", "Time game will last"));
+   menuItems.push_back(new TimeCounterMenuItem("Game Time:", 8 * 60, 99*60, "Unlimited", "Time game will last"));
    menuItems.push_back(new CounterMenuItem("Score to Win:", 10, 1, 1, 99, "points", "", "Game ends when one team gets this score"));
 }
 
@@ -549,7 +550,7 @@ void GameType::renderInterfaceOverlay(bool scoreboardVisible)
                glVertex2f(xr, yt + teamAreaHeight);
             glEnd();
 
-            UserInterface::drawString(xl + 40, yt + 2, 30, getTeamName(i));
+            UserInterface::drawString(xl + 40, yt + 2, 30, getTeamName(i).getString());
             UserInterface::drawStringf(xr - 140, yt + 2, 30, "%d", mTeams[i].getScore());
          }
 
@@ -786,9 +787,7 @@ void GameType::renderTimeLeft()
 
    const S32 size = 20;       // Size of time
    const S32 gtsize = 12;     // Size of game type/score indicator
-
-   U32 minsRemaining = timeLeft / (60000);
-   U32 secsRemaining = (timeLeft - (minsRemaining * 60000)) / 1000;
+   
    S32 len = UserInterface::getStringWidthf(gtsize, "[%s/%d]", getShortName(), mWinningScore);
 
    glColor3f(0,1,1);
@@ -796,10 +795,21 @@ void GameType::renderTimeLeft()
                               gScreenInfo.getGameCanvasHeight() - UserInterface::vertMargin - 20 + ((size - gtsize) / 2) + 2, 
                               gtsize, "[%s/%d]", getShortName(), mWinningScore);
 
+   S32 x = gScreenInfo.getGameCanvasWidth() - UserInterface::horizMargin - 65;
+   S32 y = gScreenInfo.getGameCanvasHeight() - UserInterface::vertMargin - 20;
    glColor3f(1,1,1);
-   UserInterface::drawStringf(gScreenInfo.getGameCanvasWidth() - UserInterface::horizMargin - 65,
-                              gScreenInfo.getGameCanvasHeight() - UserInterface::vertMargin - 20, 
-                              size, "%02d:%02d", minsRemaining, secsRemaining);
+
+   if(mGameTimer.getPeriod() == 0)
+   {
+      UserInterface::drawString(x, y, size, "Unlim.");
+   }
+   else
+   {
+      U32 minsRemaining = timeLeft / (60000);
+      U32 secsRemaining = (timeLeft - (minsRemaining * 60000)) / 1000;
+
+      UserInterface::drawStringf(x, y, size, "%02d:%02d", minsRemaining, secsRemaining);
+   }
 }
 
 
@@ -836,14 +846,14 @@ void GameType::gameOverManGameOver()
 }
 
 
-// Transmit statistics to the master server
+
+// Transmit statistics to the master server, LogStats to game server
 void GameType::saveGameStats()
 {
-   // Currently, only transmits statistics to the master server
    MasterServerConnection *masterConn = gServerGame->getConnectionToMaster();
-   GameType *gameType = gServerGame->getGameType();
+   //GameType *gameType = this; //gServerGame->getGameType();
 
-   if(masterConn && gameType)
+   //if(gameType)   // is this check needed ?
    {
       // Build a list of teams, so we can sort by score
       Vector<Team> sortTeams(mTeams.size());
@@ -870,16 +880,63 @@ void GameType::saveGameStats()
          colorB.push_back(RangedU32<0,256>(U32(sortTeams[i].color.b * 255)));
       }
 
-      S16 timeInSecs = (gameType->mGameTimer.getPeriod() - gameType->mGameTimer.getCurrent()) / 1000;      // Total time game was played
-      masterConn->s2mSendGameStatistics_2(gameType->getGameTypeString(), gameType->mLevelName, teams, scores, 
-                                          colorR, colorG, colorB, gameType->mClientList.size(), timeInSecs);
+      // Count the players and bots
+      S32 players = 0;
+      S32 bots = 0;
 
-      for(S32 i = 0; i < gameType->mClientList.size(); i++)
+      for(S32 i = 0; i < mClientList.size(); i++)
       {
-         Statistics *statistics = &gameType->mClientList[i]->mStatistics;
-         masterConn->s2mSendPlayerStatistics_2(gameType->mClientList[i]->name, gameType->getTeamName(gameType->mClientList[i]->getTeam()), 
-                                             statistics->getKills(), statistics->getDeaths(), 
-                                             statistics->getSuicides(), statistics->getShotsVector(), statistics->getHitsVector());
+         if(mClientList[i]->isRobot)
+            bots++;
+         else
+            players++;
+      }
+
+      S16 timeInSecs = (mGameTimer.getPeriod() - mGameTimer.getCurrent()) / 1000;      // Total time game was played
+      if(masterConn && gIniSettings.SendStatsToMaster)
+         masterConn->s2mSendGameStatistics_3(BUILD_VERSION, getGameTypeString(), isTeamGame(),
+                                          mLevelName, teams, scores, 
+                                          colorR, colorG, colorB, players, bots, timeInSecs);
+		if(gIniSettings.LogStats)
+		{
+			logprintf(LogConsumer::ServerFilter, "Version=%i %s %i:%02i",BUILD_VERSION,getGameTypeString(), timeInSecs/60, timeInSecs%60);
+			logprintf(LogConsumer::ServerFilter, "%s Level=%s", isTeamGame() ? "Team" : "NoTeam", mLevelName.getString());
+			for(S32 i=0; i < mTeams.size(); i++)
+				logprintf(LogConsumer::ServerFilter, "Team=%i Score=%i Color=%i,%i,%i Name=%s"
+					, i                   //Using unsorted, to correctly use index as team ID. Teams can have same name.
+					, mTeams[i].getScore()
+					, (S32) mTeams[i].color.r*9   //Don't need accuracy, will use one digit number.
+					, (S32) mTeams[i].color.g*9
+					, (S32) mTeams[i].color.b*9
+					, mTeams[i].getName().getString()
+					);
+		}
+
+      for(S32 i = 0; i < mClientList.size(); i++)
+      {
+         Statistics *statistics = &mClientList[i]->mStatistics;
+			mClientList[i]->getScore();
+        
+         if(masterConn && gIniSettings.SendStatsToMaster)
+            masterConn->s2mSendPlayerStatistics_3(mClientList[i]->name, mClientList[i]->clientConnection->getClientId()->toVector(), 
+                                               mClientList[i]->isRobot,
+                                               getTeamName(mClientList[i]->getTeam()),  //Both teams might have same name...
+                                               mClientList[i]->getScore(), //non-zero cause master to reset? Keep getting disconnected after the end of game.
+                                               statistics->getKills(), statistics->getDeaths(), 
+                                               statistics->getSuicides(), statistics->getShotsVector(), statistics->getHitsVector());
+			if(gIniSettings.LogStats)
+			{
+				logprintf(LogConsumer::ServerFilter, "%s=%s Team=%i Score=%i Rating=%f kill=%i death=%i suicide=%i"
+					, mClientList[i]->isRobot ? "Robot" : "Player"
+					, mClientList[i]->name.getString()
+					, mClientList[i]->getTeam()
+					, mClientList[i]->getScore()
+					, getCurrentRating(mClientList[i]->clientConnection)
+					, statistics->getKills()
+					, statistics->getDeaths() 
+               , statistics->getSuicides()
+					);
+			}
       }
    }
 }
@@ -1027,6 +1084,18 @@ bool GameType::processLevelItem(S32 argc, const char **argv)
             mTeams.push_back(team);
       }
    }
+   else if(!stricmp(argv[0], "TeamChange"))
+   {
+      if(argc >= 2)   // Enough arguments?
+      {
+         Team team;
+         S32 teamNumber = atoi(argv[1]);   //Team number to change
+         team.readTeamFromLevelLine(argc-1, argv+1);    //skip one arg
+   
+         if(team.numPlayers != -1 && teamNumber < mTeams.size() && teamNumber >= 0)
+            mTeams[teamNumber] = team;
+      }
+   }
    else if(!stricmp(argv[0], "Specials"))
    {         
       // Examine items on the specials line
@@ -1127,8 +1196,8 @@ bool GameType::processLevelItem(S32 argc, const char **argv)
    // TODO: Integrate code above with code above!!  EASY!!
    else if(!stricmp(argv[0], "BarrierMakerS"))
    {
-      if(argc < 2)
-      {
+      if(argc >= 2)
+      { 
          BarrierRec barrier;
          barrier.width = atof(argv[1]);
          for(S32 i = 2; i < argc; i++)
@@ -1209,12 +1278,20 @@ void GameType::spawnShip(GameConnection *theClient)
 
    Point spawnPoint = getSpawnPoint(teamIndex);
 
+	if(theClient->isRobot())
+	{
+		Robot *robot = (Robot *) theClient->getControlObject();
+      robot->setOwner(theClient);
+		robot->setTeam(teamIndex);
+		spawnRobot(robot);
+	}else
+	{
    //                     Player's name, team, and spawning location
-   Ship *newShip = new Ship(cl->name, theClient->isAuthenticated(), teamIndex, spawnPoint);
-
-   theClient->setControlObject(newShip);
-   newShip->setOwner(theClient);
-   newShip->addToGame(getGame());
+      Ship *newShip = new Ship(cl->name, theClient->isAuthenticated(), teamIndex, spawnPoint);
+      theClient->setControlObject(newShip);
+      newShip->setOwner(theClient);
+      newShip->addToGame(getGame());
+	}
 
    if(isSpawnWithLoadoutGame() || !levelHasLoadoutZone())
       setClientShipLoadout(cl, theClient->getLoadout());     // Set loadout if this is a SpawnWithLoadout type of game, or there is no loadout zone
@@ -1453,13 +1530,35 @@ void GameType::queryItemsOfInterest()
 }
 
 
+// Team in range?    Currently not used.
+// Could use it for processArguments, but out of range will be UNKNOWN name and should not cause any errors.
+bool GameType::checkTeamRange(S32 team){
+	return (team < mTeams.size() && team >= -2);
+}
+
+// Zero teams will crash.
+bool GameType::makeSureTeamCountIsNotZero()
+{
+	if(mTeams.size() == 0) {
+		Team team;
+		team.setName("Missing Team");
+		team.color.r = 0;
+		team.color.g = 0;
+		team.color.b = 1;
+		mTeams.push_back(team);
+		return true;
+	}
+	return false;
+}
+
+
 extern Color gNeutralTeamColor;
 extern Color gHostileTeamColor;
 
 // This method can be overridden by other game types that handle colors differently
 Color GameType::getTeamColor(S32 team)
 {
-   if(team == -1 || team >= mTeams.size())
+   if(team == -1 || team >= mTeams.size() || team < -2)
       return gNeutralTeamColor;
    else if(team == -2)
       return gHostileTeamColor;
@@ -1479,16 +1578,19 @@ S32 GameType::getTeam(const char *playerName)
 }
 
 
-const char *GameType::getTeamName(S32 team)
+//There is a bigger need to use StringTableEntry and not const char *
+//    mainly to prevent errors on CTF neutral flag and out of range team number.
+StringTableEntry GameType::getTeamName(S32 team)
 {
-   if(team >= 0)
-      return mTeams[team].getName().getString();
+   
+   if(team >= 0 && team < mTeams.size())
+      return mTeams[team].getName();
    else if(team == -2)
-      return "Hostile";
+      return StringTableEntry("Hostile");
    else if(team == -1)
-      return "Neutral";
+      return StringTableEntry("Neutral");
    else
-      return "UNKNOWN";
+      return StringTableEntry("UNKNOWN");
 }
 
 
@@ -1503,8 +1605,6 @@ Color GameType::getShipColor(Ship *s)
    return getTeamColor(s->getTeam());
 }
 
-
-extern  F32 getCurrentRating(GameConnection *conn);
 
 
 // Make sure that the mTeams[] structure has the proper player counts
@@ -1569,10 +1669,11 @@ void GameType::serverAddClient(GameConnection *theClient)
 
    // ...and add new player to that team
    cref->setTeam(minTeamIndex);
+	cref->isRobot = cref->clientConnection->isRobot();
    mClientList.push_back(cref);
    theClient->setClientRef(cref);
 
-   s2cAddClient(cref->name, false, cref->clientConnection->isAdmin(), false, true);    // Tell other clients about the new guy, who is never us...
+   s2cAddClient(cref->name, false, cref->clientConnection->isAdmin(), cref->isRobot, true);    // Tell other clients about the new guy, who is never us...
    s2cClientJoinedTeam(cref->name, cref->getTeam());
 
    spawnShip(theClient);
@@ -1681,7 +1782,7 @@ void GameType::updateScore(Ship *ship, ScoringEvent scoringEvent, S32 data)
 
    TNLAssert(ship, "Ship is null in updateScore!!");
 
-   if(!ship->isRobot() && ship->getControllingClient())
+   if(ship->getControllingClient())
       cl = ship->getControllingClient()->getClientRef();  // Get client reference for ships...
 
    updateScore(cl, ship->getTeam(), scoringEvent, data);
@@ -1719,7 +1820,7 @@ void GameType::updateScore(ClientRef *player, S32 team, ScoringEvent scoringEven
    if(isTeamGame())
    {
       // Just in case...  completely superfluous, gratuitous check
-      if(team < 0)
+      if(team < 0 || team >= mTeams.size())
          return;
 
       S32 points = getEventScore(TeamScore, scoringEvent, data);
@@ -2084,6 +2185,22 @@ void GameType::serverRemoveClient(GameConnection *theClient)
    s2cRemoveClient(theClient->getClientName());
 }
 
+//extern void updateClientChangedName(GameConnection *,StringTableEntry);  //in masterConnection.cpp
+
+// Server notifies clients that a player has changed name
+GAMETYPE_RPC_S2C(GameType, s2cRenameClient, (StringTableEntry oldName, StringTableEntry newName), (oldName, newName))
+{
+   for(S32 i = 0; i < mClientList.size(); i++)
+   {
+      if(mClientList[i]->name == oldName)
+      {
+         mClientList[i]->name = newName;
+         break;
+      }
+   }
+   gGameUserInterface.displayMessage(Color(0.6f, 0.6f, 0.8f), "%s changed to %s", oldName.getString(), newName.getString());
+}
+
 // Server notifies clients that a player has left the game
 GAMETYPE_RPC_S2C(GameType, s2cRemoveClient, (StringTableEntry name), (name))
 {
@@ -2144,9 +2261,9 @@ GAMETYPE_RPC_S2C(GameType, s2cClientJoinedTeam,
    // TODO: Better place to get current player's name?  This may fail if users have same name, and system has changed it
    // been corrected by the server.
    if(gClientGame->getGameType()->mLocalClient && name == gClientGame->getGameType()->mLocalClient->name)      
-      gGameUserInterface.displayMessage(Color(0.6f, 0.6f, 0.8f), "You have joined team %s.", getTeamName(teamIndex));
+      gGameUserInterface.displayMessage(Color(0.6f, 0.6f, 0.8f), "You have joined team %s.", getTeamName(teamIndex).getString());
    else
-      gGameUserInterface.displayMessage(Color(0.6f, 0.6f, 0.8f), "%s joined team %s.", name.getString(), getTeamName(teamIndex));
+      gGameUserInterface.displayMessage(Color(0.6f, 0.6f, 0.8f), "%s joined team %s.", name.getString(), getTeamName(teamIndex).getString());
 
    // Make this client forget about any mines or spybugs he knows about... it's a bit of a kludge to do this here,
    // but this RPC only runs when a player joins the game or changes teams, so this will never hurt, and we can
@@ -2211,15 +2328,15 @@ void GameType::onGhostAvailable(GhostConnection *theConnection)
    {
       bool localClient = mClientList[i]->clientConnection == theConnection;
 
-      s2cAddClient(mClientList[i]->name, localClient, mClientList[i]->clientConnection->isAdmin(), false, false);
+      s2cAddClient(mClientList[i]->name, localClient, mClientList[i]->clientConnection->isAdmin(), mClientList[i]->isRobot, false);
       s2cClientJoinedTeam(mClientList[i]->name, mClientList[i]->getTeam());
    }
 
-   for(S32 i = 0; i < Robot::robots.size(); i++)
-   {
-      s2cAddClient(Robot::robots[i]->getName(), false, false, true, false);
-      s2cClientJoinedTeam(Robot::robots[i]->getName(), Robot::robots[i]->getTeam());
-   }
+   //for(S32 i = 0; i < Robot::robots.size(); i++)  //Robot is part of mClientList
+   //{
+   //   s2cAddClient(Robot::robots[i]->getName(), false, false, true, false);
+   //   s2cClientJoinedTeam(Robot::robots[i]->getName(), Robot::robots[i]->getTeam());
+   //}	
 
    // An empty list clears the barriers
    Vector<F32> v;
@@ -2274,6 +2391,7 @@ GAMETYPE_RPC_S2C(GameType, s2cAddBarriers, (Vector<F32> barrier, F32 width, bool
 }
 
 
+
 // Runs the server side commands, which the client may or may not know about
 
 // This is server side commands, For client side commands, use UIGame.cpp, GameUserInterface::processCommand.
@@ -2285,14 +2403,14 @@ void GameType::processServerCommand(ClientRef *clientRef, const char *cmd, Vecto
 
    if(!stricmp(cmd, "settime"))
    {
-      if(!clientRef->isLevelChanger)
+      if(!clientRef->clientConnection->isLevelChanger())
          clientRef->clientConnection->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "!!! Need level change permission");
       else if(args.size() < 1)
          clientRef->clientConnection->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "!!! Enter time in minutes");
       else
       {
          F32 time = atof(args[0].getString());
-         if(time <= 0)
+         if(time < 0 || time == 0 && (stricmp(args[0].getString(), "0") && stricmp(args[0].getString(), "unlim")))  // 0 --> unlimited
             clientRef->clientConnection->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "!!! Invalid time... game time not changed");
          else
          {
@@ -2311,7 +2429,7 @@ void GameType::processServerCommand(ClientRef *clientRef, const char *cmd, Vecto
    }
    else if(!stricmp(cmd, "setscore"))
    {
-     if(!clientRef->isLevelChanger)                         // Level changers and above
+     if(!clientRef->clientConnection->isLevelChanger())                         // Level changers and above
          clientRef->clientConnection->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "!!! Need level change permission");
      else if(args.size() < 1)
          clientRef->clientConnection->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "!!! Enter score limit");
@@ -2327,6 +2445,19 @@ void GameType::processServerCommand(ClientRef *clientRef, const char *cmd, Vecto
          }
      }
    }
+	/* /// Remove this command
+   else if(!stricmp(cmd, "rename") && args.size() >= 1)
+   {
+		//for testing, might want to remove this once it is fully working.
+		StringTableEntry oldName = clientRef->clientConnection->getClientName();
+		clientRef->clientConnection->setClientName(StringTableEntry(""));       //avoid unique self
+		StringTableEntry uniqueName = GameConnection::makeUnique(args[0].getString()).c_str();  //new name
+		clientRef->clientConnection->setClientName(oldName);                   //restore name to properly get it updated to clients.
+
+		clientRef->clientConnection->setAuthenticated(false);         //don't underline anymore because of rename
+		updateClientChangedName(clientRef->clientConnection,uniqueName);
+   }
+	*/
    else
    {
       // Command not found, tell the client
@@ -2401,12 +2532,14 @@ GAMETYPE_RPC_S2C(GameType, s2cDisplayChatMessage, (bool global, StringTableEntry
    gGameUserInterface.displayMessage(theColor, "%s: %s", clientName.getString(), message.getString());
 }
 
+
 // Server sends message to the client for display using StringTableEntry
 GAMETYPE_RPC_S2C(GameType, s2cDisplayChatMessageSTE, (bool global, StringTableEntry clientName, StringTableEntry message), (global, clientName, message))
 {
    Color theColor = global ? gGlobalChatColor : gTeamChatColor;
    gGameUserInterface.displayMessage(theColor, "%s: %s", clientName.getString(), message.getString());
 }
+
 
 // Client requests start/stop of streaming pings and scores from server to client
 GAMETYPE_RPC_C2S(GameType, c2sRequestScoreboardUpdates, (bool updates), (updates))
@@ -2417,6 +2550,7 @@ GAMETYPE_RPC_C2S(GameType, c2sRequestScoreboardUpdates, (bool updates), (updates
    if(updates)
       updateClientScoreboard(cl);
 }
+
 
 // Client tells server that they chose the next weapon
 GAMETYPE_RPC_C2S(GameType, c2sAdvanceWeapon, (), ())
@@ -2470,6 +2604,23 @@ GAMETYPE_RPC_C2S(GameType, c2sReaffirmMountItem, (U16 itemId), (itemId))
 
 }
 
+
+GAMETYPE_RPC_C2S(GameType, c2sResendItemStatus, (U16 itemId), (itemId))
+{
+   GameConnection *source = (GameConnection *) getRPCSourceConnection();
+
+   for(S32 i = 0; i < gServerGame->mGameObjects.size(); i++)
+   {
+      Item *item = dynamic_cast<Item *>(gServerGame->mGameObjects[i]);
+      if(item && item->getItemId() == itemId)
+      {
+         item->setPositionMask();
+         break;
+      }
+   }
+}
+
+
 // Client tells server that they chose the specified weapon
 GAMETYPE_RPC_C2S(GameType, c2sSelectWeapon, (RangedU32<0, ShipWeaponCount> indx), (indx))
 {
@@ -2512,13 +2663,13 @@ void GameType::updateClientScoreboard(ClientRef *cl)
       mRatings.push_back(max(min((U32)(getCurrentRating(conn) * 100.0) + 100, maxRating), minRating));
    }
 
-   // Next come the robots
-   for(S32 i = 0; i < Robot::robots.size(); i++)
-   {
-      mPingTimes.push_back(0);
-      mScores.push_back(Robot::robots[i]->getScore());
-      mRatings.push_back(max(min((U32)(Robot::robots[i]->getRating() * 100.0) + 100, maxRating), minRating));
-   }
+   // Next come the robots ... Robots is part of mClientList
+   //for(S32 i = 0; i < Robot::robots.size(); i++)
+   //{
+   //   mPingTimes.push_back(0);
+   //   mScores.push_back(Robot::robots[i]->getScore());
+   //   mRatings.push_back(max(min((U32)(Robot::robots[i]->getRating() * 100.0) + 100, maxRating), minRating));
+   //}
 
    NetObject::setRPCDestConnection(cl->clientConnection);
    s2cScoreboardUpdate(mPingTimes, mScores, mRatings);

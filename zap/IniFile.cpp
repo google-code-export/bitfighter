@@ -58,7 +58,7 @@ namespace Zap
 
 
 // Constructor
-CIniFile::CIniFile( string const iniPath)
+CIniFile::CIniFile(const string iniPath)
 {
   Path(iniPath);
   caseInsensitive = true;        // Case sensitivity creates confusion!
@@ -82,13 +82,13 @@ void CIniFile::ReadFile()
       string y(x.begin(), x.end());
       y.assign(x.begin(), x.end());
 
-      f.open( y.c_str(), ios::in);
+      f.open(y.c_str(), ios::in);
 
       // To better handle our journaling requirements, we'll read the INI file,
       // then pass those off to a journaled routine for processing.
-      if (!f.fail())    // This is true if the file cannot be opened or something... in which case we don't want to read the file!
+      if(!f.fail())    // This is true if the file cannot be opened or something... in which case we don't want to read the file!
       {
-         while(getline( f, line))
+         while(getline(f, line))
             if(line.length() > 2)                   // Anything shorter can't be useful...  strip these out here to reduce journaling burden
                iniLines.push_back(line.c_str());
          f.close();
@@ -120,8 +120,8 @@ TNL_IMPLEMENT_JOURNAL_ENTRYPOINT(ZapJournal, processINILine, (TNL::StringPtr ini
 // Parse a single line of the INI file and break it into its component bits
 void CIniFile::processLine(string line)
 {
-   string vn, v;
-   string valuename, value;
+   string k, v;
+   string key, value;
    string::size_type pLeft, pRight;
 
    //  line = _TCHAR(l.c_str());
@@ -130,36 +130,36 @@ void CIniFile::processLine(string line)
    // Note that the '\r' will be written to INI files from
    // Unix so that the created INI file can be read under Win32
    // without change.
-   if ( (line.length() > 0) && line[line.length() - 1] == '\r')
-   line = line.substr( 0, line.length() - 1);
+   if((line.length() > 0) && line[line.length() - 1] == '\r')
+   line = line.substr(0, line.length() - 1);
 
-   if ( line.length()) {
-      if (( pLeft = line.find_first_of(";#[=")) != string::npos) {
-         switch ( line[pLeft]) {
-            case '[':
-               if ((pRight = line.find_last_of("]")) != string::npos && pRight > pLeft) {
-                  keyname = line.substr( pLeft + 1, pRight - pLeft - 1);
-                  AddKeyName( keyname);
+   if(line.length()) {
+      if((pLeft = line.find_first_of(";#[=")) != string::npos) {
+         switch (line[pLeft]) {
+            case '[':      // Section
+               if((pRight = line.find_last_of("]")) != string::npos && pRight > pLeft) {
+                  keyname = line.substr(pLeft + 1, pRight - pLeft - 1);
+                  addSection(keyname);
                }
                break;
 
-            case '=':
-               valuename = line.substr( 0, pLeft);
-               value = line.substr( pLeft + 1);
-               vn = valuename.c_str();
+            case '=':      // Key = Value pair
+               key = line.substr(0, pLeft);
+               value = line.substr(pLeft + 1);
+               k = key.c_str();
                v = value.c_str();
-               vn = trim(vn, " ");
+               k = trim(k, " ");
                v = trim(v, " ");
 
-               SetValue( keyname, vn, v);
+               SetValue(keyname, k, v);
                break;
 
-            case ';':
+            case ';':      // Comments
             case '#':
-               if ( !names.size())
-                  HeaderComment( line.substr( pLeft + 1));
+               if(!names.size())
+                  HeaderComment(line.substr(pLeft + 1));
                else
-                  KeyComment( keyname, line.substr( pLeft + 1));
+                  sectionComment(keyname, line.substr(pLeft + 1));
                break;
          }
       }
@@ -173,33 +173,33 @@ bool CIniFile::WriteFile()
       return true;
 
 
-  unsigned commentID, keyID, valueID;
+  unsigned commentID, sectionId, valueID;
 
   // Normally you would use ofstream, but the SGI CC compiler has a few bugs with ofstream. So ... fstream used
   fstream f;
   string x = path;
   string y(x.begin(), x.end());
   y.assign(x.begin(), x.end());
-  f.open( y.c_str(), ios::out);
+  f.open(y.c_str(), ios::out);
 
-  if ( f.fail())
+  if(f.fail())
     return false;
 
   // Write header comments.
-  for ( commentID = 0; commentID < comments.size(); ++commentID)
+  for(commentID = 0; commentID < comments.size(); ++commentID)
     f << ";" << comments[commentID] << iniEOL;
-  if ( comments.size())
+  if(comments.size())
     f << iniEOL;
 
   // Write keys and values.
-  for ( keyID = 0; keyID < keys.size(); ++keyID) {
-    f << '[' << names[keyID] << ']' << iniEOL;
+  for(sectionId = 0; sectionId < keys.size(); ++sectionId) {
+    f << '[' << names[sectionId] << ']' << iniEOL;
     // Comments.
-    for ( commentID = 0; commentID < keys[keyID].comments.size(); ++commentID)
-      f << ";" << keys[keyID].comments[commentID] << iniEOL;
+    for(commentID = 0; commentID < keys[sectionId].comments.size(); ++commentID)
+      f << ";" << keys[sectionId].comments[commentID] << iniEOL;
     // Values.
-    for ( valueID = 0; valueID < keys[keyID].names.size(); ++valueID)
-      f << keys[keyID].names[valueID] << '=' << keys[keyID].values[valueID] << iniEOL;
+    for(valueID = 0; valueID < keys[sectionId].names.size(); ++valueID)
+      f << keys[sectionId].names[valueID] << '=' << keys[sectionId].values[valueID] << iniEOL;
     f << iniEOL;
   }
   f.close();
@@ -207,174 +207,175 @@ bool CIniFile::WriteFile()
   return true;
 }
 
-long CIniFile::FindKey( string const keyname) const
+long CIniFile::findSection(const string keyname) const
 {
-  for ( unsigned keyID = 0; keyID < names.size(); ++keyID)
-    if ( CheckCase( names[keyID]) == CheckCase( keyname))
-      return long(keyID);
+  for(unsigned sectionId = 0; sectionId < names.size(); ++sectionId)
+    if(CheckCase(names[sectionId]) == CheckCase(keyname))
+      return long(sectionId);
   return noID;
 }
 
-long CIniFile::FindValue( unsigned const keyID, string const valuename) const
+long CIniFile::FindValue(unsigned const sectionId, const string valuename) const
 {
-  if ( !keys.size() || keyID >= keys.size())
+  if(!keys.size() || sectionId >= keys.size())
     return noID;
 
-  for ( unsigned valueID = 0; valueID < keys[keyID].names.size(); ++valueID)
-    if ( CheckCase( keys[keyID].names[valueID]) == CheckCase( valuename))
+  for(unsigned valueID = 0; valueID < keys[sectionId].names.size(); ++valueID)
+    if(CheckCase(keys[sectionId].names[valueID]) == CheckCase(valuename))
       return long(valueID);
   return noID;
 }
 
-unsigned CIniFile::AddKeyName( string const keyname)
+unsigned CIniFile::addSection(const string keyname)
 {
-  if(FindKey(keyname) != noID)            // Don't create duplicate keys!
+  if(findSection(keyname) != noID)            // Don't create duplicate keys!
     return noID;
-  names.resize( names.size() + 1, keyname);
-  keys.resize( keys.size() + 1);
+  names.resize(names.size() + 1, keyname);
+  keys.resize(keys.size() + 1);
   return (unsigned) names.size() - 1;
 }
 
-string CIniFile::KeyName( unsigned const keyID) const
+string CIniFile::sectionName(unsigned const sectionId) const
 {
-  if ( keyID < names.size())
-    return names[keyID];
+  if(sectionId < names.size())
+    return names[sectionId];
   else
     return "";
 }
 
-unsigned CIniFile::NumValues( unsigned const keyID)
+unsigned CIniFile::NumValues(unsigned const sectionId)
 {
-  if ( keyID < keys.size())
-    return (unsigned) keys[keyID].names.size();
+  if(sectionId < keys.size())
+    return (unsigned) keys[sectionId].names.size();
   return 0;
 }
 
-unsigned CIniFile::NumValues( string const &keyname)
+unsigned CIniFile::NumValues(const string &keyname)
 {
-  long keyID = FindKey( keyname);
-  if ( keyID == noID)
+  unsigned sectionId = findSection(keyname);
+  if(sectionId == noID)
     return 0;
-  return (unsigned) keys[keyID].names.size();
+  return (unsigned) keys[sectionId].names.size();
 }
 
-string CIniFile::ValueName( unsigned const keyID, unsigned const valueID) const
+string CIniFile::ValueName(unsigned const sectionId, unsigned const valueID) const
 {
-  if ( keyID < keys.size() && valueID < keys[keyID].names.size())
-    return keys[keyID].names[valueID];
+  if(sectionId < keys.size() && valueID < keys[sectionId].names.size())
+    return keys[sectionId].names[valueID];
   return "";
 }
 
-string CIniFile::ValueName(string const keyname, unsigned const valueID) const
+string CIniFile::ValueName(const string keyname, unsigned const valueID) const
 {
-  long keyID = FindKey( keyname);
-  if ( keyID == noID)
+  unsigned sectionId = findSection(keyname);
+  if(sectionId == noID)
     return "";
-  return ValueName( keyID, valueID);
+  return ValueName(sectionId, valueID);
 }
 
-bool CIniFile::SetValue( unsigned const keyID, unsigned const valueID, string const value)
+bool CIniFile::SetValue(unsigned const sectionId, unsigned const valueID, const string value)
 {
-  if ( keyID < keys.size() && valueID < keys[keyID].names.size())
-    keys[keyID].values[valueID] = value;
+  if(sectionId < keys.size() && valueID < keys[sectionId].names.size())
+    keys[sectionId].values[valueID] = value;
 
   return false;
 }
 
 // Will create key if it does not exist if create is set to true
-bool CIniFile::SetValue( string const keyname, string const valuename, string const value, bool const create)
+bool CIniFile::SetValue(const string &keyname, const string &valuename, const string &value, bool const create)
 {
-  long keyID = FindKey( keyname);
-  if ( keyID == noID) {
-    if ( create)
-      keyID = long( AddKeyName( keyname));
+  unsigned sectionId = findSection(keyname);
+  if(sectionId == noID) {
+    if(create)
+      sectionId = long(addSection(keyname));
     else
       return false;
 
-    if (keyID == noID)
-      keyID = FindKey(keyname);
+    if(sectionId == noID)
+      sectionId = findSection(keyname);
 
-    if (keyID == noID)     // Fish in a tree?  This should not be.
+    if(sectionId == noID)     // Fish in a tree?  This should not be.
        return false;
   }
 
-  long valueID = FindValue( unsigned(keyID), valuename);
-  if ( valueID == noID) {
-    if ( !create)
+  long valueID = FindValue(unsigned(sectionId), valuename);
+  if(valueID == noID) {
+    if(!create)
       return false;
-    keys[keyID].names.resize( keys[keyID].names.size() + 1, valuename);
-    keys[keyID].values.resize( keys[keyID].values.size() + 1, value);
+    keys[sectionId].names.resize(keys[sectionId].names.size() + 1, valuename);
+    keys[sectionId].values.resize(keys[sectionId].values.size() + 1, value);
   } else
-    keys[keyID].values[valueID] = value;
+    keys[sectionId].values[valueID] = value;
 
   return true;
 }
 
 
-bool CIniFile::SetAllValues( const string &section, const string &prefix, const TNL::Vector<string> &values)
+bool CIniFile::SetAllValues(const string &section, const string &prefix, const TNL::Vector<string> &values)
 {
-   char keyname[256];
+   char key[256];
    bool stat = true;
    for(S32 i = 0; i < values.size(); i++)
    {
-      dSprintf(keyname, 255, "%s%d", prefix.c_str(), i);
-      stat &= gINI.SetValue(section, keyname, values[i], true);
+      dSprintf(key, 255, "%s%d", prefix.c_str(), i);
+      stat &= gINI.SetValue(section, key, values[i], true);
    }
 
    return stat;      // true if all worked, false if any failed
 }
 
 
-bool CIniFile::SetValueI( string const keyname, string const valuename, int const value, bool const create)
+bool CIniFile::SetValueI(const string &section, const string &key, int const value, bool const create)
 {
   char svalue[MAX_VALUEDATA];
   dSprintf(svalue, sizeof(svalue), "%d", value);
-  string const x(svalue);
+  const string x(svalue);
 
-  return SetValue( keyname, valuename, x);
+  return SetValue(section, key, x);
 }
 
-bool CIniFile::SetValueF( string const keyname, string const valuename, double const value, bool const create)
+
+bool CIniFile::SetValueF(const string &section, const string &key, double const value, bool const create)
 {
   char svalue[MAX_VALUEDATA];
 
-  dSprintf( svalue, sizeof(svalue), "%f", value);
-  return SetValue( keyname, valuename, string(svalue));
+  dSprintf(svalue, sizeof(svalue), "%f", value);
+  return SetValue(section, key, string(svalue));
 }
 
-bool CIniFile::SetValueV( string const keyname, string const valuename, char *format, ...)
+bool CIniFile::SetValueV(const string &section, const string &key, char *format, ...)
 {
-  va_list args;
-  char value[MAX_VALUEDATA];
+   va_list args;
+   char value[MAX_VALUEDATA];
 
-  va_start( args, format);
-  dSprintf( value, sizeof(value), format, args);
-  va_end( args);
-  return SetValue( keyname, valuename, value);
+   va_start(args, format);
+   dSprintf(value, sizeof(value), format, args);
+   va_end(args);
+   return SetValue(section, key, value);
 }
 
-string CIniFile::GetValue( unsigned const keyID, unsigned const valueID, string const defValue) const
+string CIniFile::GetValue(unsigned const sectionId, unsigned const valueID, const string defValue) const
 {
-  if ( keyID < keys.size() && valueID < keys[keyID].names.size())
-    return keys[keyID].values[valueID];
-  return defValue;
+   if(sectionId < keys.size() && valueID < keys[sectionId].names.size())
+      return keys[sectionId].values[valueID];
+   return defValue;
 }
 
-string CIniFile::GetValue( string const &keyname, string const &valuename, string const &defValue) const
+string CIniFile::GetValue(const string &keyname, const string &valuename, const string &defValue) const
 {
-  long keyID = FindKey( keyname);
-  if ( keyID == noID)
+  unsigned sectionId = findSection(keyname);
+  if(sectionId == noID)
     return defValue;
 
-  long valueID = FindValue( unsigned(keyID), valuename);
-  if ( valueID == noID)
+  long valueID = FindValue(unsigned(sectionId), valuename);
+  if(valueID == noID)
     return defValue;
 
-  return keys[keyID].values[valueID];
+  return keys[sectionId].values[valueID];
 }
 
 
-void CIniFile::GetAllValues(string const &section, TNL::Vector<string> &valueList)
+void CIniFile::GetAllValues(const string &section, TNL::Vector<string> &valueList)
 {
    S32 numVals = gINI.NumValues(section);
    if(numVals > 0)
@@ -398,11 +399,11 @@ void CIniFile::GetAllValues(string const &section, TNL::Vector<string> &valueLis
 }
 
 
-int CIniFile::GetValueI(string const keyname, string const valuename, int const defValue) const
+int CIniFile::GetValueI(const string keyname, const string valuename, int const defValue) const
 {
   char svalue[MAX_VALUEDATA];
 
-  dSprintf( svalue, sizeof(svalue), "%d", defValue);
+  dSprintf(svalue, sizeof(svalue), "%d", defValue);
 
   string val = GetValue(keyname, valuename, string(svalue));
 
@@ -417,11 +418,11 @@ int CIniFile::GetValueI(string const keyname, string const valuename, int const 
 
 }
 
-double CIniFile::GetValueF(string const keyname, string const valuename, double const defValue) const
+double CIniFile::GetValueF(const string keyname, const string valuename, double const defValue) const
 {
   char svalue[MAX_VALUEDATA];
 
-  dSprintf( svalue, sizeof(svalue), "%f", defValue);
+  dSprintf(svalue, sizeof(svalue), "%f", defValue);
 
   string val = GetValue(keyname, valuename, string(svalue));
   size_t len = val.size();
@@ -435,7 +436,7 @@ double CIniFile::GetValueF(string const keyname, string const valuename, double 
 
 /*
 // 16 variables may be a bit of over kill, but hey, it's only code.
-unsigned CIniFile::GetValueV( string const keyname, string const valuename, char *format,
+unsigned CIniFile::GetValueV(const string keyname, const string valuename, char *format,
                void *v1, void *v2, void *v3, void *v4,
                void *v5, void *v6, void *v7, void *v8,
                void *v9, void *v10, void *v11, void *v12,
@@ -446,17 +447,17 @@ unsigned CIniFile::GetValueV( string const keyname, string const valuename, char
   unsigned nVals;
 
 
-  value = GetValue( keyname, valuename);
-  if ( !value.length())
+  value = GetValue(keyname, valuename);
+  if(!value.length())
     return false;
   // Why is there not vsscanf() function. Linux man pages say that there is
   // but no compiler I've seen has it defined. Bummer!
   //
-  // va_start( args, format);
-  // nVals = vsscanf( value.c_str(), format, args);
-  // va_end( args);
+  // va_start(args, format);
+  // nVals = vsscanf(value.c_str(), format, args);
+  // va_end(args);
 
-  nVals = sscanf( value.c_str(), format,
+  nVals = sscanf(value.c_str(), format,
         v1, v2, v3, v4, v5, v6, v7, v8,
         v9, v10, v11, v12, v13, v14, v15, v16);
 
@@ -464,51 +465,53 @@ unsigned CIniFile::GetValueV( string const keyname, string const valuename, char
 }
 */
 
-bool CIniFile::DeleteValue( string const keyname, string const valuename)
+bool CIniFile::deleteKey(const string &section, const string &key)
 {
-  long keyID = FindKey( keyname);
-  if ( keyID == noID)
+  unsigned sectionId = findSection(section);
+  if(sectionId == noID)
     return false;
 
-  long valueID = FindValue( unsigned(keyID), valuename);
-  if ( valueID == noID)
+  long valueID = FindValue(unsigned(sectionId), key);
+  if(valueID == noID)
     return false;
 
   // This looks strange, but is neccessary.
-  vector<string>::iterator npos = keys[keyID].names.begin() + valueID;
-  vector<string>::iterator vpos = keys[keyID].values.begin() + valueID;
-  keys[keyID].names.erase( npos, npos + 1);
-  keys[keyID].values.erase( vpos, vpos + 1);
+  vector<string>::iterator npos = keys[sectionId].names.begin() + valueID;
+  vector<string>::iterator vpos = keys[sectionId].values.begin() + valueID;
+  keys[sectionId].names.erase(npos, npos + 1);
+  keys[sectionId].values.erase(vpos, vpos + 1);
 
   return true;
 }
 
-bool CIniFile::DeleteKey( string const keyname)
+
+bool CIniFile::deleteSection(const string &section)
 {
-  long keyID = FindKey( keyname);
-  if ( keyID == noID)
+  unsigned sectionId = findSection(section);
+  if(sectionId == noID)
     return false;
 
   // Now hopefully this destroys the vector lists within keys.
   // Looking at <vector> source, this should be the case using the destructor.
   // If not, I may have to do it explicitly. Memory leak check should tell.
   // memleak_test.cpp shows that the following not required.
-  //keys[keyID].names.clear();
-  //keys[keyID].values.clear();
+  //keys[sectionId].names.clear();
+  //keys[sectionId].values.clear();
 
-  vector<string>::iterator npos = names.begin() + keyID;
-  vector<key>::iterator    kpos = keys.begin() + keyID;
-  names.erase( npos, npos + 1);
-  keys.erase( kpos, kpos + 1);
+  vector<string>::iterator npos = names.begin() + sectionId;
+  vector<key>::iterator    kpos = keys.begin() + sectionId;
+  names.erase(npos, npos + 1);
+  keys.erase(kpos, kpos + 1);
 
   return true;
 }
+
 
 void CIniFile::Erase()
 {
   // This loop not needed. The vector<> destructor seems to do
   // all the work itself. memleak_test.cpp shows this.
-  //for ( unsigned i = 0; i < keys.size(); ++i) {
+  //for(unsigned i = 0; i < keys.size(); ++i) {
   //  keys[i].names.clear();
   //  keys[i].values.clear();
   //}
@@ -517,126 +520,146 @@ void CIniFile::Erase()
   comments.clear();
 }
 
-void CIniFile::HeaderComment( string const comment)
+void CIniFile::HeaderComment(const string comment)
 {
-  comments.resize( comments.size() + 1, comment);
+  comments.resize(comments.size() + 1, comment);
 }
 
-string CIniFile::HeaderComment( unsigned const commentID) const
+
+string CIniFile::HeaderComment(unsigned const commentID) const
 {
-  if ( commentID < comments.size())
+  if(commentID < comments.size())
     return comments[commentID];
   return "";
 }
 
-bool CIniFile::DeleteHeaderComment( unsigned commentID)
+
+bool CIniFile::DeleteHeaderComment(unsigned commentID)
 {
-  if ( commentID < comments.size()) {
+  if(commentID < comments.size()) {
     vector<string>::iterator cpos = comments.begin() + commentID;
-    comments.erase( cpos, cpos + 1);
+    comments.erase(cpos, cpos + 1);
     return true;
   }
   return false;
 }
 
-unsigned CIniFile::NumKeyComments( unsigned const keyID) const
+
+unsigned CIniFile::numSectionComments(unsigned const sectionId) const
 {
-  if ( keyID < keys.size())
-    return (unsigned) keys[keyID].comments.size();
+  if(sectionId < keys.size())
+    return (unsigned) keys[sectionId].comments.size();
   return 0;
 }
 
-unsigned CIniFile::NumKeyComments( string const keyname) const
+
+unsigned CIniFile::numSectionComments(const string keyname) const
 {
-  long keyID = FindKey( keyname);
-  if ( keyID == noID)
+  unsigned sectionId = findSection(keyname);
+  if(sectionId == noID)
     return 0;
-  return (unsigned) keys[keyID].comments.size();
+  return (unsigned) keys[sectionId].comments.size();
 }
 
-bool CIniFile::KeyComment( unsigned const keyID, string const comment)
+
+bool CIniFile::sectionComment(unsigned sectionId, const string &comment)
 {
-  if ( keyID < keys.size()) {
-    keys[keyID].comments.resize( keys[keyID].comments.size() + 1, comment);
+  if(sectionId < keys.size()) 
+  {
+    keys[sectionId].comments.resize(keys[sectionId].comments.size() + 1, comment);
     return true;
   }
+
+  // Invalid sectionId, not adding comment
   return false;
 }
 
-bool CIniFile::KeyComment( string const keyname, string const comment, bool const create)
+
+bool CIniFile::sectionComment(const string section, const string comment, bool const create)
 {
-  long keyID = FindKey( keyname);
-  if ( keyID == noID) {
-    if ( create)
-      keyID = long( AddKeyName( keyname));
-    else
-      return false;
+   unsigned sectionId = findSection(section);
 
-    if (keyID == noID)
-      keyID = FindKey(keyname);
+   if(sectionId == noID) 
+   {
+      if(create)
+         sectionId = long(addSection(section));
+      else
+         return false;
 
-    if (keyID == noID)     
-       return false;
-  }
+      // I think this should never happen -CE 1/8/2011
+      // If addsection only returns noID if section exists
+      // if section exists, then it would have been found at top of function
 
-  return KeyComment( unsigned(keyID), comment);
+      //if(sectionId == noID)
+      //   sectionId = findSection(section);
+
+      if(sectionId == noID)     
+         return false;
+   }
+
+   return sectionComment(sectionId, comment);
 }
 
 
-string CIniFile::KeyComment( unsigned const keyID, unsigned const commentID) const
+string CIniFile::sectionComment(unsigned const sectionId, unsigned const commentID) const
 {
-  if ( keyID < keys.size() && commentID < keys[keyID].comments.size())
-    return keys[keyID].comments[commentID];
+  if(sectionId < keys.size() && commentID < keys[sectionId].comments.size())
+    return keys[sectionId].comments[commentID];
   return "";
 }
 
-string CIniFile::KeyComment( string const keyname, unsigned const commentID) const
+
+string CIniFile::sectionComment(const string keyname, unsigned const commentID) const
 {
-  long keyID = FindKey( keyname);
-  if ( keyID == noID)
-    return "";
-  return KeyComment( unsigned(keyID), commentID);
+  unsigned sectionId = findSection(keyname);
+
+  return sectionId == noID ? "" : sectionComment(unsigned(sectionId), commentID);
 }
 
-bool CIniFile::DeleteKeyComment( unsigned const keyID, unsigned const commentID)
+
+bool CIniFile::deleteSectionComment(unsigned const sectionId, unsigned const commentID)
 {
-  if ( keyID < keys.size() && commentID < keys[keyID].comments.size()) {
-    vector<string>::iterator cpos = keys[keyID].comments.begin() + commentID;
-    keys[keyID].comments.erase( cpos, cpos + 1);
+  if(sectionId < keys.size() && commentID < keys[sectionId].comments.size()) {
+    vector<string>::iterator cpos = keys[sectionId].comments.begin() + commentID;
+    keys[sectionId].comments.erase(cpos, cpos + 1);
     return true;
   }
   return false;
 }
 
-bool CIniFile::DeleteKeyComment( string const keyname, unsigned const commentID)
+
+bool CIniFile::deleteSectionComment(const string keyname, unsigned const commentID)
 {
-  long keyID = FindKey( keyname);
-  if ( keyID == noID)
+  unsigned sectionId = findSection(keyname);
+  if(sectionId == noID)
     return false;
-  return DeleteKeyComment( unsigned(keyID), commentID);
+  return deleteSectionComment(unsigned(sectionId), commentID);
 }
 
-bool CIniFile::DeleteKeyComments( unsigned const keyID)
+
+bool CIniFile::deleteSectionComments(unsigned const sectionId)
 {
-  if ( keyID < keys.size()) {
-    keys[keyID].comments.clear();
+  if(sectionId < keys.size()) {
+    keys[sectionId].comments.clear();
     return true;
   }
   return false;
 }
 
-bool CIniFile::DeleteKeyComments( string const keyname)
+
+bool CIniFile::deleteSectionComments(const string keyname)
 {
-  long keyID = FindKey( keyname);
-  if ( keyID == noID)
+  unsigned sectionId = findSection(keyname);
+  if(sectionId == noID)
     return false;
-  return DeleteKeyComments( unsigned(keyID));
+  return deleteSectionComments(unsigned(sectionId));
 }
 
-string CIniFile::CheckCase( string s) const
+
+string CIniFile::CheckCase(string s) const
 {
-  if ( caseInsensitive)
-    for ( string::size_type i = 0; i < s.length(); ++i)
+  if(caseInsensitive)
+    for(string::size_type i = 0; i < s.length(); i++)
       s[i] = tolower(s[i]);
   return s;
 }

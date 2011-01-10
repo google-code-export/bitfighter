@@ -681,8 +681,9 @@ inline string getPathFromFilename( const string& filename )
 static string origFilename;      // Name of file we're trying to load
 extern OGLCONSOLE_Console gConsole;
 
-bool ServerGame::loadLevel(const string &origFilename)
+bool ServerGame::loadLevel(const string &origFilename2)
 {
+   origFilename = origFilename2;
    mGridSize = DefaultGridSize;
 
    mObjectsLoaded = 0;
@@ -709,6 +710,7 @@ bool ServerGame::loadLevel(const string &origFilename)
       g->addToGame(this);
    }
 
+
    // If there was a script specified in the level file, now might be a fine time to try running it!
    if(getGameType()->mScriptName != "")
    {
@@ -726,6 +728,10 @@ bool ServerGame::loadLevel(const string &origFilename)
       LuaLevelGenerator levelgen = LuaLevelGenerator(name, getGameType()->mScriptArgs, getGridSize(), getGridDatabase(), this, gConsole);
    }
 
+   //  Check after script, script might add Teams
+   if(getGameType()->makeSureTeamCountIsNotZero())
+      logprintf(LogConsumer::LogWarning, "Warning: Missing Team in level \"%s\"", origFilename.c_str());
+
    getGameType()->onLevelLoaded();
 
    return true;
@@ -739,6 +745,7 @@ void ServerGame::processLevelLoadLine(U32 argc, U32 id, const char **argv)
    // This is a legacy from the old Zap! days... we do bots differently in Bitfighter, so we'll just ignore this line if we find it.
    if(!stricmp(argv[0], "BotsPerTeam"))
       return;
+
 
    if(!stricmp(argv[0], "GridSize"))      // GridSize requires a single parameter (an int
    {                                      //    specifiying how many pixels in a grid cell)
@@ -766,6 +773,21 @@ void ServerGame::processLevelLoadLine(U32 argc, U32 id, const char **argv)
          strncpy(obj, argv[0], LevelLoader::MaxArgLen);
          obj[LevelLoader::MaxArgLen] = '\0';
       }
+
+		S32 objlen = (S32) strlen(obj);
+		// All game types are of form XXXXGameType
+		if(objlen >= 8 && !strcmp(obj + objlen - 8, "GameType"))
+		{	if(mGameType)
+			{	logprintf(LogConsumer::LogWarning, "Duplicate GameType in level \"%s\"", origFilename.c_str());
+				return;
+			}
+		}else
+		{	if(!mGameType)
+			{	logprintf(LogConsumer::LogWarning, "Missing GameType in level \"%s\"", origFilename.c_str());
+				return;
+			}
+		}
+
 
       TNL::Object *theObject = TNL::Object::create(obj);          // Create an object of the type specified on the line
       GameObject *object = dynamic_cast<GameObject*>(theObject);  // Force our new object to be a GameObject
@@ -868,9 +890,31 @@ void ServerGame::idle(U32 timeDelta)
    if(mMasterUpdateTimer.update(timeDelta))
    {
       MasterServerConnection *masterConn = gServerGame->getConnectionToMaster();
+      static StringTableEntry prevCurrentLevelName;   // Using static, so it holds the value when it comes back here.
+      static StringTableEntry prevCurrentLevelType;
+      static S32 prevRobotCount;
+      static S32 prevPlayerCount;
       if(masterConn && masterConn->isEstablished())
-         masterConn->updateServerStatus(getCurrentLevelName(), getCurrentLevelType(), getRobotCount(), mPlayerCount, mMaxPlayers, mInfoFlags);
-      mMasterUpdateTimer.reset(UpdateServerStatusTime);
+      {
+         // Only update if something is different.
+         if(prevCurrentLevelName != getCurrentLevelName() || prevCurrentLevelType != getCurrentLevelType() || prevRobotCount != getRobotCount() || prevPlayerCount != mPlayerCount)
+			{
+				//logprintf("UPDATE");
+				prevCurrentLevelName = getCurrentLevelName();
+				prevCurrentLevelType = getCurrentLevelType();
+				prevRobotCount = getRobotCount();
+				prevPlayerCount = mPlayerCount;
+            masterConn->updateServerStatus(getCurrentLevelName(), getCurrentLevelType(), getRobotCount(), mPlayerCount, mMaxPlayers, mInfoFlags);
+				mMasterUpdateTimer.reset(UpdateServerStatusTime);
+			}
+			else
+				mMasterUpdateTimer.reset(CheckServerStatusTime);
+      }
+      else
+		{
+         prevPlayerCount = -1;   //Not sure if needed, but if disconnected, we need to update to master.
+			mMasterUpdateTimer.reset(CheckServerStatusTime);
+		}
    }
 
    mNetInterface->processConnections();
@@ -964,7 +1008,7 @@ ClientGame::ClientGame(const Address &bindAddress) : Game(bindAddress)
    //}
 
 
-   mScreenSaverTimer.reset(59000);         // Fire screen saver supression every 59 seconds
+   mScreenSaverTimer.reset(59 * 1000);         // Fire screen saver supression every 59 seconds
 }
 
 bool ClientGame::hasValidControlObject()
@@ -1057,6 +1101,10 @@ void ClientGame::idle(U32 timeDelta)
      // Don't saturate server with moves...
 	  if(theMove->time >= 6)     // Why 6?  Can this be related to some other factor?
      { 
+         // Limited MaxPendingMoves only allows sending a few moves at a time. changing MaxPendingMoves may break compatibility with old version server/client.
+         // If running at 1000 FPS and 300 ping it will try to add more then MaxPendingMoves, losing control horribly.
+         // Without the unlimited shield fix, the ship would also go super slow motion with over the limit MaxPendingMoves.
+         // With 100 FPS limit, time is never less then 10 milliseconds. (1000 / millisecs = FPS), may be changed in .INI [Settings] MinClientDelay
          mConnectionToServer->addPendingMove(theMove);
          prevTimeDelta = 0;
       }
@@ -1376,6 +1424,8 @@ void ClientGame::renderCommander()
    // Render the objects.  Start by putting all command-map-visible objects into renderObjects
    rawRenderObjects.clear();
    mDatabase.findObjects(CommandMapVisType, rawRenderObjects, mWorldBounds);
+   if(gServerGame && gGameUserInterface.mDebugShowMeshZones)
+       gServerGame->getGridDatabase()->findObjects(BotNavMeshZoneType,rawRenderObjects,mWorldBounds);
    
    renderObjects.clear();
    for(S32 i = 0; i < rawRenderObjects.size(); i++)
@@ -1576,6 +1626,8 @@ void ClientGame::renderNormal()
 
    rawRenderObjects.clear();
    mDatabase.findObjects(AllObjectTypes, rawRenderObjects, extentRect);    // Use extent rects to quickly find objects in visual range
+   if(gServerGame && gGameUserInterface.mDebugShowMeshZones)
+       gServerGame->getGridDatabase()->findObjects(BotNavMeshZoneType,rawRenderObjects,extentRect);
 
    renderObjects.clear();
    for(S32 i = 0; i < rawRenderObjects.size(); i++)
