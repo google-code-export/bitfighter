@@ -55,6 +55,14 @@ string itos(S32 i)
 }
 
 
+string ftos(F32 f, S32 digits)
+{
+   char outString[100];
+   dSprintf(outString, sizeof(outString), (string("%2.") + itos(digits) + "f").c_str(), f);
+   return outString;
+}
+
+
 //// From http://stackoverflow.com/questions/11635/case-insensitive-string-comparison-in-c
 //bool caseInsensitiveStringCompare(const string &str1, const string &str2) {
 //    if (str1.size() != str2.size()) {
@@ -128,6 +136,8 @@ bool fileExists(const string &path)
 // Join without checking for blank parts
 string strictjoindir(const string &part1, const string &part2)
 {
+   if(part1.length() == 0) return part2;      //avoid crash on zero length string.
+
    // Does path already have a trailing delimeter?  If so, we'll use that.
    if(part1[part1.length() - 1] == '\\' || part1[part1.length() - 1] == '/')
       return part1 + part2;

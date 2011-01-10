@@ -342,6 +342,7 @@ void EditorUserInterface::undo(bool addToRedoStack)
    rebuildEverything();
 
    mLastUndoStateWasBarrierWidthChange = false;
+   validateLevel();
 }
    
 
@@ -355,7 +356,8 @@ void EditorUserInterface::redo()
       mLastUndoIndex++;
       mItems = mUndoItems[mLastUndoIndex % UNDO_STATES];      // Restore state from undo buffer
    
-     rebuildEverything();
+      rebuildEverything();
+      validateLevel();
    }
 }
 
@@ -492,17 +494,23 @@ void EditorUserInterface::loadLevel()
 
    if(initLevelFromFile(fileBuffer))   // Process level file --> returns true if file found and loaded, false if not (assume it's a new level)
    {
+      // Loaded a level!
       makeSureThereIsAtLeastOneTeam(); // Make sure we at least have one team
       validateTeams();                 // Make sure every item has a valid team
       validateLevel();                 // Check level for errors (like too few spawns)
       mItems.sort(geometricSort);
       gGameParamUserInterface.ignoreGameParams = false;
    }
-   else
+   else     
    {
+      // New level!
       makeSureThereIsAtLeastOneTeam();                               // Make sure we at least have one team, like the man said.
       strcpy(mGameType, gGameTypeNames[gDefaultGameTypeIndex]);
       gGameParamUserInterface.gameParams.push_back("GameType 10 8"); // A nice, generic game type that we can default to
+
+      if(gIniSettings.name != gIniSettings.defaultName)
+         gGameParamUserInterface.gameParams.push_back("LevelCredits " + gIniSettings.name);  // Prepoluate level credits
+
       gGameParamUserInterface.ignoreGameParams = true;               // Don't rely on the above for populating GameParameters menus... only to make sure something is there if we save
    }
    clearUndoHistory();                 // Clean out undo/redo buffers
@@ -554,7 +562,7 @@ void EditorUserInterface::processLevelLoadLine(U32 argc, U32 id, const char **ar
 
       // Save the args (which we already have split out) for easier handling in the Game Parameter Editor
       for(U32 i = 1; i < argc; i++)
-         gEditorUserInterface.mGameTypeArgs.push_back(atoi(argv[i]));
+         gEditorUserInterface.mGameTypeArgs.push_back(argv[i]);
    }
 
    else if(!strcmp(argv[0], "GridSize"))
@@ -621,6 +629,7 @@ void EditorUserInterface::processLevelLoadLine(U32 argc, U32 id, const char **ar
       if(i < argc - 1)
          temp += " ";
    }
+
    gGameParamUserInterface.gameParams.push_back(temp);
 }    
 
@@ -3714,6 +3723,7 @@ void EditorUserInterface::doneEditingSpecialItem(bool saveChanges)
 
    
 extern string itos(S32);
+extern string ftos(F32, S32);
 
 // Handle key presses
 void EditorUserInterface::onKeyDown(KeyCode keyCode, char ascii)
@@ -4625,6 +4635,12 @@ bool EditorUserInterface::saveLevel(bool showFailMessages, bool showSuccessMessa
 extern void initHostGame(Address bindAddress, Vector<string> &levelList, bool testMode);
 extern CmdLineSettings gCmdLineSettings;
 
+
+//Some function to allow YesNoUserInterface to work with testLevel
+void testLevelStart2(){
+	gEditorUserInterface.testLevelStart();
+}
+
 void EditorUserInterface::testLevel()
 {
    bool gameTypeError = false;
@@ -4632,25 +4648,30 @@ void EditorUserInterface::testLevel()
    if(strcmp(mGameType, GameType::validateGameType(mGameType)))
       gameTypeError = true;
 
+// With all the map loading error fix, it should never crash the game.
    validateLevel();
    if(mLevelErrorMsgs.size() || gameTypeError)
    {
       S32 i;
-      gErrorMsgUserInterface.reset();
-      gErrorMsgUserInterface.setTitle("LEVEL HAS CRITICAL PROBLEMS");
+      gYesNoUserInterface.reset();
+      gYesNoUserInterface.setTitle("LEVEL HAS PROBLEMS");
 
       for(i = 0; i < mLevelErrorMsgs.size(); i++)
-         gErrorMsgUserInterface.setMessage(i + 1, mLevelErrorMsgs[i].c_str());
+         gYesNoUserInterface.setMessage(i + 1, mLevelErrorMsgs[i].c_str());
       if(gameTypeError)
       {
-         gErrorMsgUserInterface.setMessage(i + 1, "ERROR: GameType is invalid.");
-         gErrorMsgUserInterface.setMessage(i + 2, "(Fix in Level Parameters screen [F3])");
+         gYesNoUserInterface.setMessage(i + 1, "ERROR: GameType is invalid.");
+         gYesNoUserInterface.setMessage(i + 2, "(Fix in Level Parameters screen [F3])");
          i+=2;
       }
-      gErrorMsgUserInterface.setMessage(i + 3, "Loading this level may cause the game to crash.");
-      gErrorMsgUserInterface.activate();
+      gYesNoUserInterface.setInstr("Press [Y] to start, [ESC] to cancel");
+		gYesNoUserInterface.registerYesFunction(testLevelStart2);   //tried (gEditorUserInterface.testLevelStart) but compiler doesn't like that.
+      gYesNoUserInterface.activate();
       return;
    }
+	testLevelStart();
+}
+void EditorUserInterface::testLevelStart(){
 
    string tmpFileName = mEditFileName;
    mEditFileName = "editor.tmp";

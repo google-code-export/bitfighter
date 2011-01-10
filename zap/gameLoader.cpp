@@ -218,26 +218,61 @@ stateLineParseDone:
 }  // parseArgs
 
 
-bool LevelLoader::initLevelFromFile(const char *file)
+// Reads files by chunks, converts to lines
+bool LevelLoader::initLevelFromFile(const char *filename)
 {
-   FILE *f = fopen(file, "r");
+   char levelChunk[4096];     // Data buffer for reading in chunks of our level file
+   const S32 minCur = 50;     // Provide a little breathing room for this file reading algorithm to work; arbitrary value, works well
+   FILE *file = fopen(filename, "r");
 
 #ifdef SAM_ONLY
-   //Wanting to know which map the game crashes on.
-   logprintf("Loading %s", file);
+   // Wanting to know which map the game crashes on.
+   logprintf("Loading %s", filename);
 #endif
 
-   if(!f)
+   if(!file)               // Can't open file
       return false;
 
-   char fileData[MAX_LEVEL_FILE_LENGTH];      // That's really really really big!
+   S32 cur = 0;            // Cursor, or pointer to character in our chunk
+   S32 lastByteRead = -1;  // Position of last byte read in chunk; if read an entire chunk, will be c. 4096
 
-   size_t bytesRead = fread(fileData, 1, sizeof(fileData), f);
-   fileData[bytesRead] = 0;
+   while(lastByteRead != 0)
+   {
+      // Read a chunk of the level file, filling any space in levelChunk buffer after cur
+      lastByteRead = cur + fread(&levelChunk[cur], 1, sizeof(levelChunk) - 1 - cur, file);
 
-   parseArgs(fileData);
+      // Advance cursor to end of chunk
+      cur = lastByteRead - 1;
 
-   fclose(f);
+      if(cur == sizeof(levelChunk) - 2)       // Haven't finished the file yet
+      {
+         while(levelChunk[cur] != '\n' && cur > minCur)  // cur > minCur indicates the line is too long
+            cur--;      // Back cursor up, looking for final \n in our chunk
+
+         if(cur == minCur) 
+            logprintf(LogConsumer::LogWarning, "Load level ==> Some lines too long in file %s (max len = %d)", filename, sizeof(levelChunk) - minCur);
+      }
+      cur++;   // Advance cursor past that last \n, now points to first char of second line in chunk
+
+      TNLAssert(cur >= 0 && cur < sizeof(levelChunk), "Load level from file, Cur out of range");
+
+      char c = levelChunk[cur];     // Read a char, hold onto it for a second
+      levelChunk[cur] = 0;          // Replace it with null
+
+      parseArgs(levelChunk);        // parseArgs will read from the beginning of the chunk until it hits the null we just inserted
+      levelChunk[cur] = c;          // Replace the null with our saved char
+
+      // Now get rid of that line we just processed with parseArgs, by copying the data starting at cur back to the beginning of our chunk
+      S32 cur2 = 0;
+      while(cur + cur2 != lastByteRead)      // Don't go beyond the data we've read
+      {
+         levelChunk[cur2] = levelChunk[cur + cur2];      // Copy
+         cur2++;                                         // Advance
+      }
+      cur = cur2;                            // Move cur back to cur2
+   }
+
+   fclose(file);
 
    return true;
 }

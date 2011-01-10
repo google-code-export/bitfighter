@@ -1,4 +1,4 @@
-#include "gameLoader.h"                   // For MAX_LEVEL_FILE_LENGTH def  <-- there has to be a better way!
+//#include "gameLoader.h"                   // For MAX_LEVEL_FILE_LENGTH def  <-- there has to be a better way!
 
 #include "dataConnection.h"
 #include "tnlEventConnection.h"
@@ -17,7 +17,7 @@
 #include "md5wrapper.h"                   // For password verification
 
 using namespace TNL;
-using namespace std;
+//using namespace std;
 
 namespace Zap {
 
@@ -42,21 +42,23 @@ FileType getResourceType(const char *fileType)
 }
    
 
-
-
 static string getFullFilename(string filename, FileType fileType)
 {
+   // Don't return "" if empty directory, allow client load the file if on the same directory as EXE.
+   string name;
    if(fileType == BOT_TYPE)
-      return ConfigDirectories::findBotFile(filename);
+      name = ConfigDirectories::findBotFile(filename);
 
    else if(fileType == LEVEL_TYPE)
-      return ConfigDirectories::findLevelFile(filename);
+      name = ConfigDirectories::findLevelFile(filename);
 
    else if(fileType == LEVELGEN_TYPE)
-      return ConfigDirectories::findLevelGenScript(filename);
+      name = ConfigDirectories::findLevelGenScript(filename);
 
    else
-      return "";
+      name = "";
+
+   return (name == "") ? filename : name;
 }
 
 
@@ -76,9 +78,9 @@ static string getOutputFolder(FileType filetype)
 ////////////////////////////////////////
 
 // For readability
-#define MAX_LINE_LEN  HuffmanStringProcessor::MAX_SENDABLE_LINE_LENGTH
+#define MAX_CHUNK_LEN HuffmanStringProcessor::MAX_SENDABLE_LINE_LENGTH
 
-DataSender::SenderStatus DataSender::initialize(DataConnection *dataConnection, string filename, FileType fileType)
+SenderStatus DataSender::initialize(DataSendable *connection, string filename, FileType fileType)
 {
    string fullname = getFullFilename(filename, fileType);
    if(fullname == "")
@@ -86,27 +88,28 @@ DataSender::SenderStatus DataSender::initialize(DataConnection *dataConnection, 
       return COULD_NOT_FIND_FILE;
    }
 
-   ifstream file;
-   file.open(fullname.c_str());
+   //ifstream file;
+   //file.open(fullname.c_str());
+   FILE *file = fopen(fullname.c_str(), "r");
 
-   if(!file.is_open())
+   //if(!file.is_open())
+   if(!file)
       return COULD_NOT_OPEN_FILE;
 
-   mDataConnection = dataConnection;
-   mFileType = fileType;
 
-   mDone = false;
-   mLineCtr = 0;
 
 
    // Allocate a buffer
-   char *buffer = new char[MAX_LINE_LEN + 1];      // 255 for data, + 1 for terminator
+   //char *buffer = new char[MAX_CHUNK_LEN + 1];      // 255 for data, + 1 for terminator
+   char buffer[MAX_CHUNK_LEN + 1];      // 255 for data, + 1 for terminator
+   S32 size;
 
    // We'll read the file in 255 char chunks; this is the largest string we can send, and we want to be as large as possible to get
    // maximum benefit of the string compression that occurs during the transmission process.
-   while(!file.eof() && mLines.size() * MAX_LINE_LEN < MAX_LEVEL_FILE_LENGTH)
+   /*
+   while(!file.eof() && mLines.size() * MAX_CHUNK_LEN < MAX_LEVEL_FILE_LENGTH)
    {
-      file.read(buffer, MAX_LINE_LEN);
+      file.read(buffer, MAX_CHUNK_LEN);
       if(file.gcount() > 0)
       {
          buffer[file.gcount()] = '\0';     // Null terminate
@@ -114,20 +117,41 @@ DataSender::SenderStatus DataSender::initialize(DataConnection *dataConnection, 
       }
    }
    file.close();
+   */
 
-   delete[] buffer;
+   const S32 MAX_LEVEL_FILE_LENGTH = 256 * 1024;     // 256K -- Need some limit to avoid overflowing server; arbitrary value
 
-   // Not exactly accurate -- if final line is only a few bytes, this will count it as being the full 255.
-   if(mLines.size() * MAX_LINE_LEN >= MAX_LEVEL_FILE_LENGTH)
+   size = (S32) fread(buffer, 1, MAX_CHUNK_LEN, file);
+
+   while(size > 0 && mLines.size() * MAX_CHUNK_LEN < MAX_LEVEL_FILE_LENGTH)
+   {
+       buffer[size] = 0;           // Null terminate
+       mLines.push_back(buffer);
+       size = (S32) fread(buffer, 1, MAX_CHUNK_LEN, file);
+   }
+
+   fclose(file);
+
+   //delete[] buffer;
+
+   // Not exactly accurate -- if final line is only a few bytes, it will count as 255; but since our limit is arbitrary, it matters not
+   if(mLines.size() * MAX_CHUNK_LEN >= MAX_LEVEL_FILE_LENGTH)
    {
       mLines.clear();
       return FILE_TOO_LONG;
    }
 
-   return OK;
+   if(mLines.size() == 0)          // Read nothing
+      return COULD_NOT_OPEN_FILE;
+
+   mConnection = connection;
+   mFileType = fileType;
+   mDone = false;
+   mLineCtr = 0;
+   return STATUS_OK;
 }
 
-#undef MAX_LINE_LEN
+#undef MAX_CHUNK_LEN
 
 
 // Send next line of our file
@@ -138,14 +162,14 @@ void DataSender::sendNextLine()
 
    if(mLineCtr < mLines.size())
    {
-      mDataConnection->s2rSendLine(mLines[mLineCtr].c_str());
+      mConnection->s2rSendLine(mLines[mLineCtr].c_str());
       mLineCtr++;
    }
    else
    {
-      mDataConnection->c2sCommandComplete();
+      mConnection->s2rCommandComplete(STATUS_OK);
       mDone = true;
-      mLines.clear();      // Free up some memory
+      mLines.clear();      // Liberate some memory
    }
 }
 
@@ -153,15 +177,16 @@ void DataSender::sendNextLine()
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-static string  getErrorMessage(DataSender::SenderStatus stat, const string &filename)
+// static method
+string DataConnection::getErrorMessage(SenderStatus stat, const string &filename)
 {
-   if(stat == DataSender::COULD_NOT_OPEN_FILE)
+   if(stat == COULD_NOT_OPEN_FILE)
       return "Could not open file " + filename;
 
-   else if(stat == DataSender::COULD_NOT_FIND_FILE)
+   else if(stat == COULD_NOT_FIND_FILE)
       return "Could not find file " + filename;
 
-   else if(stat == DataSender::FILE_TOO_LONG)
+   else if(stat == FILE_TOO_LONG)
       return "File " + filename + " is too big to send";
 
    else
@@ -183,7 +208,7 @@ TNL_IMPLEMENT_RPC(DataConnection, c2sSendOrRequestFile,
                   (password, filetype, isRequest, filename), 
                   NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirClientToServer, 1)
 {
-   // Are data connections allowed?
+   // Check if data connections are allowed
    if(!gIniSettings.allowDataConnections)
    {
       logprintf("This server does not allow remote access to resources.  It can be enabled in the server's INI file.");
@@ -198,14 +223,13 @@ TNL_IMPLEMENT_RPC(DataConnection, c2sSendOrRequestFile,
       return;
    }
 
-
    // Process request
    if(isRequest)     // Client wants to get a file from us... they should have a file open and waiting for this data
    {
       // Initialize on the server to start sending requested file -- will return OK if everything is set up right
-      DataSender::SenderStatus stat = gServerGame->dataSender.initialize(this, filename.getString(), (FileType)(U32)filetype);
+      SenderStatus stat = gServerGame->dataSender.initialize(this, filename.getString(), (FileType)(U32)filetype);
 
-      if(stat != DataSender::OK)
+      if(stat != STATUS_OK)
       {
          string msg = getErrorMessage(stat, filename.getString());
 
@@ -225,8 +249,11 @@ TNL_IMPLEMENT_RPC(DataConnection, c2sSendOrRequestFile,
          return;
       }
 
-      mOutputFile.open(strictjoindir(folder, filename.getString()).c_str());
-      if(!mOutputFile.is_open())
+      if(mOutputFile) 
+         fclose((FILE*)mOutputFile);
+
+      mOutputFile = fopen(strictjoindir(folder, filename.getString()).c_str(), "w");
+      if(!mOutputFile)
       {
          logprintf("Problem opening file %s for writing", strictjoindir(folder, filename.getString()).c_str());
          disconnect(ReasonError, "Problem writing to file");
@@ -243,8 +270,8 @@ TNL_IMPLEMENT_RPC(DataConnection, s2cOkToSend, (), (),
                   NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirAny, 1)
 {
    // Initialize on the client to start sending file we want to send
-   DataSender::SenderStatus stat = mDataSender.initialize(this, mFilename.c_str(), mFileType);
-   if(stat != DataSender::OK)
+   SenderStatus stat = mDataSender.initialize(this, mFilename.c_str(), mFileType);
+   if(stat != STATUS_OK)
    {
       string msg = getErrorMessage(stat, mFilename);
 
@@ -254,24 +281,30 @@ TNL_IMPLEMENT_RPC(DataConnection, s2cOkToSend, (), (),
 }
 
 
-// Send a chunk of the file
+// << DataSendable >>
+// Send a chunk of the file -- this gets run on the receiving end       
 TNL_IMPLEMENT_RPC(DataConnection, s2rSendLine, (StringPtr line), (line), 
                   NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirAny, 1)
 {
-   if(mOutputFile.is_open())
-      mOutputFile.write(line.getString(), strlen(line.getString()));
+   if(mOutputFile)
+      fwrite(line.getString(), 1, strlen(line.getString()), mOutputFile);
+      //mOutputFile.write(line.getString(), strlen(line.getString()));
    // else... what?
 }
 
 
+// << DataSendable >>
 // When client has finished sending its data, it sends a commandComplete message, which triggers the server to disconnect the client
-TNL_IMPLEMENT_RPC(DataConnection, c2sCommandComplete, (), (), 
+TNL_IMPLEMENT_RPC(DataConnection, s2rCommandComplete, (RangedU32<0,SENDER_STATUS_COUNT> status), (status), 
                   NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirAny, 1)
 {
-   disconnect(ReasonNone, "done");     // Terminate connection
+   disconnect(ReasonNone, "done");     // Terminate connection... should probably send different message depending on status
 
-   if(mOutputFile.is_open())
-      mOutputFile.close();
+   if(mOutputFile)
+   {
+      fclose(mOutputFile);
+      mOutputFile = NULL;
+   }
 }
 
 
@@ -284,21 +317,25 @@ void DataConnection::onConnectionEstablished()
          c2sSendOrRequestFile(mPassword.c_str(), mFileType, false, mFilename.c_str());
       }
 
-      else if(mAction = REQUEST_FILE)
+      else if(mAction == REQUEST_FILE)
       {
          string folder = getOutputFolder(mFileType);
 
          if(folder == "")     // filetype was bogus; should never happen
          {
             logprintf("Error resolving folder!");
-            disconnect(ReasonError, "done");
+                              // we can save files without needing folder
          }
 
-         mOutputFile.open(strictjoindir(folder, mFilename).c_str());
-         if(!mOutputFile.is_open())
+         //mOutputFile.open(strictjoindir(folder, mFilename).c_str());
+         if(mOutputFile) 
+            fclose(mOutputFile);
+         mOutputFile = fopen(strictjoindir(folder, mFilename).c_str(), "w");
+         if(!mOutputFile)
          {
             logprintf("Problem opening file %s for writing", strictjoindir(folder, mFilename).c_str());
             disconnect(ReasonError, "done");
+            return;
          }
 
          c2sSendOrRequestFile(mPassword.c_str(), mFileType, true, mFilename.c_str());
@@ -312,8 +349,11 @@ extern void exitGame(S32);
 // Make sure things are cleaned up -- will run on both client and server
 void DataConnection::onConnectionTerminated(TerminationReason reason, const char *reasonMsg)
 {
-   if(mOutputFile.is_open())
-      mOutputFile.close();
+   if(mOutputFile)
+   {
+      fclose((FILE*)mOutputFile);
+      mOutputFile = NULL;
+   }
 
    if(isInitiator())    // i.e. client
    {

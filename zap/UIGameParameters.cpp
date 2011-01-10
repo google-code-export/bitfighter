@@ -88,29 +88,6 @@ void GameParamUserInterface::updateMenuItems(const char *gt)
 }
 
 
-// It would be more efficient to simply parse our list and create a lookup table
-string GameParamUserInterface::getParamVal(string paramName)
-{
-   const string delimiters = " \t";       // Spaces or tabs delimit our lines
-
-   for(S32 i = 0; i < gameParams.size(); i++)
-   {
-      string str = gameParams[i];
-      string::size_type lastPos = str.find_first_not_of(delimiters, 0);    // Skip any leading delimiters
-      string::size_type pos     = str.find_first_of(delimiters, lastPos);  // Find first "non-delimiter"
-
-      string token = str.substr(lastPos, pos - lastPos);
-      lastPos = min(str.find_first_not_of(delimiters, pos), str.size());   // Skip delimiters.  Note the "not_of"!
-      string val = str.substr(lastPos, str.size() - lastPos);
-
-      if(token == paramName)
-         return val;
-   }
-
-   return "";
-}
-
-
 static void changeGameTypeCallback(U32 gtIndex)
 {
    gGameParamUserInterface.updateMenuItems(gtIndex);
@@ -142,6 +119,31 @@ static string stripExtension(string filename)
 }
 
 
+// Simply breaks down gameParams into a map that looks like paramName, paramValue
+// First word is assumed to be the name, rest of the line is the value
+static map<string,string> makeParamMap(const Vector<string> &gameParams)
+{
+   map<string,string> paramMap;
+
+   const string delimiters = " \t";       // Spaces or tabs delimit our lines
+
+   for(S32 i = 0; i < gameParams.size(); i++)
+   {
+      string str = gameParams[i];
+      string::size_type lastPos = str.find_first_not_of(delimiters, 0);    // Skip any leading delimiters
+      string::size_type pos     = str.find_first_of(delimiters, lastPos);  // Find first "non-delimiter"
+
+      string key = str.substr(lastPos, pos - lastPos);
+      lastPos = min(str.find_first_not_of(delimiters, pos), str.size());   // Skip delimiters.  Note the "not_of"!
+      string val = str.substr(lastPos, str.size() - lastPos);
+
+      paramMap[key] = val;
+   }
+
+   return paramMap;
+}
+
+
 #ifndef WIN32
 extern const S32 Game::MIN_GRID_SIZE;     // Needed by gcc, cause errors in VC++... and for Mac?
 extern const S32 Game::MAX_GRID_SIZE;
@@ -150,6 +152,8 @@ extern const S32 Game::MAX_GRID_SIZE;
 // Does the actual work of updating the menu items!
 void GameParamUserInterface::updateMenuItems(S32 gtIndex)
 {
+   map<string, string> paramMap = makeParamMap(gameParams);
+
    TNL::Object *theObject = TNL::Object::create(gGameTypeNames[gtIndex]);          // Instantiate our gameType object
    GameType *gameType = dynamic_cast<GameType*>(theObject);                        // and cast it to GameType
 
@@ -163,6 +167,7 @@ void GameParamUserInterface::updateMenuItems(S32 gtIndex)
       {
          bool found = false;
 
+         // Would be more efficient with a dictionary
          if(savedMenuItems.size())
             for(S32 j = 0; j < savedMenuItems.size(); j++)
                if(savedMenuItems[j].getParamName() == menuItems[i]->getString())   // Overwrite already saved parameters
@@ -199,7 +204,7 @@ void GameParamUserInterface::updateMenuItems(S32 gtIndex)
 
 
    MenuItem *item = new EditableMenuItem("Level Name:", 
-                                         getParamVal("LevelName"), 
+                                         paramMap["LevelName"],
                                          "", 
                                          "The level's name -- pick a good one!",  
                                          MAX_GAME_NAME_LEN);
@@ -209,7 +214,7 @@ void GameParamUserInterface::updateMenuItems(S32 gtIndex)
    
 
    menuItems.push_back(new EditableMenuItem("Level Descr:", 
-                                            getParamVal("LevelDescription"), 
+                                            paramMap["LevelDescription"], 
                                             "", 
                                             "A brief description of the level",                     
                                             MAX_GAME_DESCR_LEN));
@@ -217,7 +222,7 @@ void GameParamUserInterface::updateMenuItems(S32 gtIndex)
    
 
    menuItems.push_back(new EditableMenuItem("Level By:", 
-                                            getParamVal("LevelCredits"), 
+                                            paramMap["LevelCredits"], 
                                             "", 
                                             "Who created this level",                                  
                                             MAX_GAME_DESCR_LEN));
@@ -225,7 +230,7 @@ void GameParamUserInterface::updateMenuItems(S32 gtIndex)
 
 
    menuItems.push_back(new EditableMenuItem("Levelgen Script:", 
-                                            getParamVal("Script"), 
+                                            paramMap["Script"], 
                                             "<None>", 
                                             "Levelgen script & args to be run when level is loaded",  
                                             255));
@@ -282,43 +287,35 @@ void GameParamUserInterface::updateMenuItems(S32 gtIndex)
    mQuitItemIndex = menuItems.size() - 1;
 
    // Now populate the menu with values derived from our saved values
-
    if(gameParams.size())
    {
       const string delimiters = " \t";       // Spaces or tabs will delimit our lines
+
       for(S32 i = 0; i < gameParams.size(); i++)
       {
-         //string str = gameParams[i];
-         //string::size_type lastPos = str.find_first_not_of(delimiters, 0);    // Skip any leading delimiters
-         //string::size_type pos     = str.find_first_of(delimiters, lastPos);  // Find first "non-delimiter"
-
-         //string token = str.substr(lastPos, pos - lastPos);
-         //lastPos = min(str.find_first_not_of(delimiters, pos), str.size());   // Skip delimiters.  Note the "not_of"
-         //string val = str.substr(lastPos, str.size() - lastPos);
-
          Vector<string> words = parseString(gameParams[i]);
 
          if(!stricmp(words[0].c_str(), "GridSize"))
          {
             S32 gridSize = max(min(atoi(words[1].c_str()), Game::MAX_GRID_SIZE), Game::MIN_GRID_SIZE);
-            menuItems[OPT_GRIDSIZE]->setValue(gridSize);
+            menuItems[OPT_GRIDSIZE]->setIntValue(gridSize);
          }
          else if(!stricmp(words[0].c_str(), "MinPlayers"))
          {
             S32 minPlayers = max(min(atoi(words[1].c_str()), gMaxPlayers), 0);
-            menuItems[OPT_MIN_PLAYERS]->setValue(minPlayers);
+            menuItems[OPT_MIN_PLAYERS]->setIntValue(minPlayers);
          }
          else if(!stricmp(words[0].c_str(), "MaxPlayers"))
          {
             S32 maxPlayers = max(min(atoi(words[1].c_str()), gMaxPlayers), 0);
-            menuItems[OPT_MAX_PLAYERS]->setValue(maxPlayers);
+            menuItems[OPT_MAX_PLAYERS]->setIntValue(maxPlayers);
          }
          else if(!stricmp(words[0].c_str(), "Specials"))
          {
             for(S32 i = 1; i < words.size(); i++)
             {
                if(!stricmp(words[i].c_str(), "Engineer"))
-                  menuItems[OPT_ENGINEER]->setValue(1);
+                  menuItems[OPT_ENGINEER]->setValue("yes");
             }
          }
       }
@@ -335,11 +332,10 @@ void GameParamUserInterface::updateMenuItems(S32 gtIndex)
          for(S32 j = 0; j < savedMenuItems.size(); j++)
             if(menuItems[i]->getString() == savedMenuItems[j].getParamName())    // Found a match
             {
-               menuItems[i]->setValue(savedMenuItems[j].getParamIVal());
+               menuItems[i]->setValue(savedMenuItems[j].getParamVal());
                break;
             }
 }
-
 
 
 // Runs as we're exiting the menu
@@ -349,8 +345,9 @@ void GameParamUserInterface::onEscape()
    strcpy(gEditorUserInterface.mGameType, gGameTypeNames[gameTypeIndex]);   // Save current game type
 
    // Compose GameType string from GameType and level-specific params
-   gEditorUserInterface.setLevelFileName(menuItems[OPT_FILENAME]->getValue());   // Save level file name if it changed. Or hell, even if it didn't
-   gEditorUserInterface.setLevelGenScriptName(menuItems[OPT_SCRIPT]->getValue());
+   // Save level file name if it changed. Or hell, even if it didn't
+   gEditorUserInterface.setLevelFileName(menuItems[OPT_FILENAME]->getValueForWritingToLevelFile());  
+   gEditorUserInterface.setLevelGenScriptName(menuItems[OPT_SCRIPT]->getValueForWritingToLevelFile());
 
    gEditorUserInterface.setGridSize(menuItems[OPT_GRIDSIZE]->getIntValue()); 
    buildGameParamList();
@@ -380,27 +377,28 @@ void GameParamUserInterface::buildGameParamList()
 
    // GameType string -- value stored in the LineEditor is a "pretty name".  This looks up the "official" value.
    gameTypeHeader += gGameTypeNames[gameTypeIndex];
-
+   
    // Build up GameType string parameter by parameter... all game specific params go on the GameType line
    for(S32 i = FIRST_GAME_SPECIFIC_PARAM; i < FIRST_GAME_SPECIFIC_PARAM + mGameSpecificParams; i++)
    {
       // Add the game type parameters to the header one by one, separated by a space
-      gameTypeHeader += " " + itos(menuItems[i]->getIntValue());
+      gameTypeHeader += " " + menuItems[i]->getValueForWritingToLevelFile();
 
       // Save the already-parsed GameType args in a vector for use if we re-enter this interface
-      gEditorUserInterface.mGameTypeArgs.push_back(menuItems[i]->getIntValue());  
+      gEditorUserInterface.mGameTypeArgs.push_back(menuItems[i]->getValueForWritingToLevelFile());  
    }
 
+   for(S32 i = 0; i < gameParams.size(); i++)  logprintf("GP %d = %s", i, gameParams[i].c_str());     // XXXXX
    // Compose other game description strings
    gameParams.push_back(gameTypeHeader);
-   gameParams.push_back("LevelName "        + menuItems[OPT_LEVEL_NAME]->getValue());
-   gameParams.push_back("LevelDescription " + menuItems[OPT_LEVEL_DESCR]->getValue());
-   gameParams.push_back("LevelCredits "     + menuItems[OPT_CREDITS]->getValue());
-   gameParams.push_back("Script "           + menuItems[OPT_SCRIPT]->getValue());
-   gameParams.push_back("GridSize "         + menuItems[OPT_GRIDSIZE]->getValue());
-   gameParams.push_back("MinPlayers "       + menuItems[OPT_MIN_PLAYERS]->getValue());
-   gameParams.push_back("MaxPlayers "       + menuItems[OPT_MAX_PLAYERS]->getValue());
-   gameParams.push_back("Specials"          + menuItems[OPT_ENGINEER]->getValue());
+   gameParams.push_back("LevelName "        + menuItems[OPT_LEVEL_NAME]->getValueForWritingToLevelFile());
+   gameParams.push_back("LevelDescription " + menuItems[OPT_LEVEL_DESCR]->getValueForWritingToLevelFile());
+   gameParams.push_back("LevelCredits "     + menuItems[OPT_CREDITS]->getValueForWritingToLevelFile());
+   gameParams.push_back("Script "           + menuItems[OPT_SCRIPT]->getValueForWritingToLevelFile());
+   gameParams.push_back("GridSize "         + menuItems[OPT_GRIDSIZE]->getValueForWritingToLevelFile());
+   gameParams.push_back("MinPlayers "       + menuItems[OPT_MIN_PLAYERS]->getValueForWritingToLevelFile());
+   gameParams.push_back("MaxPlayers "       + menuItems[OPT_MAX_PLAYERS]->getValueForWritingToLevelFile());
+   gameParams.push_back("Specials"          + string(menuItems[OPT_ENGINEER]->getValueForWritingToLevelFile() == "yes" ? " Engineer" : ""));
 }
 
 

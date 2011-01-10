@@ -502,7 +502,7 @@ public:
    void saveUndoState();
 
    char mGameType[gameTypeLen];
-   Vector<S32> mGameTypeArgs;
+   Vector<string> mGameTypeArgs;
 
    void syncUnmovedItems();
 
@@ -584,6 +584,7 @@ public:
 
    bool saveLevel(bool showFailMessages, bool showSuccessMessages, bool autosave = false);
    void testLevel();
+   void testLevelStart();
    void setSaveMessage(string msg, bool savedOK);
    void setWarnMessage(string msg1, string msg2);
 

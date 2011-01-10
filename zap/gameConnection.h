@@ -29,7 +29,8 @@
 
 #include "sfx.h"
 #include "controlObjectConnection.h"
-#include "shipItems.h"     // For EngineerBuildObjects enum
+#include "shipItems.h"           // For EngineerBuildObjects enum
+#include "dataConnection.h"      // For DataSendable interface
 #include "tnlNetConnection.h"
 #include "timer.h"
 #include <time.h>
@@ -74,7 +75,7 @@ struct ClientInfo
 class ClientRef;
 struct LevelInfo;
 
-class GameConnection: public ControlObjectConnection
+class GameConnection: public ControlObjectConnection, public DataSendable
 {
 private:
    typedef ControlObjectConnection Parent;
@@ -94,6 +95,7 @@ private:
    static GameConnection gClientList;
 
    bool mInCommanderMap;
+	bool mIsRobot;
    bool mIsAdmin;
    bool mIsLevelChanger;
    bool mWaitingForPermissionsReply;
@@ -101,6 +103,7 @@ private:
    bool mIsBusy;              // True when the player is off chatting or futzing with options or whatever, false when they are "active"
 
    StringTableEntry mClientName;
+   StringTableEntry mClientNameNonUnique;    // For authentication, not unique name.
    Nonce mClientId;
    bool mClientClaimsToBeVerified;
    bool mClientNeedsToBeVerified;
@@ -113,9 +116,9 @@ private:
    Vector<U32> mLoadout;
    SafePtr<ClientRef> mClientRef;
 
-   void linkToClientList();
 
 public:
+   void linkToClientList();
    Vector<LevelInfo> mLevelInfos;
 
    static const S32 MASTER_SERVER_FAILURE_RETRY = 10000;   // 10 secs
@@ -149,6 +152,12 @@ public:
    GameConnection(const ClientInfo &clientInfo);      // Constructor
    ~GameConnection();                                 // Destructor
 
+
+   // These from the DataSendable interface class
+   TNL_DECLARE_RPC(s2rSendLine, (StringPtr line));
+   TNL_DECLARE_RPC(s2rCommandComplete, (RangedU32<0,SENDER_STATUS_COUNT> status));
+
+
    S32 mScore;       // Total points scored my this connection
    S32 mTotalScore;  // Total points scored by anyone while this connection is alive
    U32 mGamesPlayed; // Number of games played, obviously
@@ -157,6 +166,7 @@ public:
    Timer mSwitchTimer;     // Timer controlling when player can switch teams after an initial switch
 
    void setClientName(StringTableEntry name) { mClientName = name; }
+   void setClientNameNonUnique(StringTableEntry name) { mClientNameNonUnique = name; }
    void setServerName(StringTableEntry name) { mServerName = name; }
 
    std::string getServerName() { return mServerName.getString(); }
@@ -173,7 +183,10 @@ public:
    void suspendGame();
    void unsuspendGame();
 
-   bool isAdmin() { return mIsAdmin; }
+   bool isRobot() { return mIsRobot; }
+   void setIsRobot(bool robot) { mIsRobot = robot; }
+
+	bool isAdmin() { return mIsAdmin; }
    void setIsAdmin(bool admin) { mIsAdmin = admin; }
 
    bool isBusy() { if(!this) return false; else return mIsBusy; }
@@ -239,10 +252,14 @@ public:
    TNL_DECLARE_RPC(c2sSetIsBusy, (bool busy));
 
    TNL_DECLARE_RPC(c2sSetServerAlertVolume, (S8 vol));
+   TNL_DECLARE_RPC(c2sRenameClient, (StringTableEntry newName));
+
+   TNL_DECLARE_RPC(c2sRequestCurrentLevel, ());
 
    static GameConnection *getClientList();
    static S32 getClientCount();
    static bool onlyClientIs(GameConnection *client);
+   //static GameConnection *findClient(const Nonce &clientId);   // Loop through the client list, return first match
 
    Nonce *getClientId() { return &mClientId; }
 

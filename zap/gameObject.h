@@ -49,7 +49,7 @@ enum GameObjectType
    ShipType            = BIT(1),
    BarrierType         = BIT(2),
    MoveableType        = BIT(3),
-   ItemType            = BIT(4),    // Not made available to Lua... could we get rid of this altogether?
+   ItemType            = BIT(4),    // Not made available to Lua... could we get rid of this altogether?  Or make it a aggregate of other masks?
    ResourceItemType    = BIT(5),
          // slot available
    ForceFieldType      = BIT(7),
@@ -155,6 +155,7 @@ public:
    
    StringTableEntry getKillString() { return mKillString; }
    S32 getTeam() { return mTeam; }
+   void setTeam(S32 team) { mTeam = team; }    //needed for robot change team
    F32 getRating() { return 0; }    // TODO: Fix this
    S32 getScore() { return 0; }     // TODO: Fix this
    void findObjects(U32 typeMask, Vector<DatabaseObject *> &fillVector, const Rect &extents);
@@ -193,9 +194,9 @@ public:
    enum IdleCallPath {
       ServerIdleMainLoop,              // Idle called from top-level idle loop on server
       ServerIdleControlFromClient,
-      ClientIdleMainRemote,            // Idle run on the client --???--
+      ClientIdleMainRemote,            // On client, when object is not our control object
       ClientIdleControlMain,           // On client, when object is our control object
-      ClientIdleControlReplay,         // On client, when object is not our control object
+      ClientIdleControlReplay,
    };
 
    virtual void idle(IdleCallPath path);

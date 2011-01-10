@@ -42,6 +42,7 @@ enum MenuItemTypes {
    MenuItemType,
    ToggleMenuItemType,
    CounterMenuItemType,
+   TimeCounterMenuItemType,
    EditableMenuItemType,   
    PlayerMenuItemType,
    TeamMenuItemType
@@ -66,7 +67,7 @@ private:
    S32 mIndex;
 
 protected:
-   Color color;      // Color in which item should be displayed
+   Color mColor;      // Color in which item should be displayed
    bool mEnterAdvancesItem;
    void (*mCallback)(U32);
 
@@ -74,12 +75,12 @@ public:
    MenuItem() { TNLAssert(false, "Do not use this constructor!"); }    // Default constructor
 
    // Constructor
-   MenuItem(S32 index, string text, void (*callback)(U32), string help, KeyCode k1 = KEY_UNKNOWN, KeyCode k2 = KEY_UNKNOWN, Color c = Color(1,1,1))
+   MenuItem(S32 index, const string &text, void (*callback)(U32), const string &help, KeyCode k1 = KEY_UNKNOWN, KeyCode k2 = KEY_UNKNOWN, Color c = Color(1,1,1))
    {
       mText = text;
       key1 = k1;
       key2 = k2;
-      color = c;
+      mColor = c;
       mCallback = callback;
       mHelp = help;
       mIndex = (U32)index;
@@ -95,16 +96,17 @@ public:
    const char *getText() { return mText.c_str(); }
    S32 getIndex() { return mIndex; }
    string getString() { return mText; }
-
    virtual void setSecret(bool secret) { /* Do nothing */ }
 
    // When enter is pressed, should selection advance to the next item?
    virtual void setEnterAdvancesItem(bool enterAdvancesItem) { mEnterAdvancesItem = enterAdvancesItem; }
    
    virtual const char *getSpecialEditingInstructions() { return ""; }
-   virtual string getValue() { return ""; }
+   virtual string getValueForDisplayingInMenu() { return ""; }
    virtual S32 getIntValue() { return 0; }
-   virtual void setValue(S32 val) { /* Do nothing */ }
+   virtual string getValueForWritingToLevelFile() { return itos(getIntValue()); }
+   virtual void setValue(const string &val) { /* Do nothing */ }
+   virtual void setIntValue(S32 val) { /* Do nothing */ }
 
    virtual bool handleKey(KeyCode keyCode, char ascii);
    virtual void setFilter(LineEditor::LineEditorFilter filter) { /* Do nothing */ }
@@ -137,7 +139,7 @@ public:
    }
 
    virtual MenuItemTypes getItemType() { return ToggleMenuItemType; }
-   virtual string getValue() { return mValue; }
+   virtual string getValueForDisplayingInMenu() { return mValue; }
    virtual const char *getSpecialEditingInstructions() { return "Use [<-] and [->] keys to change value."; }
    virtual S32 getValueIndex() { return mIndex; }
 
@@ -166,8 +168,9 @@ public:
       mOptions.push_back("Yes");    // 1
    }
 
-   virtual string getValue() { return mIndex ? " Engineer" : ""; }
-   virtual void setValue(S32 val) { mIndex = (val == 0) ? 0 : 1; }
+   virtual string getValueForDisplayingInMenu() { return mIndex ? " Engineer" : ""; }
+   virtual string getValueForWritingToLevelFile() { return mIndex ? "yes" : "no"; }
+   virtual void setValue(const string &val) { mIndex = (val == "yes") ? 1 : 0; }
 };
 
 ////////////////////////////////////////
@@ -175,7 +178,7 @@ public:
 
 class CounterMenuItem : public MenuItem
 {
-private:
+protected:
    S32 mValue;
    S32 mStep;
    S32 mMinValue;
@@ -185,9 +188,10 @@ private:
 
    virtual void increment(S32 fact = 1); 
    virtual void decrement(S32 fact = 1);
+   virtual S32 getBigIncrement() { return 10; }    // How much our counter is incremented when shift is down (multiplier)
 
 public:
-   CounterMenuItem(string title, S32 value, S32 step, S32 minVal, S32 maxVal, string units, string minMsg, string help, 
+   CounterMenuItem(const string &title, S32 value, S32 step, S32 minVal, S32 maxVal, const string &units, const string &minMsg, const string &help, 
                    KeyCode k1 = KEY_UNKNOWN, KeyCode k2 = KEY_UNKNOWN, Color color = Color(1,1,1)) :
       MenuItem(-1, title, NULL, help, k1, k2,  color)
    {
@@ -203,16 +207,68 @@ public:
    virtual void render(S32 ypos, S32 textsize, bool isSelected);
 
    virtual MenuItemTypes getItemType() { return CounterMenuItemType; }
-   virtual string getValue() { return itos(mValue); }
-   const char *getUnits() { return mUnits.c_str(); }
+   virtual string getValueForDisplayingInMenu() { return itos(mValue); }
+   virtual const char *getUnits() { return mUnits.c_str(); }
    virtual S32 getIntValue() { return mValue; }
-   virtual void setValue(S32 value) { mValue = value; }
+   virtual void setValue(const string &val) { mValue = atoi(val.c_str()); }
+   virtual void setIntValue(S32 val) { mValue = val; }
    virtual const char *getSpecialEditingInstructions() { return "Use [<-] and [->] keys to change value.  Use [Shift] for bigger change."; }
    virtual bool handleKey(KeyCode keyCode, char ascii);
+
+   virtual void snap() { /* Do nothing */ }
 
    virtual void activatedWithShortcutKey() { /* Do nothing */ }
 };
 
+
+////////////////////////////////////////
+////////////////////////////////////////
+
+class TimeCounterMenuItem : public CounterMenuItem
+{
+protected:
+   virtual S32 getBigIncrement() { return 12; }    // 12 * 5sec = 1 minute
+
+public:
+   TimeCounterMenuItem(const string &title, S32 value, S32 maxVal, const string &zeroMsg, const string &help, 
+                       S32 step = 5, KeyCode k1 = KEY_UNKNOWN, KeyCode k2 = KEY_UNKNOWN, Color color = Color(1,1,1)) :
+      CounterMenuItem(title, value, step, 0, maxVal, "", zeroMsg, help, k1, k2, color)
+   {
+      // Do nothing
+   }
+
+   virtual const char *getUnits() { return mValue >= 60 ? "mins" : "secs"; }
+
+   virtual MenuItemTypes getItemType() { return TimeCounterMenuItemType; }
+   virtual void setValue (const string &val) { mValue = S32((atof(val.c_str()) * 60 + 2.5) / 5) * 5 ; }     // Snap to nearest 5 second interval
+   virtual string getValueForDisplayingInMenu() { return (mValue < 60) ? itos(mValue) : 
+                                                   itos(mValue / 60) + ":" + ((mValue % 60) < 10 ? "0" : "") + itos(mValue % 60); }
+   virtual string getValueForWritingToLevelFile() { return ftos((F32)mValue / 60.0f, 3); }
+};
+
+
+////////////////////////////////////////
+////////////////////////////////////////
+
+// As TimeCounterMenuItem, but reporting time in seconds, and with increments of 1 second, rather than 5
+class TimeCounterMenuItemSeconds : public TimeCounterMenuItem
+{
+protected:
+   virtual S32 getBigIncrement() { return 5; }
+
+public:
+   TimeCounterMenuItemSeconds(const string &title, S32 value, S32 maxVal, const string &zeroMsg, const string &help, 
+                   KeyCode k1 = KEY_UNKNOWN, KeyCode k2 = KEY_UNKNOWN, Color color = Color(1,1,1)) :
+      TimeCounterMenuItem(title, value, maxVal, zeroMsg, help, 1, k1, k2, color)
+   {
+      // Do nothing
+   }
+
+   virtual void setValue (const string &val) { mValue = atoi(val.c_str()); } 
+   virtual string getValueForWritingToLevelFile() { return itos(mValue); }
+
+   virtual void snap() { mValue = S32((mValue / getBigIncrement()) * getBigIncrement()); }
+};
 
 ////////////////////////////////////
 ////////////////////////////////////
@@ -243,7 +299,8 @@ public:
    LineEditor getLineEditor() { return mLineEditor; }
    void setLineEditor(LineEditor editor) { mLineEditor = editor; }
 
-   virtual string getValue() { return mLineEditor.getString(); }
+   virtual string getValueForWritingToLevelFile() { return mLineEditor.getString(); }
+   virtual string getValueForDisplayingInMenu() { return mLineEditor.getString(); }
    virtual void setFilter(LineEditor::LineEditorFilter filter) { mLineEditor.setFilter(filter); }
 
    virtual void activatedWithShortcutKey() { /* Do nothing */ }
@@ -257,7 +314,8 @@ public:
 
 class MaskedEditableMenuItem : public EditableMenuItem
 {
-     MaskedEditableMenuItem(string title, string val, string emptyVal, string help, U32 maxLen, KeyCode k1 = KEY_UNKNOWN, KeyCode k2 = KEY_UNKNOWN,                             Color c = Color(1, 1, 1) ) : 
+     MaskedEditableMenuItem(string title, string val, string emptyVal, string help, U32 maxLen, KeyCode k1 = KEY_UNKNOWN, KeyCode k2 = KEY_UNKNOWN,
+                            Color c = Color(1, 1, 1) ) : 
          EditableMenuItem(title, val, emptyVal, help, maxLen, k1, k2, c)
      {
         mLineEditor.setSecret(true);
