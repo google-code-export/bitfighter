@@ -830,6 +830,7 @@ U32 Ship::packUpdate(GhostConnection *connection, U32 updateMask, BitStream *str
       }
       stream->writeFlag(false);
    }  // End initial update
+
    if(stream->writeFlag(updateMask & AuthenticationMask))     // Player authentication status changed
    {
       stream->writeStringTableEntry(mPlayerName);
@@ -1076,7 +1077,7 @@ void Ship::unpackUpdate(GhostConnection *connection, BitStream *stream)
 }  // unpackUpdate
 
 
-F32 getAngleDiff(F32 a, F32 b)
+static F32 getAngleDiff(F32 a, F32 b)
 {
    // Figure out the shortest path from a to b...
    // Restrict them to the range 0-360

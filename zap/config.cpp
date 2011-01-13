@@ -197,32 +197,38 @@ static string displayModeToString(DisplayMode mode)
 
 static void loadGeneralSettings()
 {
-   gIniSettings.displayMode = stringToDisplayMode( gINI.GetValue("Settings", "WindowMode", displayModeToString(gIniSettings.displayMode)));
+   string section = "Settings";
+
+   gIniSettings.displayMode = stringToDisplayMode( gINI.GetValue(section, "WindowMode", displayModeToString(gIniSettings.displayMode)));
    gIniSettings.oldDisplayMode = gIniSettings.displayMode;
 
-   gIniSettings.controlsRelative = (lcase(gINI.GetValue("Settings", "ControlMode", (gIniSettings.controlsRelative ? "Relative" : "Absolute"))) == "relative");
-   gIniSettings.echoVoice = (lcase(gINI.GetValue("Settings", "VoiceEcho",(gIniSettings.echoVoice ? "Yes" : "No"))) == "yes");
-   gIniSettings.showWeaponIndicators = (lcase(gINI.GetValue("Settings", "LoadoutIndicators", (gIniSettings.showWeaponIndicators ? "Yes" : "No"))) == "yes");
-   gIniSettings.verboseHelpMessages = (lcase(gINI.GetValue("Settings", "VerboseHelpMessages", (gIniSettings.verboseHelpMessages ? "Yes" : "No"))) == "yes");
-   gIniSettings.showKeyboardKeys = (lcase(gINI.GetValue("Settings", "ShowKeyboardKeysInStickMode", (gIniSettings.showKeyboardKeys ? "Yes" : "No"))) == "yes");
-   gIniSettings.joystickType = stringToJoystickType(gINI.GetValue("Settings", "JoystickType", joystickTypeToString(gIniSettings.joystickType)));
-   gIniSettings.winXPos = max(gINI.GetValueI("Settings", "WindowXPos", gIniSettings.winXPos), 0);    // Restore window location
-   gIniSettings.winYPos = max(gINI.GetValueI("Settings", "WindowYPos", gIniSettings.winYPos), 0);
-   gIniSettings.winSizeFact = (F32) gINI.GetValueF("Settings", "WindowScalingFactor", gIniSettings.winSizeFact);
-   gIniSettings.masterAddress = gINI.GetValue("Settings", "MasterServerAddress", gIniSettings.masterAddress);
+   gIniSettings.controlsRelative = (lcase(gINI.GetValue(section, "ControlMode", (gIniSettings.controlsRelative ? "Relative" : "Absolute"))) == "relative");
+
+   gIniSettings.echoVoice            = gINI.GetValueYN(section, "VoiceEcho", gIniSettings.echoVoice);
+   gIniSettings.showWeaponIndicators = gINI.GetValueYN(section, "LoadoutIndicators", gIniSettings.showWeaponIndicators);
+   gIniSettings.verboseHelpMessages  = gINI.GetValueYN(section, "VerboseHelpMessages", gIniSettings.verboseHelpMessages);
+   gIniSettings.showKeyboardKeys     = gINI.GetValueYN(section, "ShowKeyboardKeysInStickMode", gIniSettings.showKeyboardKeys);
+
+   gIniSettings.joystickType = stringToJoystickType(gINI.GetValue(section, "JoystickType", joystickTypeToString(gIniSettings.joystickType)));
+
+   gIniSettings.winXPos = max(gINI.GetValueI(section, "WindowXPos", gIniSettings.winXPos), 0);    // Restore window location
+   gIniSettings.winYPos = max(gINI.GetValueI(section, "WindowYPos", gIniSettings.winYPos), 0);
+
+   gIniSettings.winSizeFact = (F32) gINI.GetValueF(section, "WindowScalingFactor", gIniSettings.winSizeFact);
+   gIniSettings.masterAddress = gINI.GetValue(section, "MasterServerAddress", gIniSettings.masterAddress);
    
-   gIniSettings.name = gINI.GetValue("Settings", "Nickname", gIniSettings.name);
-   gIniSettings.password = gINI.GetValue("Settings", "Password", gIniSettings.password);
+   gIniSettings.name           = gINI.GetValue(section, "Nickname", gIniSettings.name);
+   gIniSettings.password       = gINI.GetValue(section, "Password", gIniSettings.password);
 
-   gIniSettings.defaultName = gINI.GetValue("Settings", "DefaultName", gIniSettings.defaultName);
-   gIniSettings.lastName = gINI.GetValue("Settings", "LastName", gIniSettings.lastName);
-   gIniSettings.lastPassword = gINI.GetValue("Settings", "LastPassword", gIniSettings.lastPassword);
-   gIniSettings.lastEditorName = gINI.GetValue("Settings", "LastEditorName", gIniSettings.lastEditorName);
+   gIniSettings.defaultName    = gINI.GetValue(section, "DefaultName", gIniSettings.defaultName);
+   gIniSettings.lastName       = gINI.GetValue(section, "LastName", gIniSettings.lastName);
+   gIniSettings.lastPassword   = gINI.GetValue(section, "LastPassword", gIniSettings.lastPassword);
+   gIniSettings.lastEditorName = gINI.GetValue(section, "LastEditorName", gIniSettings.lastEditorName);
 
-   gIniSettings.enableExperimentalAimMode = (lcase(gINI.GetValue("Settings", "EnableExperimentalAimMode", (gIniSettings.enableExperimentalAimMode ? "Yes" : "No"))) == "yes");
-   gIniSettings.minSleepTimeClient = gINI.GetValueI("Settings", "MinClientDelay", gIniSettings.minSleepTimeClient);
+   gIniSettings.enableExperimentalAimMode = gINI.GetValueYN(section, "EnableExperimentalAimMode", gIniSettings.enableExperimentalAimMode);
+   gIniSettings.maxFPS = gINI.GetValueI(section, "MaxFPS", gIniSettings.maxFPS);
 
-   gDefaultLineWidth = (F32) gINI.GetValueF("Settings", "LineWidth", 2);
+   gDefaultLineWidth = (F32) gINI.GetValueF(section, "LineWidth", 2);
    gLineWidth1 = gDefaultLineWidth * 0.5f;
    gLineWidth3 = gDefaultLineWidth * 1.5f;
    gLineWidth4 = gDefaultLineWidth * 2;
@@ -231,27 +237,29 @@ static void loadGeneralSettings()
 
 static void loadDiagnostics()
 {
-   gIniSettings.diagnosticKeyDumpMode = (lcase(gINI.GetValue("Diagnostics", "DumpKeys",              (gIniSettings.diagnosticKeyDumpMode ? "Yes" : "No"))) == "yes");
+   string section = "Diagnostics";
 
-   gIniSettings.logConnectionProtocol = (lcase(gINI.GetValue("Diagnostics", "LogConnectionProtocol", (gIniSettings.logConnectionProtocol ? "Yes" : "No"))) == "yes");
-   gIniSettings.logNetConnection      = (lcase(gINI.GetValue("Diagnostics", "LogNetConnection",      (gIniSettings.logNetConnection      ? "Yes" : "No"))) == "yes");
-   gIniSettings.logEventConnection    = (lcase(gINI.GetValue("Diagnostics", "LogEventConnection",    (gIniSettings.logEventConnection    ? "Yes" : "No"))) == "yes");
-   gIniSettings.logGhostConnection    = (lcase(gINI.GetValue("Diagnostics", "LogGhostConnection",    (gIniSettings.logGhostConnection    ? "Yes" : "No"))) == "yes");
-   gIniSettings.logNetInterface       = (lcase(gINI.GetValue("Diagnostics", "LogNetInterface",       (gIniSettings.logNetInterface       ? "Yes" : "No"))) == "yes");
-   gIniSettings.logPlatform           = (lcase(gINI.GetValue("Diagnostics", "LogPlatform",           (gIniSettings.logPlatform           ? "Yes" : "No"))) == "yes");
-   gIniSettings.logNetBase            = (lcase(gINI.GetValue("Diagnostics", "LogNetBase",            (gIniSettings.logNetBase            ? "Yes" : "No"))) == "yes");
-   gIniSettings.logUDP                = (lcase(gINI.GetValue("Diagnostics", "LogUDP",                (gIniSettings.logUDP                ? "Yes" : "No"))) == "yes");
+   gIniSettings.diagnosticKeyDumpMode = gINI.GetValueYN(section, "DumpKeys",              gIniSettings.diagnosticKeyDumpMode);
 
-   gIniSettings.logFatalError         = (lcase(gINI.GetValue("Diagnostics", "LogFatalError",          (gIniSettings.logFatalError        ? "Yes" : "No"))) == "yes");
-   gIniSettings.logError              = (lcase(gINI.GetValue("Diagnostics", "LogError",               (gIniSettings.logError             ? "Yes" : "No"))) == "yes");
-   gIniSettings.logWarning            = (lcase(gINI.GetValue("Diagnostics", "LogWarning",             (gIniSettings.logWarning           ? "Yes" : "No"))) == "yes");
-   gIniSettings.logConnection         = (lcase(gINI.GetValue("Diagnostics", "LogConnection",          (gIniSettings.logConnection        ? "Yes" : "No"))) == "yes");
+   gIniSettings.logConnectionProtocol = gINI.GetValueYN(section, "LogConnectionProtocol", gIniSettings.logConnectionProtocol);
+   gIniSettings.logNetConnection      = gINI.GetValueYN(section, "LogNetConnection",      gIniSettings.logNetConnection);
+   gIniSettings.logEventConnection    = gINI.GetValueYN(section, "LogEventConnection",    gIniSettings.logEventConnection);
+   gIniSettings.logGhostConnection    = gINI.GetValueYN(section, "LogGhostConnection",    gIniSettings.logGhostConnection);
+   gIniSettings.logNetInterface       = gINI.GetValueYN(section, "LogNetInterface",       gIniSettings.logNetInterface);
+   gIniSettings.logPlatform           = gINI.GetValueYN(section, "LogPlatform",           gIniSettings.logPlatform);
+   gIniSettings.logNetBase            = gINI.GetValueYN(section, "LogNetBase",            gIniSettings.logNetBase);
+   gIniSettings.logUDP                = gINI.GetValueYN(section, "LogUDP",                gIniSettings.logUDP);
 
-   gIniSettings.logLevelLoaded        = (lcase(gINI.GetValue("Diagnostics", "LogLevelLoaded",          (gIniSettings.logLevelLoaded        ? "Yes" : "No"))) == "yes");
-   gIniSettings.logLuaObjectLifecycle = (lcase(gINI.GetValue("Diagnostics", "LogLuaObjectLifecycle",   (gIniSettings.logLuaObjectLifecycle ? "Yes" : "No"))) == "yes");
-   gIniSettings.luaLevelGenerator     = (lcase(gINI.GetValue("Diagnostics", "LuaLevelGenerator",       (gIniSettings.luaLevelGenerator     ? "Yes" : "No"))) == "yes");
-   gIniSettings.luaBotMessage         = (lcase(gINI.GetValue("Diagnostics", "LuaBotMessage",           (gIniSettings.luaBotMessage         ? "Yes" : "No"))) == "yes");
-   gIniSettings.serverFilter          = (lcase(gINI.GetValue("Diagnostics", "ServerFilter",            (gIniSettings.serverFilter          ? "Yes" : "No"))) == "yes");
+   gIniSettings.logFatalError         = gINI.GetValueYN(section, "LogFatalError",         gIniSettings.logFatalError);
+   gIniSettings.logError              = gINI.GetValueYN(section, "LogError",              gIniSettings.logError);
+   gIniSettings.logWarning            = gINI.GetValueYN(section, "LogWarning",            gIniSettings.logWarning);
+   gIniSettings.logConnection         = gINI.GetValueYN(section, "LogConnection",         gIniSettings.logConnection);
+
+   gIniSettings.logLevelLoaded        = gINI.GetValueYN(section, "LogLevelLoaded",        gIniSettings.logLevelLoaded);
+   gIniSettings.logLuaObjectLifecycle = gINI.GetValueYN(section, "LogLuaObjectLifecycle", gIniSettings.logLuaObjectLifecycle);
+   gIniSettings.luaLevelGenerator     = gINI.GetValueYN(section, "LuaLevelGenerator",     gIniSettings.luaLevelGenerator);
+   gIniSettings.luaBotMessage         = gINI.GetValueYN(section, "LuaBotMessage",         gIniSettings.luaBotMessage);
+   gIniSettings.serverFilter          = gINI.GetValueYN(section, "ServerFilter",          gIniSettings.serverFilter);
 }
 
 
@@ -273,54 +281,51 @@ static sfxSets stringToSFXSet(string sfxSet)
 }
 
 
+static F32 checkVol(F32 vol)
+{
+   if(vol > 1.0) 
+      return 1.0;
+
+   if(vol < 0)   
+      return 0;
+
+   return vol;
+}
+
+
 static void loadSoundSettings()
 {
-   gIniSettings.sfxVolLevel = (float) gINI.GetValueI("Sounds", "EffectsVolume", (S32) (gIniSettings.sfxVolLevel * 10)) / 10.0f;
-   gIniSettings.musicVolLevel = (float) gINI.GetValueI("Sounds", "MusicVolume", (S32) (gIniSettings.musicVolLevel * 10)) / 10.0f;
-   gIniSettings.voiceChatVolLevel = (float) gINI.GetValueI("Sounds", "VoiceChatVolume", (S32) (gIniSettings.voiceChatVolLevel * 10)) / 10.0f;
+   gIniSettings.sfxVolLevel       = (F32) gINI.GetValueI("Sounds", "EffectsVolume",   (S32) (gIniSettings.sfxVolLevel       * 10)) / 10.0f;
+   gIniSettings.musicVolLevel     = (F32) gINI.GetValueI("Sounds", "MusicVolume",     (S32) (gIniSettings.musicVolLevel     * 10)) / 10.0f;
+   gIniSettings.voiceChatVolLevel = (F32) gINI.GetValueI("Sounds", "VoiceChatVolume", (S32) (gIniSettings.voiceChatVolLevel * 10)) / 10.0f;
 
    string sfxSet = gINI.GetValue("Sounds", "SFXSet", "Modern");
    gIniSettings.sfxSet = stringToSFXSet(sfxSet);
 
    // Bounds checking
-   if(gIniSettings.sfxVolLevel > 1.0)
-      gIniSettings.sfxVolLevel = 1.0;
-   else if(gIniSettings.sfxVolLevel < 0)
-      gIniSettings.sfxVolLevel = 0;
-
-   if(gIniSettings.musicVolLevel > 1.0)
-      gIniSettings.musicVolLevel = 1.0;
-   else if(gIniSettings.musicVolLevel < 0)
-      gIniSettings.musicVolLevel = 0;
-
-   if(gIniSettings.voiceChatVolLevel > 1.0)
-      gIniSettings.voiceChatVolLevel = 1.0;
-   else if(gIniSettings.voiceChatVolLevel < 0)
-      gIniSettings.voiceChatVolLevel = 0;
-
-   if(gIniSettings.alertsVolLevel > 1.0)
-      gIniSettings.alertsVolLevel = 1.0;
-   else if(gIniSettings.alertsVolLevel < 0)
-      gIniSettings.alertsVolLevel = 0;
+   gIniSettings.sfxVolLevel       = checkVol(gIniSettings.sfxVolLevel);
+   gIniSettings.musicVolLevel     = checkVol(gIniSettings.musicVolLevel);
+   gIniSettings.voiceChatVolLevel = checkVol(gIniSettings.voiceChatVolLevel);
 }
 
 
 static void loadHostConfiguration()
 {
-   gIniSettings.hostname = gINI.GetValue("Host", "ServerName", gIniSettings.hostname);
-   gIniSettings.hostaddr = gINI.GetValue("Host", "ServerAddress", gIniSettings.hostaddr);
+   gIniSettings.hostname  = gINI.GetValue("Host", "ServerName", gIniSettings.hostname);
+   gIniSettings.hostaddr  = gINI.GetValue("Host", "ServerAddress", gIniSettings.hostaddr);
    gIniSettings.hostdescr = gINI.GetValue("Host", "ServerDescription", gIniSettings.hostdescr);
 
-   gIniSettings.serverPassword = gINI.GetValue("Host", "ServerPassword", gIniSettings.serverPassword);
-   gIniSettings.adminPassword = gINI.GetValue("Host", "AdminPassword", gIniSettings.adminPassword);
+   gIniSettings.serverPassword      = gINI.GetValue("Host", "ServerPassword", gIniSettings.serverPassword);
+   gIniSettings.adminPassword       = gINI.GetValue("Host", "AdminPassword", gIniSettings.adminPassword);
    gIniSettings.levelChangePassword = gINI.GetValue("Host", "LevelChangePassword", gIniSettings.levelChangePassword);
-   gIniSettings.levelDir = gINI.GetValue("Host", "LevelDir", gIniSettings.levelDir);
-   gIniSettings.maxplayers = gINI.GetValueI("Host", "MaxPlayers", gIniSettings.maxplayers);
+   gIniSettings.levelDir            = gINI.GetValue("Host", "LevelDir", gIniSettings.levelDir);
+   gIniSettings.maxplayers          = gINI.GetValueI("Host", "MaxPlayers", gIniSettings.maxplayers);
 
    gIniSettings.alertsVolLevel = (float) gINI.GetValueI("Host", "AlertsVolume", (S32) (gIniSettings.alertsVolLevel * 10)) / 10.0f;
-   gIniSettings.allowGetMap = (lcase(gINI.GetValue("Host", "AllowGetMap", "No")) == "yes");
-   gIniSettings.allowDataConnections = (lcase(gINI.GetValue("Host", "AllowDataConnections", (gIniSettings.allowDataConnections ? "Yes" : "No"))) == "yes");
-   gIniSettings.minSleepTimeDedicatedServer = gINI.GetValueI("Host", "MinDedicatedDelay", 10);
+   gIniSettings.allowGetMap          = gINI.GetValueYN("Host", "AllowGetMap", gIniSettings.allowGetMap);
+   gIniSettings.allowDataConnections = gINI.GetValueYN("Host", "AllowDataConnections", gIniSettings.allowDataConnections);
+
+   gIniSettings.maxDedicatedFPS = gINI.GetValueI("Host", "MaxFPS", gIniSettings.maxDedicatedFPS);
 
    // allow "Yes" to enable logging
    string str = gINI.GetValue("Host", "LogStats", "1");
@@ -328,6 +333,8 @@ static void loadHostConfiguration()
    if(lcase(str) == "yes") gIniSettings.LogStats = 1;
 
    gIniSettings.SendStatsToMaster = (lcase(gINI.GetValue("Host", "SendStatsToMaster", "yes")) == "yes");
+
+   gIniSettings.alertsVolLevel = checkVol(gIniSettings.alertsVolLevel);
 }
 
 
@@ -340,48 +347,52 @@ void loadUpdaterSettings()
 // Remember: If you change any of these defaults, you'll need to rebuild your INI file to see the results!
 static void loadKeyBindings()
 {                                // Whew!  This is quite the dense block of code!!
-   keySELWEAP1[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "SelWeapon1", keyCodeToString(KEY_1)).c_str());
-   keySELWEAP2[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "SelWeapon2", keyCodeToString(KEY_2)).c_str());
-   keySELWEAP3[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "SelWeapon3", keyCodeToString(KEY_3)).c_str());
-   keyADVWEAP[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "SelNextWeapon", keyCodeToString(KEY_E)).c_str());
-   keyCMDRMAP[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "ShowCmdrMap", keyCodeToString(KEY_C)).c_str());
-   keyTEAMCHAT[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "TeamChat", keyCodeToString(KEY_T)).c_str());
-   keyGLOBCHAT[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "GlobalChat", keyCodeToString(KEY_G)).c_str());
-   keyQUICKCHAT[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "QuickChat", keyCodeToString(KEY_V)).c_str());
-   keyCMDCHAT[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "Command", keyCodeToString(KEY_SLASH)).c_str());
-   keyLOADOUT[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "ShowLoadoutMenu", keyCodeToString(KEY_Z)).c_str());
-   keyMOD1[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "ActivateModule1", keyCodeToString(KEY_SPACE)).c_str());
-   keyMOD2[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "ActivateModule2", keyCodeToString(MOUSE_RIGHT)).c_str());
-   keyFIRE[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "Fire", keyCodeToString(MOUSE_LEFT)).c_str());
-   keyDROPITEM[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "DropItem", keyCodeToString(KEY_B)).c_str());
+   string section = "KeyboardKeyBindings";
 
-   keyTOGVOICE[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "VoiceChat", keyCodeToString(KEY_R)).c_str());
-   keyUP[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "ShipUp", keyCodeToString(KEY_W)).c_str());
-   keyDOWN[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "ShipDown", keyCodeToString(KEY_S)).c_str());
-   keyLEFT[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "ShipLeft", keyCodeToString(KEY_A)).c_str());
-   keyRIGHT[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "ShipRight", keyCodeToString(KEY_D)).c_str());
-   keySCRBRD[Keyboard] = stringToKeyCode(gINI.GetValue("KeyboardKeyBindings", "ShowScoreboard", keyCodeToString(KEY_TAB)).c_str());
+   keySELWEAP1[Keyboard]  = stringToKeyCode(gINI.GetValue(section, "SelWeapon1",      keyCodeToString(KEY_1)).c_str());
+   keySELWEAP2[Keyboard]  = stringToKeyCode(gINI.GetValue(section, "SelWeapon2",      keyCodeToString(KEY_2)).c_str());
+   keySELWEAP3[Keyboard]  = stringToKeyCode(gINI.GetValue(section, "SelWeapon3",      keyCodeToString(KEY_3)).c_str());
+   keyADVWEAP[Keyboard]   = stringToKeyCode(gINI.GetValue(section, "SelNextWeapon",   keyCodeToString(KEY_E)).c_str());
+   keyCMDRMAP[Keyboard]   = stringToKeyCode(gINI.GetValue(section, "ShowCmdrMap",     keyCodeToString(KEY_C)).c_str());
+   keyTEAMCHAT[Keyboard]  = stringToKeyCode(gINI.GetValue(section, "TeamChat",        keyCodeToString(KEY_T)).c_str());
+   keyGLOBCHAT[Keyboard]  = stringToKeyCode(gINI.GetValue(section, "GlobalChat",      keyCodeToString(KEY_G)).c_str());
+   keyQUICKCHAT[Keyboard] = stringToKeyCode(gINI.GetValue(section, "QuickChat",       keyCodeToString(KEY_V)).c_str());
+   keyCMDCHAT[Keyboard]   = stringToKeyCode(gINI.GetValue(section, "Command",         keyCodeToString(KEY_SLASH)).c_str());
+   keyLOADOUT[Keyboard]   = stringToKeyCode(gINI.GetValue(section, "ShowLoadoutMenu", keyCodeToString(KEY_Z)).c_str());
+   keyMOD1[Keyboard]      = stringToKeyCode(gINI.GetValue(section, "ActivateModule1", keyCodeToString(KEY_SPACE)).c_str());
+   keyMOD2[Keyboard]      = stringToKeyCode(gINI.GetValue(section, "ActivateModule2", keyCodeToString(MOUSE_RIGHT)).c_str());
+   keyFIRE[Keyboard]      = stringToKeyCode(gINI.GetValue(section, "Fire",            keyCodeToString(MOUSE_LEFT)).c_str());
+   keyDROPITEM[Keyboard]  = stringToKeyCode(gINI.GetValue(section, "DropItem",        keyCodeToString(KEY_B)).c_str());
 
-   keySELWEAP1[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "SelWeapon1", keyCodeToString(KEY_1)).c_str());
-   keySELWEAP2[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "SelWeapon2", keyCodeToString(KEY_2)).c_str());
-   keySELWEAP3[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "SelWeapon3", keyCodeToString(KEY_3)).c_str());
-   keyADVWEAP[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "SelNextWeapon", keyCodeToString(BUTTON_1)).c_str());
-   keyCMDRMAP[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "ShowCmdrMap", keyCodeToString(BUTTON_2)).c_str());
-   keyTEAMCHAT[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "TeamChat", keyCodeToString(KEY_T)).c_str());
-   keyGLOBCHAT[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "GlobalChat", keyCodeToString(KEY_G)).c_str());
-   keyQUICKCHAT[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "QuickChat", keyCodeToString(BUTTON_3)).c_str());
-   keyCMDCHAT[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "Command", keyCodeToString(KEY_SLASH)).c_str());
-   keyLOADOUT[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "ShowLoadoutMenu", keyCodeToString(BUTTON_4)).c_str());
-   keyMOD1[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "ActivateModule1", keyCodeToString(BUTTON_7)).c_str());
-   keyMOD2[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "ActivateModule2", keyCodeToString(BUTTON_6)).c_str());
-   keyFIRE[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "Fire", keyCodeToString(MOUSE_LEFT)).c_str());
-   keyDROPITEM[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "DropItem", keyCodeToString(BUTTON_8)).c_str());
-   keyTOGVOICE[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "VoiceChat", keyCodeToString(KEY_R)).c_str());
-   keyUP[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "ShipUp", keyCodeToString(KEY_UP)).c_str());
-   keyDOWN[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "ShipDown", keyCodeToString(KEY_DOWN)).c_str());
-   keyLEFT[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "ShipLeft", keyCodeToString(KEY_LEFT)).c_str());
-   keyRIGHT[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "ShipRight", keyCodeToString(KEY_RIGHT)).c_str());
-   keySCRBRD[Joystick] = stringToKeyCode(gINI.GetValue("JoystickKeyBindings", "ShowScoreboard", keyCodeToString(BUTTON_5)).c_str());
+   keyTOGVOICE[Keyboard] = stringToKeyCode(gINI.GetValue(section, "VoiceChat",        keyCodeToString(KEY_R)).c_str());
+   keyUP[Keyboard]       = stringToKeyCode(gINI.GetValue(section, "ShipUp",           keyCodeToString(KEY_W)).c_str());
+   keyDOWN[Keyboard]     = stringToKeyCode(gINI.GetValue(section, "ShipDown",         keyCodeToString(KEY_S)).c_str());
+   keyLEFT[Keyboard]     = stringToKeyCode(gINI.GetValue(section, "ShipLeft",         keyCodeToString(KEY_A)).c_str());
+   keyRIGHT[Keyboard]    = stringToKeyCode(gINI.GetValue(section, "ShipRight",        keyCodeToString(KEY_D)).c_str());
+   keySCRBRD[Keyboard]   = stringToKeyCode(gINI.GetValue(section, "ShowScoreboard",   keyCodeToString(KEY_TAB)).c_str());
+
+   section = "JoystickKeyBindings";
+
+   keySELWEAP1[Joystick]  = stringToKeyCode(gINI.GetValue(section, "SelWeapon1",      keyCodeToString(KEY_1)).c_str());
+   keySELWEAP2[Joystick]  = stringToKeyCode(gINI.GetValue(section, "SelWeapon2",      keyCodeToString(KEY_2)).c_str());
+   keySELWEAP3[Joystick]  = stringToKeyCode(gINI.GetValue(section, "SelWeapon3",      keyCodeToString(KEY_3)).c_str());
+   keyADVWEAP[Joystick]   = stringToKeyCode(gINI.GetValue(section, "SelNextWeapon",   keyCodeToString(BUTTON_1)).c_str());
+   keyCMDRMAP[Joystick]   = stringToKeyCode(gINI.GetValue(section, "ShowCmdrMap",     keyCodeToString(BUTTON_2)).c_str());
+   keyTEAMCHAT[Joystick]  = stringToKeyCode(gINI.GetValue(section, "TeamChat",        keyCodeToString(KEY_T)).c_str());
+   keyGLOBCHAT[Joystick]  = stringToKeyCode(gINI.GetValue(section, "GlobalChat",      keyCodeToString(KEY_G)).c_str());
+   keyQUICKCHAT[Joystick] = stringToKeyCode(gINI.GetValue(section, "QuickChat",       keyCodeToString(BUTTON_3)).c_str());
+   keyCMDCHAT[Joystick]   = stringToKeyCode(gINI.GetValue(section, "Command",         keyCodeToString(KEY_SLASH)).c_str());
+   keyLOADOUT[Joystick]   = stringToKeyCode(gINI.GetValue(section, "ShowLoadoutMenu", keyCodeToString(BUTTON_4)).c_str());
+   keyMOD1[Joystick]      = stringToKeyCode(gINI.GetValue(section, "ActivateModule1", keyCodeToString(BUTTON_7)).c_str());
+   keyMOD2[Joystick]      = stringToKeyCode(gINI.GetValue(section, "ActivateModule2", keyCodeToString(BUTTON_6)).c_str());
+   keyFIRE[Joystick]      = stringToKeyCode(gINI.GetValue(section, "Fire",            keyCodeToString(MOUSE_LEFT)).c_str());
+   keyDROPITEM[Joystick]  = stringToKeyCode(gINI.GetValue(section, "DropItem",        keyCodeToString(BUTTON_8)).c_str());
+   keyTOGVOICE[Joystick]  = stringToKeyCode(gINI.GetValue(section, "VoiceChat",       keyCodeToString(KEY_R)).c_str());
+   keyUP[Joystick]        = stringToKeyCode(gINI.GetValue(section, "ShipUp",          keyCodeToString(KEY_UP)).c_str());
+   keyDOWN[Joystick]      = stringToKeyCode(gINI.GetValue(section, "ShipDown",        keyCodeToString(KEY_DOWN)).c_str());
+   keyLEFT[Joystick]      = stringToKeyCode(gINI.GetValue(section, "ShipLeft",        keyCodeToString(KEY_LEFT)).c_str());
+   keyRIGHT[Joystick]     = stringToKeyCode(gINI.GetValue(section, "ShipRight",       keyCodeToString(KEY_RIGHT)).c_str());
+   keySCRBRD[Joystick]    = stringToKeyCode(gINI.GetValue(section, "ShowScoreboard",  keyCodeToString(BUTTON_5)).c_str());
 
    // The following key bindings are not user-defineable at the moment, mostly because we want consistency
    // throughout the game, and that would require some real constraints on what keys users could choose.
@@ -465,9 +476,7 @@ static void writeKeyBindings()
    Button=Button 1
    Caption=Hello
    MessageType=Hello there!
-
 */
-
 static void loadQuickChatMessages()
 {
    // Add initial node
@@ -1087,16 +1096,17 @@ static void writeSettings()
       gINI.sectionComment(section, " LastName - Name user entered when game last run (may be overwritten if you enter a different name on startup screen)");
       gINI.sectionComment(section, " LastPassword - Password user entered when game last run (may be overwritten if you enter a different pw on startup screen)");
       gINI.sectionComment(section, " LastEditorName - Last edited file name");
-      gINI.sectionComment(section, " MinClientDelay -  in millisecs, lower use more CPU, higher will lose performance/reduce FPS (delay 10 = max 100 FPS) (using 1000 / delay = fps)");
+      gINI.sectionComment(section, " MaxFPS - Maximum FPS the client will run at.  Higher values use more CPU, lower may increase lag (default = 100).");
+
       gINI.sectionComment(section, " LineWidth - default 2, width in pixels, use /LineWidth in game");
       gINI.sectionComment(section, "----------------");
    }
    saveWindowMode();
    saveWindowPosition(gIniSettings.winXPos, gIniSettings.winYPos);
 
-   gINI.SetValueF(section, "WindowScalingFactor", gIniSettings.winSizeFact);
+   gINI.SetValueF (section, "WindowScalingFactor", gIniSettings.winSizeFact);
    gINI.setValueYN(section, "VoiceEcho", gIniSettings.echoVoice );
-   gINI.SetValue(section,  "ControlMode", (gIniSettings.controlsRelative ? "Relative" : "Absolute"));
+   gINI.SetValue  (section, "ControlMode", (gIniSettings.controlsRelative ? "Relative" : "Absolute"));
 
    // inputMode is not saved, but rather determined at runtime by whether a joystick is attached
 
@@ -1111,9 +1121,9 @@ static void writeSettings()
    gINI.SetValue  (section, "LastPassword", gIniSettings.lastPassword);
    gINI.SetValue  (section, "LastEditorName", gIniSettings.lastEditorName);
 
-   gINI.SetValue(section, "EnableExperimentalAimMode", (gIniSettings.enableExperimentalAimMode ? "Yes" : "No"));
-   if(gIniSettings.minSleepTimeClient < 100)    // Don't save if too high
-      gINI.SetValueI(section, "MinClientDelay", gIniSettings.minSleepTimeClient);  
+   gINI.setValueYN(section, "EnableExperimentalAimMode", gIniSettings.enableExperimentalAimMode);
+   gINI.SetValueI (section, "MaxFPS", gIniSettings.maxFPS);  
+
    //gINI.SetValueF(section,"LineWidth",gDefaultLineWidth,true);     //Allow load, but not save, a user can screw up with /LineWidth command
 }
 
@@ -1155,7 +1165,7 @@ static void writeHost()
       addComment(" LevelDir - Specify where level files are stored; can be overridden on command line with -leveldir param.");
       addComment(" MaxPlayers - The max number of players that can play on your server.");
       addComment(" AlertsVolume - Volume of audio alerts when players join or leave game from 0 (mute) to 10 (full bore).");
-      addComment(" MinDedicatedDelay - (Dedicated only) default 10, in milliseconds, lower use more CPU, higher may increase lag.");
+      addComment(" MaxFPS - Maximum FPS the dedicaetd server will run at.  Higher values use more CPU, lower may increase lag (default = 100).");
       addComment(" AllowGetMap - When getmap is allowed, anyone can download the current level using the /getmap command.");
       addComment(" AllowDataConnections - When data connections are allowed, anyone with the admin password can upload or download levels, bots, or");
       addComment("                        levelGen scripts.  This feature is probably insecure, and should be DISABLED unless you require the functionality.");
@@ -1173,7 +1183,7 @@ static void writeHost()
    gINI.SetValueI (section, "AlertsVolume", (S32) (gIniSettings.alertsVolLevel * 10));
    gINI.setValueYN(section, "AllowGetMap", gIniSettings.allowGetMap);
    gINI.setValueYN(section, "AllowDataConnections", gIniSettings.allowDataConnections);
-   gINI.SetValueI (section, "MinDedicatedDelay", gIniSettings.minSleepTimeDedicatedServer);
+   gINI.SetValueI (section, "MaxFPS", gIniSettings.maxDedicatedFPS);
    gINI.SetValueI (section, "LogStats", gIniSettings.LogStats);
 }
 
