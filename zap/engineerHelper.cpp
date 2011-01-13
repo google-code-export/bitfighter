@@ -56,35 +56,35 @@ void EngineerHelper::render()
    if(mSelectedItem == -1)    // Haven't selected an item yet
    {
       const S32 xPos = UserInterface::horizMargin + 50;
-      glColor3f(1,1,0);
-      UserInterface::drawString(UserInterface::horizMargin, yPos, fontSize, "What do you want to Engineer?");
-      yPos += fontSize + 4;
+   glColor3f(1,1,0);
+   UserInterface::drawString(UserInterface::horizMargin, yPos, fontSize, "What do you want to Engineer?");
+   yPos += fontSize + 4;
 
-      bool showKeys = gIniSettings.showKeyboardKeys || gIniSettings.inputMode == Keyboard;
+   bool showKeys = gIniSettings.showKeyboardKeys || gIniSettings.inputMode == Keyboard;
 
-      for(S32 i = 0; i < mEngineerCostructionItemInfos.size(); i++)
+   for(S32 i = 0; i < mEngineerCostructionItemInfos.size(); i++)
+   {
+      // Draw key controls for selecting the object to be created
+
+      if(gIniSettings.inputMode == Joystick)     // Only draw joystick buttons when in joystick mode
+         renderControllerButton(UserInterface::horizMargin + (showKeys ? 0 : 20), yPos, mEngineerCostructionItemInfos[i].mButton, false);
+
+      if(showKeys)
       {
-         // Draw key controls for selecting the object to be created
+         glColor3f(1, 1, 1);     // Render key in white
+         renderControllerButton(UserInterface::horizMargin + 20, yPos, mEngineerCostructionItemInfos[i].mKey, false);
+      }
 
-         if(gIniSettings.inputMode == Joystick)     // Only draw joystick buttons when in joystick mode
-            renderControllerButton(UserInterface::horizMargin + (showKeys ? 0 : 20), yPos, mEngineerCostructionItemInfos[i].mButton, false);
-
-         if(showKeys)
-         {
-            glColor3f(1, 1, 1);     // Render key in white
-            renderControllerButton(UserInterface::horizMargin + 20, yPos, mEngineerCostructionItemInfos[i].mKey, false);
-         }
-
-         glColor3f(0.1, 1.0, 0.1);     
+      glColor3f(0.1, 1.0, 0.1);     
 
          S32 x = UserInterface::drawStringAndGetWidth(xPos, yPos, fontSize, mEngineerCostructionItemInfos[i].mName); 
 
-         glColor3f(.2, .8, .8);    
+      glColor3f(.2, .8, .8);    
          UserInterface::drawString(xPos + x, yPos, fontSize, mEngineerCostructionItemInfos[i].mHelp);      // The help string, if there is one
 
-         yPos += fontSize + 7;
-      }
+      yPos += fontSize + 7;
    }
+}
    else     // Have selected a module, need to indicate where to deploy
    {
       S32 xPos = UserInterface::horizMargin;
@@ -152,8 +152,8 @@ bool EngineerHelper::processKeyCode(KeyCode keyCode)
          else
             gGameUserInterface.displayErrorMessage(deployer.getErrorMessage().c_str());
             
-         gGameUserInterface.setPlayMode();
-      }
+      gGameUserInterface.setPlayMode();
+   }
 
       return true;
    }
