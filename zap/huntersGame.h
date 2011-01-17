@@ -42,16 +42,16 @@ class HuntersGameType : public GameType
 private:
    typedef GameType Parent;
 
-   S32 mNexusReturnDelay;
-   S32 mNexusCapDelay;
-   Timer mNexusReturnTimer;
-   Timer mNexusCapTimer;
+   S32 mNexusClosedTime;      // Time Nexus remains closed
+   S32 mNexusOpenTime;        // Time Nexus remains open
+   Timer mNexusTimer;
 
    struct YardSaleWaypoint
    {
       Timer timeLeft;
       Point pos;
    };
+
    Vector<YardSaleWaypoint> mYardSaleWaypoints;
    Vector<SafePtr<HuntersNexusObject> > mNexus;
    U32 getLowerRightCornerScoreboardOffsetFromBottom() { return 88; }
@@ -61,7 +61,7 @@ public:
    bool processArguments(S32 argc, const char **argv);
 
    bool mNexusIsOpen;      // Is the nexus open?
-	S32 getNexusTimeLeft() {return mNexusIsOpen ? mNexusCapTimer.getCurrent() : mNexusReturnTimer.getCurrent(); }
+	S32 getNexusTimeLeft() {return mNexusTimer.getCurrent(); }
 
    // Info about this game type:
    bool isTeamGame() { return mTeams.size() > 1; }

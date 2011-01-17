@@ -44,7 +44,7 @@ TNL_IMPLEMENT_NETOBJECT(HuntersGameType);
 
 TNL_IMPLEMENT_NETOBJECT_RPC(HuntersGameType, s2cSetNexusTimer, (U32 nexusTime, bool isOpen), (nexusTime, isOpen), NetClassGroupGameMask, RPCGuaranteedOrdered, RPCToGhost, 0)
 {
-   mNexusReturnTimer.reset(nexusTime);
+   mNexusTimer.reset(nexusTime);
    mNexusIsOpen = isOpen;
 }
 
@@ -89,11 +89,10 @@ TNL_IMPLEMENT_NETOBJECT_RPC(HuntersGameType, s2cHuntersMessage,
 // Constructor
 HuntersGameType::HuntersGameType() : GameType()
 {
+   mNexusClosedTime = 60 * 1000;
+   mNexusOpenTime = 15 * 1000;
+   mNexusTimer.reset(mNexusClosedTime);
    mNexusIsOpen = false;
-   mNexusReturnDelay = 60 * 1000;
-   mNexusCapDelay = 15 * 1000;
-   mNexusReturnTimer.reset(mNexusReturnDelay);
-   mNexusCapTimer.reset(0);
 }
 
 
@@ -105,16 +104,16 @@ bool HuntersGameType::processArguments(S32 argc, const char **argv)
       mGameTimer.reset(U32(atof(argv[0]) * 60 * 1000));       // Game time
       if(argc > 1)
       {
-         mNexusReturnDelay = S32(atof(argv[1]) * 60 * 1000);  // Time until nexus opens
+         mNexusClosedTime = S32(atof(argv[1]) * 60 * 1000);  // Time until nexus opens, specified in minutes
          if(argc > 2)
          {
-            mNexusCapDelay = S32(atof(argv[2]) * 1000);       // Time nexus remains open
+            mNexusOpenTime = S32(atof(argv[2]) * 1000);       // Time nexus remains open, specified in seconds
             if(argc > 3)
                mWinningScore = atoi(argv[3]);                 // Winning score
          }
       }
    }
-   mNexusReturnTimer.reset(mNexusReturnDelay);
+   mNexusTimer.reset(mNexusClosedTime);
 
    return true;
 }
@@ -223,10 +222,7 @@ void HuntersGameType::onGhostAvailable(GhostConnection *theConnection)
    Parent::onGhostAvailable(theConnection);
 
    NetObject::setRPCDestConnection(theConnection);
-   if(mNexusIsOpen)
-      s2cSetNexusTimer(mNexusCapTimer.getCurrent(), mNexusIsOpen);
-   else
-      s2cSetNexusTimer(mNexusReturnTimer.getCurrent(), mNexusIsOpen);
+   s2cSetNexusTimer(mNexusTimer.getCurrent(), mNexusIsOpen);
    NetObject::setRPCDestConnection(NULL);
 }
 
@@ -253,7 +249,7 @@ void HuntersGameType::idle(GameObject::IdleCallPath path)
    U32 deltaT = mCurrentMove.time;
    if(isGhost())     // i.e. on client
    {
-      mNexusReturnTimer.update(deltaT);
+      mNexusTimer.update(deltaT);
       for(S32 i = 0; i < mYardSaleWaypoints.size();)
       {
          if(mYardSaleWaypoints[i].timeLeft.update(deltaT))
@@ -265,11 +261,11 @@ void HuntersGameType::idle(GameObject::IdleCallPath path)
    }
 
    // The following only runs on the server
-   if(mNexusReturnTimer.update(deltaT))         // Nexus has opened
+   if(!mNexusIsOpen && mNexusTimer.update(deltaT))         // Nexus has just opened
    {
-      mNexusCapTimer.reset(mNexusCapDelay);
+      mNexusTimer.reset(mNexusOpenTime);
       mNexusIsOpen = true;
-      s2cSetNexusTimer(mNexusCapTimer.getCurrent(), mNexusIsOpen);
+      s2cSetNexusTimer(mNexusTimer.getCurrent(), mNexusIsOpen);
       static StringTableEntry msg("The Nexus is now OPEN!");
 
       // Broadcast a message
@@ -289,11 +285,12 @@ void HuntersGameType::idle(GameObject::IdleCallPath path)
             shipTouchNexus(client_ship, nexus);
       }
    }
-   else if(mNexusCapTimer.update(deltaT))       // Nexus has closed
+   else if(mNexusIsOpen && mNexusTimer.update(deltaT))       // Nexus has just closed
    {
-      mNexusReturnTimer.reset(mNexusReturnDelay);
+      mNexusTimer.reset(mNexusClosedTime);
       mNexusIsOpen = false;
-      s2cSetNexusTimer(mNexusReturnTimer.getCurrent(), mNexusIsOpen);
+      s2cSetNexusTimer(mNexusTimer.getCurrent(), mNexusIsOpen);
+
       static StringTableEntry msg("The Nexus is now CLOSED.");
       for(S32 i = 0; i < mClientList.size(); i++)
          mClientList[i]->clientConnection->s2cDisplayMessage(GameConnection::ColorNuclearGreen, SFXFlagDrop, msg);
@@ -376,14 +373,14 @@ void HuntersGameType::renderInterfaceOverlay(bool scoreboardVisible)
 
    glColor(mNexusIsOpen ? gNexusOpenColor : gNexusClosedColor);      // Display timer in appropriate color
 
-   U32 timeLeft = mNexusReturnTimer.getCurrent();
+   U32 timeLeft = mNexusTimer.getCurrent();
    U32 minsRemaining = timeLeft / (60000);
    U32 secsRemaining = (timeLeft - (minsRemaining * 60000)) / 1000;
 
    const S32 y = gScreenInfo.getGameCanvasHeight() - UserInterface::vertMargin - 45;
    const S32 size = 20;
 
-   if(mNexusReturnTimer.getPeriod() == 0)
+   if(mNexusTimer.getPeriod() == 0)
    {
       S32 x =  gScreenInfo.getGameCanvasWidth() - UserInterface::horizMargin - UserInterface::getStringWidth(size, NEXUS_NEVER_STR);
       UserInterface::drawStringf(x, y, size, NEXUS_NEVER_STR);
