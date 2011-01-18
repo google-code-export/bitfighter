@@ -224,11 +224,11 @@ void ControlObjectConnection::writeCompressedPoint(Point &p, BitStream *stream)
 
    Point delta = p - mServerPosition;
     // floor(number + 0.5) fix rounding problems (was 5 = (U32)5.95)
-   S32 dx = (S32) floor((delta.x + Game::PlayerHorizVisDistance + Game::PlayerScopeMargin) + 0.5f);
-   S32 dy = (S32) floor((delta.y + Game::PlayerVertVisDistance + Game::PlayerScopeMargin) + 0.5f);
+   S32 dx = (S32) floor((delta.x + Game::PLAYER_VISUAL_DISTANCE_HORIZONTAL + Game::PLAYER_SCOPE_MARGIN) + 0.5f);
+   S32 dy = (S32) floor((delta.y + Game::PLAYER_VISUAL_DISTANCE_VERTICAL + Game::PLAYER_SCOPE_MARGIN) + 0.5f);
 
-   S32 maxx = (Game::PlayerHorizVisDistance + Game::PlayerScopeMargin) * 2;
-   S32 maxy = (Game::PlayerVertVisDistance + Game::PlayerScopeMargin) * 2;
+   S32 maxx = (Game::PLAYER_VISUAL_DISTANCE_HORIZONTAL + Game::PLAYER_SCOPE_MARGIN) * 2;
+   S32 maxy = (Game::PLAYER_VISUAL_DISTANCE_VERTICAL + Game::PLAYER_SCOPE_MARGIN) * 2;
 
    if(stream->writeFlag(dx >= 0 && dx <= maxx && dy >= 0 && dy <= maxy))
    {
@@ -252,11 +252,11 @@ void ControlObjectConnection::readCompressedPoint(Point &p, BitStream *stream)
    }
    if(stream->readFlag())
    {
-      U32 maxx = (Game::PlayerHorizVisDistance + Game::PlayerScopeMargin) * 2;
-      U32 maxy = (Game::PlayerVertVisDistance + Game::PlayerScopeMargin) * 2;
+      U32 maxx = (Game::PLAYER_VISUAL_DISTANCE_HORIZONTAL + Game::PLAYER_SCOPE_MARGIN) * 2;
+      U32 maxy = (Game::PLAYER_VISUAL_DISTANCE_VERTICAL + Game::PLAYER_SCOPE_MARGIN) * 2;
 
-      F32 dx = F32(stream->readRangedU32(0, maxx)) - (Game::PlayerHorizVisDistance + Game::PlayerScopeMargin);
-      F32 dy = F32(stream->readRangedU32(0, maxy)) - (Game::PlayerVertVisDistance + Game::PlayerScopeMargin);
+      F32 dx = F32(stream->readRangedU32(0, maxx)) - (Game::PLAYER_VISUAL_DISTANCE_HORIZONTAL + Game::PLAYER_SCOPE_MARGIN);
+      F32 dy = F32(stream->readRangedU32(0, maxy)) - (Game::PLAYER_VISUAL_DISTANCE_VERTICAL + Game::PLAYER_SCOPE_MARGIN);
 
       Point delta(dx, dy);
       p = mServerPosition + delta;
