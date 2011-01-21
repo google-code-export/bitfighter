@@ -194,8 +194,8 @@ using namespace TNL;
 #ifdef WIN32
 #include <io.h>
 #include <fcntl.h>
+#define USE_BFUP
 #endif 
-
 
 #ifdef TNL_OS_MAC_OSX
 #include "Directory.h"
@@ -1900,7 +1900,7 @@ void setJoystick(ControllerTypeType jsType)
 }
 
 
-#ifdef WIN32
+#ifdef USE_BFUP
 #include <direct.h>
 #include <stdlib.h>
 #include "stringUtils.h"      // For itos
@@ -1908,8 +1908,6 @@ void setJoystick(ControllerTypeType jsType)
 // This block is Windows only, so it can do all sorts of icky stuff...
 void launchUpdater(string bitfighterExecutablePathAndFilename)
 {
-   //string executable = ExtractFilename(bitfighterExecutablePathAndFilename);
-
    string updaterPath = ExtractDirectory(bitfighterExecutablePathAndFilename) + "\\updater";
    string updaterFileName = updaterPath + "\\bfup.exe";
 
@@ -2083,8 +2081,8 @@ int main(int argc, char **argv)
       actualizeScreenMode(false, true);               // Create a display window
 
       gConsole = OGLCONSOLE_Create();                 // Create our console *after* the screen mode has been actualized
-
-#ifdef WIN32
+      
+#ifdef USE_BFUP
       if(gIniSettings.useUpdater)
             launchUpdater(argv[0]);                   // Spawn external updater tool to check for new version of Bitfighter -- Windows only
 #endif
