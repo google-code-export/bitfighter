@@ -24,6 +24,7 @@
 //------------------------------------------------------------------------------------
 
 #include "statistics.h"
+#include "gameWeapons.h"
 
 namespace Zap
 {
@@ -43,14 +44,13 @@ Statistics::Statistics() : mShots(WeaponCount), mHits(WeaponCount)
    mFratricides = 0;
 }
 
-
-void Statistics::countShot(WeaponType weaponType)
+void Statistics::countShot(S32 weaponType)      // --> S32 should be WeaponType
 {
    mShots[(S32) weaponType]++;
 }
 
 
-void Statistics::countHit(WeaponType weaponType)
+void Statistics::countHit(S32 weaponType)    // --> S32 should be WeaponType
 {
    mHits[(S32) weaponType]++;
 }
@@ -67,7 +67,7 @@ S32 Statistics::getShots()
 }
 
 
-S32 Statistics::getShots(WeaponType weaponType)
+S32 Statistics::getShots(S32 weaponType)     // --> S32 should be WeaponType
 {
    return mShots[(S32)weaponType];
 }
@@ -96,7 +96,7 @@ S32 Statistics::getHits()
 }
 
 
-S32 Statistics::getHits(WeaponType weaponType)
+S32 Statistics::getHits(S32 weaponType)     // --> S32 should be WeaponType
 {
    return mHits[(S32)weaponType];
 }
@@ -110,7 +110,7 @@ F32 Statistics::getHitRate()
 
 
 // Report hit rate for specified weapon
-F32 Statistics::getHitRate(WeaponType weaponType)
+F32 Statistics::getHitRate(S32 weaponType)     // --> S32 should be WeaponType
 {
    return (F32)mHits[(S32)weaponType] / (F32)mShots[(S32)weaponType];
 }

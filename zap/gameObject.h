@@ -26,16 +26,10 @@
 #ifndef _GAMEOBJECT_H_
 #define _GAMEOBJECT_H_
 
-#include "tnlTypes.h"
-#include "tnlNetObject.h"
-
-#include "gameConnection.h"
 #include "gridDB.h"        // For DatabaseObject
 #include "game.h"
-#include "move.h"
-#include "point.h"
 
-#include "luaObject.h"     // For returnInt method
+#include "luaObject.h"     // For LuaObject def and returnInt method
 #include "lua.h"           // For push prototype
 
 namespace Zap
@@ -139,11 +133,11 @@ protected:
 
 public:
 
-   GameObject();                          // Constructor
-   ~GameObject() { removeFromGame(); }    // Destructor
+   GameObject();                             // Constructor
+   ~GameObject() { removeFromGame(); }       // Destructor
 
-   virtual void addToGame(Game *theGame);     // BotNavMeshZone have their own addToGame
-   virtual void onAddedToGame(Game *theGame);
+   virtual void addToGame(Game *game);       // BotNavMeshZone has its own addToGame
+   virtual void onAddedToGame(Game *game);
    void removeFromGame();
 
    Game *getGame() { return mGame; }
