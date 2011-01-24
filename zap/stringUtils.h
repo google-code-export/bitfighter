@@ -42,10 +42,12 @@ string ExtractDirectory(const std::string& path);
 string ExtractFilename(const std::string& path);
 
 string itos(int i);
+string itos(U32);
+string itos(U64);
 string ftos(float f, int digits);
 
 
-string &replaceString(string &strString, const string &strOld, const string &strNew);
+string replaceString(const string &strString, const string &strOld, const string &strNew);
 
 // TODO: Merge these methods
 TNL::Vector<string> parseString(const string &line);
