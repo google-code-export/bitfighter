@@ -85,6 +85,7 @@ namespace Types
       write(s, val.playerSuicides);
       write(s, val.shots);
       write(s, val.hits);
+
       if(GameStatistics3_CurrentVersion >= 1)
          write(s, val.playerSwitchedTeamCount);
    }
