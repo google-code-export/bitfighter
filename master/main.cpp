@@ -951,11 +951,11 @@ public:
    /////////////////////////////////////////////////////////////////////////////////////
 
 
-   // This relies on teamScores being sent sorted in order of descending score...  Can we really trust that?  Does it matter if we do?
+   // This relies on team and player scores being sent sorted in order of descending score...  Can we really trust that?  Does it matter if we do?
    static string getResult(S32 scores, S32 score1, S32 score2, S32 currScore, bool isFirst)
    {
-      if(scores == 1)      // Only one player/team, assign win, arbitrary
-         return "W";
+      if(scores == 1)      // Only one player/team, winner/loser makes no sense
+         return "X";
       else if(score1 == score2 && currScore == score1)     // Tie -- everyone with high score gets tie
          return "T";
       else if(isFirst)     // No tie -- first one gets the win...
