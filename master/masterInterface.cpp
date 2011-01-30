@@ -51,7 +51,7 @@ namespace Types
    /// Reads objects from a BitStream.
    void read(TNL::BitStream &s, GameStatistics3 *val)
    {
-		U32 position = s.getBitPosition();
+		//U32 position = s.getBitPosition();
       val->valid = false;
       U8 version = readU8(s);  // Read version number.
       val->version = version;
@@ -77,7 +77,7 @@ namespace Types
          gt->score = readS32(s);
          gt->color_bin = s.readInt(24); // 24 bit color
          gt->color = "000000";//Color(gt->color_bin).toHexString(); // TODO: fix conversion from int to float
-         gt->gameResult = "?";
+         //gt->gameResult = "?";
          if(!s.isValid()) return;
 
          U32 playerSize = readU8(s);
@@ -92,12 +92,12 @@ namespace Types
             gp->suicides = readU16(s);
             gp->switchedTeamCount = readU8(s);
             gp->switchedTeams = (gp->switchedTeamCount != 0);
-            gp->isLevelChanger = s.readFlag();
-            gp->isAdmin = s.readFlag();
             gp->isRobot = s.readFlag();
+            gp->isAdmin = s.readFlag();
+            gp->isLevelChanger = s.readFlag();
             gp->isAuthenticated = false; //s.readFlag();  // we may set this by comparing Nonce id.
             gp->nonce.read(&s);
-            gp->gameResult = "?";
+            //gp->gameResult = "?";
 
             U32 weaponSize = readU8(s);
             gp->weaponStats.setSize(weaponSize);
@@ -113,15 +113,15 @@ namespace Types
       }
       if(playerCount == g->playerCount)  // make sure server don't lie to master.
          val->valid = true;
-		position = s.getBitPosition() - position;
-		logprintf(LogConsumer::LogError, "read %d", position);
+		//position = s.getBitPosition() - position;
+		//logprintf(LogConsumer::LogError, "read %d", position);
    }
 
 
    /// Writes objects into a BitStream. Server write and send to master.
    void write(TNL::BitStream &s, GameStatistics3 &val)
    {
-		U32 position = s.getBitPosition();
+		//U32 position = s.getBitPosition();
       write(s, U8(GameStatistics3_CurrentVersion));       // send current version
       GameStats *g = &val.gameStats;
 
@@ -152,9 +152,9 @@ namespace Types
             write(s, U16(gp->suicides));
             write(s, U8(gp->switchedTeamCount));
             //gp->switchedTeams
-            s.writeFlag(gp->isLevelChanger);
-            s.writeFlag(gp->isAdmin);
             s.writeFlag(gp->isRobot);
+            s.writeFlag(gp->isAdmin);
+            s.writeFlag(gp->isLevelChanger);
             //gp->isAuthenticated;;  // we may set this by comparing Nonce id.
             gp->nonce.write(&s);
 
@@ -168,8 +168,8 @@ namespace Types
             }
          }
       }
-		position = s.getBitPosition() - position;
-		logprintf(LogConsumer::LogError, "write %d", position);
+		//position = s.getBitPosition() - position;
+		//logprintf(LogConsumer::LogError, "write %d", position);
    }
 }
 

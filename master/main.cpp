@@ -70,12 +70,12 @@ string gPhpbb3Database;
 string gPhpbb3TablePrefix;
 
 // Variables for writing stats
-const char *gStatsDatabaseAddress;
-const char *gStatsDatabaseName;
-const char *gStatsDatabaseUsername;
-const char *gStatsDatabasePassword;
+string gStatsDatabaseAddress;
+string gStatsDatabaseName;
+string gStatsDatabaseUsername;
+string gStatsDatabasePassword;
 
-DatabaseWriter *databaseWriter;
+//DatabaseWriter *databaseWriter;
 
 class MasterServerConnection;
 
@@ -265,10 +265,10 @@ protected:
    U32              mCSProtocolVersion; ///< Protocol version client will use to talk to server (client can only play with others 
                                         ///     using this same version)
    U32              mClientBuild;       ///< Build number of the client (different builds may use same protocols)
-   U32              mInfoFlags;         ///< Info flags describing this server.  1 = server is testing from map editor
 
    // The following are mostly dummy values at the moment... we may use them later.
    U32              mCPUSpeed;          ///< The CPU speed of this server.
+   U32              mInfoFlags;         ///< Info flags describing this server.
    U32              mPlayerCount;       ///< Current number of players on this server.
    U32              mMaxPlayers;        ///< Maximum number of players on this server.
    U32              mNumBots;           ///< Current number of bots on this server.
@@ -1096,7 +1096,7 @@ public:
 
       //gameStats.teamStats.setSize(teams.size());
 
-      S32 lastPlayerProcessed = 0;
+      S32 nextPlayerToProcess = 0;
 
       for(S32 i = 0; i < teams.size(); i++)
       {
@@ -1108,16 +1108,14 @@ public:
 
          teamStats.score = teamScores[i];
 
-         for(S32 j = lastPlayerProcessed; j < playerNames.size(); j++)
+         for(S32 j = nextPlayerToProcess; j < playerNames.size(); j++)
          {
             PlayerStats playerStats;
 
             // TODO: Put these into a constuctor
             playerStats.deaths = playerDeaths[j];
 
-            if(teamGame)      // Team games players get team's win/loss/tie status
-               playerStats.gameResult = teamStats.gameResult;
-            // else gameResult will be computed below
+            // Note: Have to wait until team result is computed to set it on the players
 
             Nonce playerId(playerIds[j]);
             MasterServerConnection *client = findClient(playerId);
@@ -1145,80 +1143,112 @@ public:
 
             if(lastOnTeam[j])
             {
-               lastPlayerProcessed = j;
+               nextPlayerToProcess = j + 1;
                break;
             }
-         }
-
-         // Now compute winning player(s) based on score; but must sort first
-         if(!teamGame)
-         {
-            teamStats.playerStats.sort(playerScoreSort);
-
-            for(S32 j = 0; j < teamStats.playerStats.size(); j++)
-               teamStats.playerStats[j].gameResult = 
-                        getResult(playerScores.size(), playerScores[0], playerScores.size() == 1 ? 0 : playerScores[1], playerScores[j], j == 0);
          }
 
          gameStats.teamStats.push_back(teamStats);
       }
 
       gameStats.teamStats.sort(teamScoreSort);
-      for(S32 i = 0; i < teams.size(); i++)
+
+      // Compute win/loss/tie for teams
+      for(S32 i = 0; i < gameStats.teamStats.size(); i++)
          gameStats.teamStats[i].gameResult = 
-                     getResult(teams.size(), teamScores[0], teams.size() == 1 ? 0 : teamScores[1], teamScores[i], i == 0);
+                     getResult(gameStats.teamStats.size(), teamScores[0], gameStats.teamStats.size() == 1 ? 0 : teamScores[1], teamScores[i], i == 0);
 
-      //DatabaseWriter dbWriter(gStatsDatabaseAddress, gStatsDatabaseName, gStatsDatabaseUsername, gStatsDatabasePassword);  
-      //dbWriter.insertStats(gameStats);
+      // Now that we have the win/loss/tie results for the teams, we can also assign those same results to the players.
+      if(gameStats.isTeamGame)
+      {
+         for(S32 i = 0; i < gameStats.teamStats.size(); i++)
+            for(S32 j = 0; j < gameStats.teamStats[i].playerStats.size(); j++)
+               gameStats.teamStats[i].playerStats[j].gameResult = gameStats.teamStats[i].gameResult;
+      }
+      else
+      {
+         // Non-team games: compute winning player(s) based on score; but must sort first
+         if(!teamGame)
+         {
+            for(S32 i = 0; i < gameStats.teamStats.size(); i++)
+            {
+               gameStats.teamStats[i].playerStats.sort(playerScoreSort);
 
-		// the below 2 lines keeps the same connection going, above 2 lines always makes new connection.
+               for(S32 j = 0; j < gameStats.teamStats[i].playerStats.size(); j++)
+               {
+                  gameStats.teamStats[i].playerStats[j].gameResult = 
+                     getResult(gameStats.teamStats[i].playerStats.size(), 
+                               gameStats.teamStats[i].playerStats[0].points, 
+                               gameStats.teamStats[i].playerStats.size() == 1 ? 0 : gameStats.teamStats[i].playerStats[1].points, 
+                               gameStats.teamStats[i].playerStats[j].points, 
+                               j == 0);
+               }
+            }
+         }
 
-		if(! databaseWriter) databaseWriter = new DatabaseWriter(gStatsDatabaseAddress, gStatsDatabaseName, gStatsDatabaseUsername, gStatsDatabasePassword);
-      if(databaseWriter) databaseWriter->insertStats(gameStats);
 
+
+      }
+
+
+
+
+      DatabaseWriter dbWriter(gStatsDatabaseAddress.c_str(), gStatsDatabaseName.c_str(), 
+                              gStatsDatabaseUsername.c_str(), gStatsDatabasePassword.c_str());  
+      dbWriter.insertStats(gameStats);
    }
+
    TNL_DECLARE_RPC_OVERRIDE(s2mSendGameStatistics_3_1, (GameStatistics3 stats))
-	{
-		if(! stats.valid)
-		{
+   {
+      if(! stats.valid)
+      {
          logprintf(LogConsumer::LogWarning, "Invalid stats %d %s %s", stats.version, getNetAddressString(), mPlayerOrServerName.getString());
-			return;
-		}
-		GameStats *gameStats = &stats.gameStats;
+         return;
+      }
+      GameStats *gameStats = &stats.gameStats;
 
       gameStats->serverIP = getNetAddressString();
       gameStats->serverName = mPlayerOrServerName.getString();
-		gameStats->cs_protocol_version = mCSProtocolVersion;
+      gameStats->cs_protocol_version = mCSProtocolVersion;
 
-		for(S32 i = 0; i < gameStats->teamStats.size(); i++)
-		{
-			Vector<PlayerStats> *playerStats = &gameStats->teamStats[i].playerStats;
+      for(S32 i = 0; i < gameStats->teamStats.size(); i++)
+      {
+         Vector<PlayerStats> *playerStats = &gameStats->teamStats[i].playerStats;
 
-			Nonce playerId = playerStats->get(i).nonce;
-			MasterServerConnection *client = findClient(playerId);
-			playerStats->get(i).isAuthenticated = (client && client->isAuthenticated());
+         for(S32 j=0; j < playerStats->size(); j++)
+         {
+            Nonce playerId = playerStats->get(j).nonce;
+            MasterServerConnection *client = findClient(playerId);
+            playerStats->get(j).isAuthenticated = (client && client->isAuthenticated());
+         }
 
-			// Now compute winning player(s) based on score or points; but must sort first
-			if(! gameStats->isTeamGame)
+         // Now compute winning player(s) based on score or points; but must sort first
+         if(! gameStats->isTeamGame)
+         {
+            playerStats->sort(playerScoreSort);
+            for(S32 j = 0; j < playerStats->size(); j++)
+					(*playerStats)[j].gameResult = 
+                  getResult(playerStats->size(), (*playerStats)[0].points, playerStats->size() == 1 ? 0 : (*playerStats)[1].points, (*playerStats)[j].points, j == 0);
+         }
+      }
+      if(gameStats->isTeamGame)
+      {
+         Vector<TeamStats> *teams = &gameStats->teamStats;
+         teams->sort(teamScoreSort);
+         for(S32 i = 0; i < teams->size(); i++)
 			{
-				playerStats->sort(playerScoreSort);
-				for(S32 j = 0; j < playerStats->size(); j++)
-					playerStats->get(j).gameResult = 
-						getResult(playerStats->size(), playerStats->get(0).points, playerStats->size() == 1 ? 0 : playerStats->get(1).points, playerStats->get(j).points, j == 0);
+            (*teams)[i].gameResult = 
+               getResult(teams->size(), (*teams)[0].score, teams->size() == 1 ? 0 : (*teams)[1].score, (*teams)[i].score, i == 0);
+            for(S32 j = 0; j < (*teams)[i].playerStats.size(); j++) // make all players in a team same gameResults
+					(*teams)[i].playerStats[j].gameResult = (*teams)[i].gameResult;
 			}
-		}
-		if(gameStats->isTeamGame)
-		{
-			Vector<TeamStats> *teams = &gameStats->teamStats;
-			teams->sort(teamScoreSort);
-			for(S32 i = 0; i < teams->size(); i++)
-				teams->get(i).gameResult = 
-					getResult(teams->size(), teams->get(0).score, teams->size() == 1 ? 0 : teams->get(1).score, teams->get(i).score, i == 0);
-		}
+      }
 
-		if(! databaseWriter) databaseWriter = new DatabaseWriter(gStatsDatabaseAddress, gStatsDatabaseName, gStatsDatabaseUsername, gStatsDatabasePassword);
-      if(databaseWriter) databaseWriter->insertStats(*gameStats);
-	}
+      DatabaseWriter dbWriter(gStatsDatabaseAddress.c_str(), gStatsDatabaseName.c_str(), 
+                              gStatsDatabaseUsername.c_str(), gStatsDatabasePassword.c_str());  
+      dbWriter.insertStats(*gameStats);
+   }
+
 
    // Game server wants to know if user name has been verified
    TNL_DECLARE_RPC_OVERRIDE(s2mRequestAuthentication, (Vector<U8> id, StringTableEntry name))
