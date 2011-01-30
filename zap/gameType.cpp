@@ -927,11 +927,11 @@ void GameType::saveGameStats()
 {
    MasterServerConnection *masterConn = gServerGame->getConnectionToMaster();
 
-	//GameStatistics3 stats = getGameStats();
-	//if(masterConn)
-	//{
-	//	masterConn->s2mSendGameStatistics_3_1(stats);
-	//}
+	GameStatistics3 stats = getGameStats();
+	if(masterConn)
+	{
+		masterConn->s2mSendGameStatistics_3_1(stats);
+	}
 	return;
 // // may use the above code, and remove most of below code (Need to rewrite logging)
 
