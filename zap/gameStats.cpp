@@ -75,7 +75,6 @@ U32 VersionedGameStats_WriteSize;
 
 
 
-
 namespace Types
 {
    U8 readU8(TNL::BitStream &s)   { U8 val; read(s, &val); return val; }
@@ -115,40 +114,37 @@ namespace Types
       val->isLevelChanger = s.readFlag();
       val->isAuthenticated = false; //s.readFlag();  // we may set this by comparing Nonce id.
       val->nonce.read(&s);
-      //gp->gameResult = "?";
 		read(s, &val->weaponStats);
 	}
    void write(TNL::BitStream &s, Zap::PlayerStats &val)
-	{
+   {
       writeString(s, val.name);
       write(s, S32(val.points));
       write(s, U16(val.kills));
       write(s, U16(val.deaths));
       write(s, U16(val.suicides));
       write(s, U8(val.switchedTeamCount));
-      //gp->switchedTeams
       s.writeFlag(val.isRobot);
       s.writeFlag(val.isAdmin);
       s.writeFlag(val.isLevelChanger);
-      //gp->isAuthenticated;;  // we may set this by comparing Nonce id.
       val.nonce.write(&s);
 
       write(s, val.weaponStats);
 	}
    void read(TNL::BitStream &s, Zap::TeamStats *val)
-	{
+      {
       val->name = readString(s);
       val->score = readS32(s);
       val->color_bin = s.readInt(24); // 24 bit color
-      char c[24];
+         char c[24];
       dSprintf(c, sizeof(c), "%.6X", val->color_bin);
       val->color = string(c);
-      //gt->gameResult = "?";
+         //gt->gameResult = "?";
 
 		read(s, &val->playerStats);
 	}
    void write(TNL::BitStream &s, Zap::TeamStats &val)
-	{
+         {
       writeString(s, val.name);
       write(s, S32(val.score));
       s.writeInt(val.color_bin,24); // 24 bit color
@@ -173,7 +169,6 @@ namespace Types
       write(s, U16(val.playerCount));
       write(s, U16(val.duration));     // game length in seconds
       s.writeFlag(val.isTeamGame);
-      //s.writeFlag(g->isTied);
       writeString(s, val.gameType);
       writeString(s, val.levelName);
       write(s, val.teamStats);
@@ -184,13 +179,13 @@ namespace Types
 
    /// Reads objects from a BitStream.
    void read(TNL::BitStream &s, VersionedGameStats *val)
-   {
+            {
       VersionedGameStats_read_start(s);
       U8 version = readU8(s);  // Read version number.
       val->version = version;
       read(s, &val->gameStats); // This is not Vector, goes directly to read(s, Zap::GameStats *val)
 
-         // Stops here if TNL_ENABLE_ASSERTS is on, and write/read size is not matched.
+      // Stops here if TNL_ENABLE_ASSERTS is on, and write/read size is not matched.
       VersionedGameStats_read_end(s);
       val->valid = true;
    }
@@ -206,6 +201,7 @@ namespace Types
       // write(number) write 32 bit when number is S32
       // write(number) write 8 bit when number is U8
       // write(U16(number)) always write 16 bit when number is U8, S32, or any type.
+
 
       VersionedGameStats_write_end(s);
    }
