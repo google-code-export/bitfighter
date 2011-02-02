@@ -193,9 +193,10 @@ public:
    bool mDebugShowMeshZones;        // Show bot nav mesh zones?
 
    void displayErrorMessage(const char *format, ...);
-   void displayMessage(GameConnection::MessageColors msgColorIndex, const char *format, ...);
-   void displayMessage(const Color &msgColor, const char *format, ...);
+   void displaySuccessMessage(const char *format, ...);
 
+   void displayMessage(const Color &msgColor, const char *format, ...);
+   void displayMessage(GameConnection::MessageColors msgColorIndex, const char *format, ...);
 
    void initializeLoadoutOptions(bool engineerAllowed) { mLoadoutHelper.initialize(engineerAllowed); }
 
