@@ -202,7 +202,7 @@ bool isConvex(const Vector<Point> &verts)
 // Check if circle at inCenter with radius^2 = inRadiusSq intersects with a polygon.
 // Function returns true when it does and the intersection point is in outPoint
 // Works only for convex hulls.. maybe no longer true... may work for all polys now
-bool PolygonCircleIntersect(const Point *inVertices, int inNumVertices, const Point &inCenter, F32 inRadiusSq, Point &outPoint)
+bool polygonCircleIntersect(const Point *inVertices, int inNumVertices, const Point &inCenter, F32 inRadiusSq, Point &outPoint)
 {
    // Check if the center is inside the polygon  ==> now works for all polys
    if(PolygonContains2(inVertices, inNumVertices, inCenter))
@@ -249,6 +249,42 @@ bool PolygonCircleIntersect(const Point *inVertices, int inNumVertices, const Po
    }
 
    return collision;
+}
+
+
+// Returns true if polygon instersects or contains segment defined by start - end
+bool polygonIntersectsSegment(const Vector<Point> &points, const Point &start, const Point &end)
+{
+   for(S32 i = 0; i < points.size(); i++)
+      if(segmentsIntersect(start, end, points[points.size() - 1], points[i]))
+         return true;
+   
+   //  Line inside polygon?  If so, then the start will be within.
+   return PolygonContains2(points.address(), points.size(), start);
+}
+
+
+// Returns true if polygons represented by p1 & p2 intersect or one contains the other
+bool polygonsIntersect(const Vector<Point> &p1, const Vector<Point> &p2)
+{
+   const Point *rp1 = &p1[p1.size() - 1];
+   for(S32 i = 0; i < p1.size(); i++)
+   {
+      const Point *rp2 = &p1[i];
+      
+      const Point *cp1 = &p2[p2.size() - 1];
+
+      for(S32 j = 0; j < p2.size(); j++)
+      {
+         const Point *cp2 = &p2[j];
+         if(segmentsIntersect(*rp1, *rp2, *cp1, *cp2))
+            return true;
+         cp1 = cp2;
+      }
+      rp1 = rp2;
+   }
+   //  All points of polygon is inside the other polygon?  At this point, if any are, all are.
+   return PolygonContains2(p1.address(), p1.size(), p2[0]) || PolygonContains2(p2.address(), p2.size(), p1[0]);
 }
 
 
@@ -575,7 +611,7 @@ bool SweptCircleEdgeVertexIntersect(const Point *inVertices, int inNumVertices, 
 bool PolygonSweptCircleIntersect(const Point *inVertices, int inNumVertices, const Point &inBegin, const Point &inDelta, F32 inRadius, Point &outPoint, F32 &outFraction)
 {
    // Test if circle intersects at t = 0
-   if (PolygonCircleIntersect(inVertices, inNumVertices, inBegin, inRadius * inRadius, outPoint))
+   if(polygonCircleIntersect(inVertices, inNumVertices, inBegin, inRadius * inRadius, outPoint))
    {
       outFraction = 0;
       return true;
