@@ -839,13 +839,18 @@ void ServerGame::processLevelLoadLine(U32 argc, U32 id, const char **argv)
 		S32 objlen = (S32) strlen(obj);
 		// All game types are of form XXXXGameType
 		if(objlen >= 8 && !strcmp(obj + objlen - 8, "GameType"))
-		{	if(mGameType)
-			{	logprintf(LogConsumer::LogWarning, "Duplicate GameType in level \"%s\"", origFilename.c_str());
+		{	
+         if(mGameType)
+			{	
+            logprintf(LogConsumer::LogWarning, "Duplicate GameType in level \"%s\"", origFilename.c_str());
 				return;
 			}
-		}else
-		{	if(!mGameType)
-			{	logprintf(LogConsumer::LogWarning, "Missing GameType in level \"%s\"", origFilename.c_str());
+		}
+      else
+		{	
+         if(!mGameType)
+			{	
+            logprintf(LogConsumer::LogWarning, "Missing GameType in level \"%s\"", origFilename.c_str());
 				return;
 			}
 		}
@@ -1502,8 +1507,10 @@ void ClientGame::renderCommander()
    // Render the objects.  Start by putting all command-map-visible objects into renderObjects
    rawRenderObjects.clear();
    mDatabase.findObjects(CommandMapVisType, rawRenderObjects, mWorldBounds);
+
+   // If we're drawing bot zones, add them to our list of render objects
    if(gServerGame && mGameUserInterface->mDebugShowMeshZones)
-       gServerGame->mDatabaseForBotZones.findObjects(BotNavMeshZoneType,rawRenderObjects,mWorldBounds);
+       gServerGame->mDatabaseForBotZones.findObjects(BotNavMeshZoneType, rawRenderObjects, mWorldBounds);
 
    
    renderObjects.clear();
@@ -1511,7 +1518,7 @@ void ClientGame::renderCommander()
       renderObjects.push_back(dynamic_cast<GameObject *>(rawRenderObjects[i]));
 
    if(gServerGame && showDebugBots)
-      for(S32 i = 0; i<Robot::robots.size(); i++)
+      for(S32 i = 0; i < Robot::robots.size(); i++)
          renderObjects.push_back(Robot::robots[i]);
 
    if(u)
