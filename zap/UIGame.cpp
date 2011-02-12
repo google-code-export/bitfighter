@@ -1611,15 +1611,15 @@ bool GameUserInterface::processCommand(Vector<string> &words)
       else
          gc->submitLevelChangePassword(words[1].c_str());
    }
-   else if(words[0] == "dcoords")
+   else if(words[0] == "showcoords")
       mDebugShowShipCoords = !mDebugShowShipCoords;
-   else if(words[0] == "dzones")
+   else if(words[0] == "showzones")
    {
        mDebugShowMeshZones = !mDebugShowMeshZones;
        if(!gServerGame) 
           displayErrorMessage("!!! Zones can only be displayed on a local host");
    }
-   else if(words[0] == "drobot")
+   else if(words[0] == "showpaths")
    {
        showDebugBots = !showDebugBots;
        if(!gServerGame) 
@@ -1797,9 +1797,9 @@ void GameUserInterface::populateChatCmdList()
    // Our list of commands that can be entered at the chat prompt
    mChatCmds.push_back("/add");
    mChatCmds.push_back("/admin");
-   mChatCmds.push_back("/dcoords");
-   mChatCmds.push_back("/dzones");
-   mChatCmds.push_back("/drobot");
+   mChatCmds.push_back("/showcoords");
+   mChatCmds.push_back("/showzones");
+   mChatCmds.push_back("/showpaths");
    mChatCmds.push_back("/levpass");
    mChatCmds.push_back("/mvol");
    mChatCmds.push_back("/next");
@@ -1817,7 +1817,7 @@ void GameUserInterface::populateChatCmdList()
    // commands that runs in game server, in processServerCommand
    mChatCmds.push_back("/settime");
    mChatCmds.push_back("/setscore");
-   mChatCmds.push_back("/showBots");
+   mChatCmds.push_back("/showbots");
 
    // Administrative commands
    mChatCmds.push_back("/kick");

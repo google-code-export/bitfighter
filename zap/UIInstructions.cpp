@@ -611,14 +611,14 @@ static ControlStringsEditor commands[][20] = { {                  // NO MORE THA
    { "/levpass <password>", "Request level change permissions" },
    { "-", NULL },       // Horiz. line
    { "/suspend", "Place game on hold while waiting for players" },
-   { "/getmap [file]", "Save currently playing level in <file>, if allowed" },
+   { "/getmap [file]", "Save currently playing level in [file], if allowed" },
    { "/pm <name> <message>", "Send private message to player" },
    { "-", NULL },       // Horiz. line
    { "/mvol <0-10>", "Set music volume" },
    { "/svol <0-10>", "Set SFX volume" },
    { "/vvol <0-10>", "Set voice chat volume" },
-
    { NULL, NULL },      // End of list
+
 },{
    { "/add <time in minutes>", "Add time to the current game" },
    { "/next", "Start next level" },
@@ -626,8 +626,12 @@ static ControlStringsEditor commands[][20] = { {                  // NO MORE THA
    { "/restart", "Restart current level" },
    { "/settime <time in minutes>", "Set play time for the level" },
    { "/setscore <score>", "Set score to win the level" },
-
+   { "-", NULL },       // Horiz. line
+   { "/addbot [team] [file] [args]", "Add a bot from [file] to [team], pass [args] to bot"},
+   { "/kickbot", "Kick most recently added bot"},
+   { "/kickbots", "Kick all bots"},
    { NULL, NULL },      // End of list
+
 }, {
    { "/kick <player name>",        "Kick a player from the game" },
    { "/shutdown [time] [message]", "Start orderly shutdown of server (def. = 10 secs)" },
@@ -637,18 +641,17 @@ static ControlStringsEditor commands[][20] = { {                  // NO MORE THA
    { "/setservername <name>",      "Set server name" },
    { "/setserverdescr <descr>",    "Set server description" },
    { "/deletecurrentlevel",        "Remove current level from server" },
-
    { NULL, NULL },      // End of list
+
 }, {
-   { "/dcoords", "Show ship coordinates" },
-   { "/dzones", "Show bot nav mesh zones" },
-   { "/drobot", "Show robot paths" },
+   { "/showcoords", "Show ship coordinates" },
+   { "/showzones", "Show bot nav mesh zones" },
+   { "/showpaths", "Show robot paths" },
    { "/showbots", "Show all robots" },
    { "-", NULL },       // Horiz. line
    { "/linewidth <number>", "Default = 2, Changes width of all lines" },
    { "/linesmooth", "Enable line smoothing, might look better" },
    { "/maxfps <number>", "Set maximum speed of game in frames per second" },
-   
    { NULL, NULL },      // End of list
    } };
 
