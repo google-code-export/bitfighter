@@ -24,7 +24,7 @@
 //------------------------------------------------------------------------------------
 
 #include "input.h"
-//#include "tnlLog.h"
+#include "tnlLog.h"
 
 #ifndef ZAP_DEDICATED
 
@@ -70,7 +70,7 @@ padData joyPads[MAX_JOYPADS];
 
 extern U32 gUseStickNumber;
 extern Vector<string> gJoystickNames;
-U32 gSticksFound;
+U32 gSticksFound = 0;
 
 #endif
 
@@ -99,11 +99,13 @@ void getModifierState(bool &shiftDown, bool &controlDown, bool &altDown)
 void InitJoystick()
 {
 #ifndef ZAP_DEDICATED
+ //logprintf("finding joystick");
  if(gJoystickInit)
     ShutdownJoystick();
 
  char chr1[15] = "/dev/input/js0";
  gSticksFound = 0;
+ gJoystickNames.clear();
  for(int i = 0; i < MAX_JOYPADS; i++)
  {
    chr1[13] = i + '0';
@@ -134,7 +136,7 @@ void InitJoystick()
          close(joyPads[gSticksFound].fd);
    }
  }
- //logprintf("Found %i joysticks", gSticksFound);
+ logprintf("Found %i joysticks", gSticksFound);
  gJoystickInit = true;
 #endif
 }
