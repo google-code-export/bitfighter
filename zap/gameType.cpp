@@ -495,7 +495,8 @@ void GameType::renderInterfaceOverlay(bool scoreboardVisible)
 
       glEnableBlend;
       glColor4f(1, 0.5 , 0.5, alpha);
-      UserInterface::drawCenteredStringf(UserInterface::vertMargin + 130, 20, "Input mode changed to %s", gIniSettings.inputMode == Joystick ? "Joystick" : "Keyboard");
+      UserInterface::drawCenteredStringf(UserInterface::vertMargin + 130, 20, "Input mode changed to %s", 
+                                         gIniSettings.inputMode == Joystick ? "Joystick" : "Keyboard");
       glDisableBlend;
    }
 
@@ -544,7 +545,7 @@ void GameType::renderInterfaceOverlay(bool scoreboardVisible)
          Color c = getTeamColor(i);
          glEnableBlend;
 
-         glColor4f(c.r, c.g, c.b, 0.6);
+         glColor(c, 0.6);
          glBegin(GL_POLYGON);
             glVertex2f(xl, yt);
             glVertex2f(xr, yt);
@@ -639,6 +640,10 @@ void GameType::renderInterfaceOverlay(bool scoreboardVisible)
       for(S32 i = 0; i < teams.size(); i++)
       {
          S32 ypos = gScreenInfo.getGameCanvasHeight() - UserInterface::vertMargin - lroff - (teams.size() - i - 1) * 38;
+
+         glColor3f(1,0,1);
+         if(teamHasFlag(teams[i].getId()))
+            UserInterface::drawString(xpos - 50, ypos + 3, 18, "*");
 
          renderFlag(xpos - 20, ypos + 18, teams[i].color);
          glColor3f(1,1,1);
@@ -799,7 +804,7 @@ void GameType::renderObjectiveArrow(Point nearestPoint, Color c, F32 alphaMod)
 
 void GameType::renderTimeLeft()
 {
-   U32 timeLeft = mGameTimer.getCurrent();      // Time remaining in game
+   U32 timeLeft = getRemainingGameTime();      // Time remaining in game
 
    const S32 size = 20;       // Size of time
    const S32 gtsize = 12;     // Size of game type/score indicator
@@ -819,8 +824,8 @@ void GameType::renderTimeLeft()
       UserInterface::drawString(x, y, size, "Unlim.");
    else
    {
-      U32 minsRemaining = timeLeft / (60000);
-      U32 secsRemaining = (timeLeft - (minsRemaining * 60000)) / 1000;
+      U32 minsRemaining = timeLeft / 60;
+      U32 secsRemaining = timeLeft - (minsRemaining * 60);
 
       UserInterface::drawStringf(x, y, size, "%02d:%02d", minsRemaining, secsRemaining);
    }
@@ -1554,11 +1559,12 @@ void GameType::performProxyScopeQuery(GameObject *scopeObject, GameConnection *c
 }
 
 
+// Server only
 void GameType::addItemOfInterest(Item *theItem)
 {
 #ifdef TNL_DEBUG
    for(S32 i = 0; i < mItemsOfInterest.size(); i++)
-      TNLAssert(mItemsOfInterest[i].theItem.getPointer() != theItem, "item in ItemOfInterest already exist.");
+      TNLAssert(mItemsOfInterest[i].theItem.getPointer() != theItem, "Item already exists in ItemOfInterest!");
 #endif
    ItemOfInterest i;
    i.theItem = theItem;
