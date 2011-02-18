@@ -39,6 +39,35 @@
 namespace Zap
 {
 
+enum ArgTypes {
+   NAME,    // Player name (can be tab-completed)
+   INT,     // Integer argument
+   STR,      // String argument
+   NUL      // Nothing
+};
+
+enum HelpCategories {
+   ADV_COMMANDS,
+   LEVEL_COMMANDS,
+   ADMIN_COMMANDS,
+   DEBUG_COMMANDS,
+   COMMAND_CATEGORIES
+};
+
+struct CommandInfo {
+   string cmdName;
+   void (*cmdCallback)(GameUserInterface *obj, const Vector<string> &args);
+   ArgTypes cmdArgInfo[9];
+   S32 cmdArgCount;
+   HelpCategories helpCategory;
+   S32 helpGroup;
+   string helpArgString[9];
+   string helpTextString;
+};
+
+////////////////////////////////////////
+////////////////////////////////////////
+
 class GameUserInterface : public UserInterface
 {
 public:
@@ -173,7 +202,7 @@ private:
    bool mModActivated[ShipModuleCount];
 
    void setBusyChatting(bool busy);       // Tell the server we are (or are not) busy chatting
-   bool checkName(string *name);          // Make sure name is valid, and correct case of name if otherwise correct
+   bool checkName(const string &name);    // Make sure name is valid, and correct case of name if otherwise correct
 
    enum VolumeType {
       SfxVolumeType,
@@ -182,7 +211,7 @@ private:
       ServerAlertVolumeType,
    };
 
-   Vector<string> mChatCmds;        // List of all commands we can type at chat prompt, for <tab> completion
+   //Vector<string> mChatCmds;        // List of all commands we can type at chat prompt, for <tab> completion
 
    Mode mCurrentMode;               // Current game mode
 
@@ -224,9 +253,9 @@ public:
 
    Vector<string> parseString(const char *str);    // Break a chat msg into parsable bits
    bool processCommand(Vector<string> &words);     // Process a cmd entered into the chat interface
-   void populateChatCmdList();                     // Add all our chat cmds to a list for autocompletion purposes
+   //void populateChatCmdList();                     // Add all our chat cmds to a list for autocompletion purposes
 
-   void setVolume(VolumeType volType, Vector<string> &words);
+   void setVolume(VolumeType volType, const Vector<string> &words);
 
    // Mouse handling
    void onMouseDragged(S32 x, S32 y);
@@ -267,6 +296,36 @@ public:
 
    // Message colors... (rest to follow someday)
    static Color privateF5MessageDisplayedInGameColor;
+
+   static void mVolHandler(GameUserInterface* gui, const Vector<string> &args);    
+   static void sVolHandler(GameUserInterface* gui, const Vector<string> &args);    
+   static void vVolHandler(GameUserInterface* gui, const Vector<string> &args);    
+   static void servVolHandler(GameUserInterface* gui, const Vector<string> &args);  
+   static void getMapHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void nextLevelHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void prevLevelHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void restartLevelHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void shutdownServerHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void kickPlayerHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void adminPassHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void levelPassHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void showCoordsHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void showZonesHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void showPathsHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void setAdminPassHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void setServerPassHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void setLevPassHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void setServerNameHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void setServerDescrHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void serverCommandHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void pmHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void GameUserInterface::muteHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void maxFpsHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void lineSmoothHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void lineWidthHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void suspendHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void deleteCurrentLevelHandler(GameUserInterface *gui, const Vector<string> &words);
+   static void addTimeHandler(GameUserInterface *gui, const Vector<string> &words);
 };
 
 
