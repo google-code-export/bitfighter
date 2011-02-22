@@ -801,10 +801,10 @@ void ServerGame::buildOrLoadBotMeshZones()
    if(!readBotNavMeshZones(filename2.c_str()))
    {
       //if(!loadLevelFromFile(filename.c_str())) // might not be needed anymore.
-      {
-         BotNavMeshZone::buildBotMeshZones();
+   {
+      BotNavMeshZone::buildBotMeshZones();
          //saveBotMeshZones(filename.c_str());
-      }
+   }
 
       BotNavMeshZone::buildBotNavMeshZoneConnections();      // Create the connecions bettween zones
       writeBotNavMeshZones(filename2.c_str());
