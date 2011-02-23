@@ -793,22 +793,21 @@ void writeBotNavMeshZones(const char *filename)
 
 void ServerGame::buildOrLoadBotMeshZones()
 {
-   string filename = joindir(gConfigDirs.cacheDir, mLevelFileHash + ".zones");
-   string filename2 = joindir(gConfigDirs.cacheDir, mLevelFileHash + ".zones2");
+   string cacheFile = joindir(gConfigDirs.cacheDir, mLevelFileHash + ".zones");
 
    makeSureFolderExists(gConfigDirs.cacheDir);
 
-   if(getGameType()->mScriptName != "" || !readBotNavMeshZones(filename2.c_str()))
+   if(getGameType()->mScriptName != "" || !readBotNavMeshZones(cacheFile.c_str()))
    {
       //if(!loadLevelFromFile(filename.c_str())) // might not be needed anymore.
-   {
-      BotNavMeshZone::buildBotMeshZones();
-         //saveBotMeshZones(filename.c_str());
-   }
+      {
+         BotNavMeshZone::buildBotMeshZones();
+            //saveBotMeshZones(filename.c_str());
+      }
 
       BotNavMeshZone::buildBotNavMeshZoneConnections();      // Create the connecions bettween zones
       if(getGameType()->mScriptName == "") 
-         writeBotNavMeshZones(filename2.c_str());
+         writeBotNavMeshZones(cacheFile.c_str());
    }
 }
 
@@ -1991,7 +1990,7 @@ void ClientGame::renderNormal()
       renderObjects.push_back(dynamic_cast<GameObject *>(rawRenderObjects[i]));
 
    if(gServerGame && showDebugBots)
-      for(S32 i = 0; i<Robot::robots.size(); i++)
+      for(S32 i = 0; i < Robot::robots.size(); i++)
          renderObjects.push_back(Robot::robots[i]);
 
 
