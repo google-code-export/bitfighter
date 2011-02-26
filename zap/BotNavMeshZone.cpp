@@ -30,6 +30,11 @@
 #include "UIGame.h"           // for access to mGameUserInterface.mDebugShowMeshZones
 #include "gameObjectRender.h"
 #include "teleporter.h"
+#include "barrier.h"          // For Barrier methods in generating zones
+
+extern "C" {
+#include "../Triangle/triangle.h"      // For Triangle!
+}
 
 namespace Zap
 {
@@ -175,7 +180,7 @@ bool BotNavMeshZone::getCollisionPoly(Vector<Point> &polyPoints)
 }
 
 
-// These methods will be empty later... Currently used for cache.
+// These methods will be empty later...
  U32 BotNavMeshZone::packUpdate(GhostConnection *connection, U32 updateMask, BitStream *stream)
 {
    stream->writeInt(mZoneID, 16);
@@ -352,116 +357,6 @@ static void makeBotMeshZones(F32 x1, F32 y1, F32 x2, F32 y2)
 }
 
 
-extern Rect gServerWorldBounds;
-
-// Only runs on server
-static void removeUnusedNavMeshZones()
-{
-   Vector<U16> inProcessList;      
-
-   for(S32 i = 0; i < gBotNavMeshZones.size(); i++)
-      gBotNavMeshZones[i]->flag = false;
-
-   GameType *gameType = gServerGame->getGameType();
-   TNLAssert(gameType, "Invalid gametype... cannot proceed!");
-
-   if(!gameType)
-      return;
-
-   // Start with list of all spawns and teleport outtakes --> these are the places a bot could "appear"
-   // First the spawns
-   for(S32 i = 0; i < gameType->mTeams.size(); i++)
-      for(S32 j = 0; j < gameType->mTeams[i].spawnPoints.size(); j++)
-      {
-         U16 zoneIndex = BotNavMeshZone::findZoneContaining(gameType->mTeams[i].spawnPoints[j]);
-
-         if(zoneIndex < U16_MAX)
-         {
-            gBotNavMeshZones[zoneIndex]->flag = true;        // Mark zone as processed
-            inProcessList.push_back(zoneIndex);
-         }
-      }
-
-   // Then the teleporters
-   Vector<DatabaseObject *> teleporters;
-
-   // Find all teleporters in the game
-   gServerGame->getGridDatabase()->findObjects(TeleportType, teleporters, gServerWorldBounds);
-
-   for(S32 i = 0; i < teleporters.size(); i++)
-   {
-      Teleporter *teleporter = dynamic_cast<Teleporter *>(teleporters[i]);
-
-      if(teleporter)
-         for(S32 j = 0; j < teleporter->mDest.size(); j++)
-         {
-            U16 zoneIndex = BotNavMeshZone::findZoneContaining(teleporter->mDest[j]);
-            if(zoneIndex < U16_MAX)
-            {
-               gBotNavMeshZones[zoneIndex]->flag = true;        // Mark zone as processed
-               inProcessList.push_back(zoneIndex);
-            }
-         }
-   }
-
-   // From here on down, very inefficient, but ok for testing the idea.  Need to precompute some of these things!
-   // Since the order in which we process the zones doesn't matter, work from the end of the last towards the front; it's more efficient 
-   // that way...
-
-   Point start, end;    // Reusable container
-
-   while(inProcessList.size() > 0)
-   {
-      S32 zoneIndex = inProcessList.last();
-      inProcessList.erase(inProcessList.size() - 1);     // Remove last element      
-
-      // Visit all neighboring zones
-      for(S32 i = 0; i < gBotNavMeshZones.size(); i++)
-      {
-         if(i == zoneIndex)
-            continue;      // Don't check self...
-
-         // Do zones i and j touch?  First a quick and dirty bounds check:
-         if(!gBotNavMeshZones[zoneIndex]->getExtent().intersectsOrBorders(gBotNavMeshZones[i]->getExtent()))
-            continue;
-
-         if(zonesTouch(*gBotNavMeshZones[zoneIndex]->getPolyBoundsPtr(), *gBotNavMeshZones[i]->getPolyBoundsPtr(), 
-                       1 / gServerGame->getGridSize(), start, end))
-         {
-            if(!gBotNavMeshZones[i]->flag)           // If zone hasn't been processed...
-            {
-               inProcessList.push_back(i);
-               gBotNavMeshZones[i]->flag = true;     // Mark zone as "in"
-            }
-         }
-      }
-   }
-
-   // Anything not marked as in at this point is out.  Delete it.
-   for(S32 i = 0; i < gBotNavMeshZones.size(); i++)
-   {
-      if(!gBotNavMeshZones[i]->flag)
-      {
-         gBotNavMeshZones[i]->removeFromDatabase();
-         gBotNavMeshZones.erase_fast(i);
-         i--;
-      }
-   }
-
-   // Make a final pass and recalculate the zone ids to be equal to the index; some of our processes depend on this
-   // Also calc the centroid and add to the zone database
-   for(S32 i = 0; i < gBotNavMeshZones.size(); i++)
-   {
-      gBotNavMeshZones[i]->mZoneID = i;
-
-		gBotNavMeshZones[i]->mConvex = true;             // avoid random red and green on /dzones, was uninitalized.
-		gBotNavMeshZones[i]->addToGame(gServerGame);
-		gBotNavMeshZones[i]->computeExtent();
-
-      // As long as our zones are rectangular, this shortcut will work
-      gBotNavMeshZones[i]->mCentroid.set(gBotNavMeshZones[i]->getExtent().getCenter());
-   }
-}
 
 
 const F32 pi = 3.14159265;
@@ -657,13 +552,258 @@ void makeBotMeshZones2()
 
 
 
-void BotNavMeshZone::buildBotMeshZones()
-{
-	Rect bounds = gServerGame->computeWorldObjectExtents();
 
-	makeBotMeshZones2();
+
+extern Rect gServerWorldBounds;
+
+// Only runs on server
+static void removeUnusedNavMeshZones()
+{
+   Vector<U16> inProcessList;      
+
+   for(S32 i = 0; i < gBotNavMeshZones.size(); i++)
+      gBotNavMeshZones[i]->flag = false;
+
+   GameType *gameType = gServerGame->getGameType();
+   TNLAssert(gameType, "Invalid gametype... cannot proceed!");
+
+   if(!gameType)
+      return;
+
+   // Start with list of all spawns and teleport outtakes --> these are the places a bot could "appear"
+   // First the spawns
+   for(S32 i = 0; i < gameType->mTeams.size(); i++)
+      for(S32 j = 0; j < gameType->mTeams[i].spawnPoints.size(); j++)
+      {
+         U16 zoneIndex = BotNavMeshZone::findZoneContaining(gameType->mTeams[i].spawnPoints[j]);
+
+         if(zoneIndex < U16_MAX)
+         {
+            gBotNavMeshZones[zoneIndex]->flag = true;        // Mark zone as processed
+            inProcessList.push_back(zoneIndex);
+         }
+      }
+
+   // Then the teleporters
+   Vector<DatabaseObject *> teleporters;
+
+   // Find all teleporters in the game
+   gServerGame->getGridDatabase()->findObjects(TeleportType, teleporters, gServerWorldBounds);
+
+   for(S32 i = 0; i < teleporters.size(); i++)
+   {
+      Teleporter *teleporter = dynamic_cast<Teleporter *>(teleporters[i]);
+
+      if(teleporter)
+         for(S32 j = 0; j < teleporter->mDest.size(); j++)
+         {
+            U16 zoneIndex = BotNavMeshZone::findZoneContaining(teleporter->mDest[j]);
+            if(zoneIndex < U16_MAX)
+            {
+               gBotNavMeshZones[zoneIndex]->flag = true;        // Mark zone as processed
+               inProcessList.push_back(zoneIndex);
+            }
+         }
+   }
+
+   // From here on down, very inefficient, but ok for testing the idea.  Need to precompute some of these things!
+   // Since the order in which we process the zones doesn't matter, work from the end of the last towards the front; it's more efficient 
+   // that way...
+
+   Point start, end;    // Reusable container
+
+   while(inProcessList.size() > 0)
+   {
+      S32 zoneIndex = inProcessList.last();
+      inProcessList.erase(inProcessList.size() - 1);     // Remove last element      
+
+      // Visit all neighboring zones
+      for(S32 i = 0; i < gBotNavMeshZones.size(); i++)
+      {
+         if(i == zoneIndex)
+            continue;      // Don't check self...
+
+         // Do zones i and j touch?  First a quick and dirty bounds check:
+         if(!gBotNavMeshZones[zoneIndex]->getExtent().intersectsOrBorders(gBotNavMeshZones[i]->getExtent()))
+            continue;
+
+         if(zonesTouch(*gBotNavMeshZones[zoneIndex]->getPolyBoundsPtr(), *gBotNavMeshZones[i]->getPolyBoundsPtr(), 
+                       1 / gServerGame->getGridSize(), start, end))
+         {
+            if(!gBotNavMeshZones[i]->flag)           // If zone hasn't been processed...
+            {
+               inProcessList.push_back(i);
+               gBotNavMeshZones[i]->flag = true;     // Mark zone as "in"
+            }
+         }
+      }
+   }
+
+   // Anything not marked as in at this point is out.  Delete it.
+   for(S32 i = 0; i < gBotNavMeshZones.size(); i++)
+   {
+      if(!gBotNavMeshZones[i]->flag)
+      {
+         gBotNavMeshZones[i]->removeFromDatabase();
+         gBotNavMeshZones.erase_fast(i);
+         i--;
+      }
+   }
+
+   // Make a final pass and recalculate the zone ids to be equal to the index; some of our processes depend on this
+   // Also calc the centroid and add to the zone database
+   for(S32 i = 0; i < gBotNavMeshZones.size(); i++)
+   {
+      gBotNavMeshZones[i]->mZoneID = i;
+
+		gBotNavMeshZones[i]->mConvex = true;             // avoid random red and green on /dzones, was uninitalized.
+		gBotNavMeshZones[i]->addToGame(gServerGame);
+		gBotNavMeshZones[i]->computeExtent();
+
+      // As long as our zones are rectangular, this shortcut will work
+      gBotNavMeshZones[i]->mCentroid.set(gBotNavMeshZones[i]->getExtent().getCenter());
+   }
+}
+
+
+static void initIoStruct(triangulateio *ioStruct)
+{
+   ioStruct->numberofpoints = 0;
+   ioStruct->pointlist = NULL;
+
+   ioStruct->segmentlist = NULL;
+   ioStruct->numberofsegments = 0;
+   ioStruct->segmentmarkerlist = NULL; 
+
+   ioStruct->pointmarkerlist = NULL;
+   ioStruct->numberofpointattributes = 0;
+   ioStruct->pointattributelist = NULL;
+
+   ioStruct->numberofregions = 0;
+   ioStruct->numberoftriangles = 0;
+   ioStruct->numberofcorners = 0; 
+
+   ioStruct->trianglelist = NULL;       
+   ioStruct->triangleattributelist = NULL;
+   ioStruct->trianglearealist = NULL;
+   ioStruct->numberoftriangleattributes = 0;    
+   ioStruct->neighborlist = NULL;       
+
+   ioStruct->holelist = NULL;           
+   ioStruct->numberofholes = 0;                 
+
+   ioStruct->regionlist = NULL;         
+   ioStruct->numberofregions = 0;               
+
+   ioStruct->edgelist = NULL;           
+   ioStruct->edgemarkerlist = NULL;     
+   ioStruct->normlist = NULL;           
+   ioStruct->numberofedges = 0;                 
+}
+
+
+extern bool loadBarrierPoints(const BarrierRec &barrier, Vector<Point> &points);
+
+// Server only
+void BotNavMeshZone::buildBotMeshZones(Game *game)
+{
+	Rect bounds = game->computeWorldObjectExtents();
+
+#ifdef SAM_ONLY
+   makeBotMeshZones2();
+   return;
+#endif
+
 	//makeBotMeshZones(bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y);
-   removeUnusedNavMeshZones();
+ //  removeUnusedNavMeshZones();
+
+   // Just for fun, let's triangulate!
+   Vector<F32> coords;
+   Vector<F32> holes;
+   Vector<S32> edges;
+
+   Point ctr;     // Reusable container
+
+   for(S32 i = 0; i < game->mGameObjects.size(); i++)
+      if(game->mGameObjects[i]->getObjectTypeMask() & BarrierType)
+      {
+         Barrier *barrier = dynamic_cast<Barrier *>(game->mGameObjects[i]);  
+
+         if(barrier)
+         {
+            barrier->prepareRenderingGeometry();
+            for(S32 j = 0; j < barrier->mRenderLineSegments.size(); j++)
+            {
+               bool found = false;
+               for(S32 k = 0; k < coords.size(); k+=2)
+               {
+                  // TODO: Is this needed, or can we use Triangle's duplicate vertex removal process?
+                  if(coords[k] == barrier->mRenderLineSegments[j].x && coords[k+1] == barrier->mRenderLineSegments[j].y)
+                  {
+                     edges.push_back(k/2);
+                     found = true;
+                     break;
+                  }
+               }
+
+               if(!found)
+               {
+                  edges.push_back(coords.size() / 2);
+                  coords.push_back(barrier->mRenderLineSegments[j].x);
+                  coords.push_back(barrier->mRenderLineSegments[j].y);
+               }
+            }
+         }
+         ctr.set(barrier->getExtent().getCenter());
+         holes.push_back(ctr.x);
+         holes.push_back(ctr.y);
+
+      }
+
+   triangulateio in, out;
+   initIoStruct(&in);
+   initIoStruct(&out);
+
+   in.numberofpoints = coords.size() / 2;
+   in.pointlist = coords.address();
+
+   in.segmentlist = edges.address();
+   in.numberofsegments = edges.size() / 2;
+
+   in.numberofholes = holes.size() / 2;
+   in.holelist = holes.address();
+
+   logprintf("===============================================");
+   logprintf("%d 2 0 0", in.numberofpoints);
+   for(S32 i = 0; i < in.numberofpoints * 2; i+=2)
+      logprintf("%d %f %f", i/2, in.pointlist[i], in.pointlist[i+1]);
+   logprintf("%d 0", in.numberofsegments);
+   for(S32 i = 0; i < in.numberofsegments * 2; i+=2)
+      logprintf("%d %d %d", i/2, in.segmentlist[i], in.segmentlist[i+1]);
+   logprintf("%d", in.numberofholes);
+   for(S32 i = 0; i < in.numberofholes * 2; i+=2)
+      logprintf("%d %f %f", i/2, in.holelist[i], in.holelist[i+1]);
+
+
+
+   triangulate("zqpcV", &in, &out, NULL);  // TODO: Replace V with Q after debugging
+
+
+   for(S32 i = 0; i < out.numberoftriangles * 3; i+=3)
+   {
+      BotNavMeshZone *botzone = new BotNavMeshZone();
+
+		botzone->mPolyBounds.push_back(Point(out.pointlist[out.trianglelist[i]*2], out.pointlist[out.trianglelist[i]*2 + 1]));
+		botzone->mPolyBounds.push_back(Point(out.pointlist[out.trianglelist[i+1]*2], out.pointlist[out.trianglelist[i+1]*2 + 1]));
+		botzone->mPolyBounds.push_back(Point(out.pointlist[out.trianglelist[i+2]*2], out.pointlist[out.trianglelist[i+2]*2 + 1]));
+      botzone->mCentroid.set(findCentroid(botzone->mPolyBounds));
+
+		botzone->mConvex = true;             // Avoid random red and green on /dzones, if this is uninitalized
+		botzone->addToGame(gServerGame);
+		botzone->computeExtent();   
+   }
+
+   //removeUnusedNavMeshZones();
 }
 
 
@@ -731,7 +871,7 @@ void BotNavMeshZone::buildBotNavMeshZoneConnections()
             neighbor.borderCenter.set(bordCen);
 
             neighbor.distTo = gBotNavMeshZones[i]->getExtent().getCenter().distanceTo(bordCen);     // Whew!
-            neighbor.center.set(gBotNavMeshZones[j]->mCentroid);
+            neighbor.center.set(gBotNavMeshZones[j]->getCenter());
             gBotNavMeshZones[i]->mNeighbors.push_back(neighbor);
 
             // Zone i is a neighbor of j
@@ -741,7 +881,7 @@ void BotNavMeshZone::buildBotNavMeshZoneConnections()
             neighbor.borderCenter.set(bordCen);
 
             neighbor.distTo = gBotNavMeshZones[j]->getExtent().getCenter().distanceTo(bordCen);     
-            neighbor.center.set(gBotNavMeshZones[i]->mCentroid);
+            neighbor.center.set(gBotNavMeshZones[i]->getCenter());
             gBotNavMeshZones[j]->mNeighbors.push_back(neighbor);
          }
       }
