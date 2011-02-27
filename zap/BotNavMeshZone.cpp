@@ -385,21 +385,25 @@ bool isBotZoneCollideWithOtherZone(Point *p1, Point *p2, Point *p3)
    GridDatabase *gb = &gServerGame->mDatabaseForBotZones;
    Vector<Point> pts(3);
    pts.setSize(3);
-   const F32 mult1 = 0.000244140625;
-   const F32 mult2 = 1 - mult1*2;
+   //const F32 mult1 = 0.000244140625;
+   //const F32 mult2 = 1 - mult1*2;
    // Slightly reduce size to avoid false positive when one line touch the other.
-   pts[0].x = p1->x * mult2 + p2->x * mult1 + p3->x * mult1;
-   pts[0].y = p1->y * mult2 + p2->y * mult1 + p3->y * mult1;
-   pts[1].x = p2->x * mult2 + p1->x * mult1 + p3->x * mult1;
-   pts[1].y = p2->y * mult2 + p1->y * mult1 + p3->y * mult1;
-   pts[2].x = p3->x * mult2 + p1->x * mult1 + p2->x * mult1;
-   pts[2].y = p3->y * mult2 + p1->y * mult1 + p2->y * mult1;
-   //pts[0].setPolar(1, (p1->angleTo(*p2) + p1->angleTo(*p3))/2);
-   //pts[1].setPolar(1, (p2->angleTo(*p1) + p2->angleTo(*p3))/2);
-   //pts[2].setPolar(1, (p3->angleTo(*p1) + p3->angleTo(*p2))/2);
-   //pts[0] += *p1;
-   //pts[1] += *p2;
-   //pts[2] += *p3;
+   //pts[0].x = p1->x * mult2 + p2->x * mult1 + p3->x * mult1;
+   //pts[0].y = p1->y * mult2 + p2->y * mult1 + p3->y * mult1;
+   //pts[1].x = p2->x * mult2 + p1->x * mult1 + p3->x * mult1;
+   //pts[1].y = p2->y * mult2 + p1->y * mult1 + p3->y * mult1;
+   //pts[2].x = p3->x * mult2 + p1->x * mult1 + p2->x * mult1;
+   //pts[2].y = p3->y * mult2 + p1->y * mult1 + p2->y * mult1;
+   pts[0].setPolar(0.1, p1->angleTo(*p2));
+   pts[1].setPolar(0.1, p2->angleTo(*p1));
+   pts[2].setPolar(0.1, p3->angleTo(*p1));
+   Point tmp;
+   tmp.setPolar(0.1, p1->angleTo(*p3));
+   pts[0] += tmp + *p1;
+   tmp.setPolar(0.1, p2->angleTo(*p3));
+   pts[1] += tmp + *p2;
+   tmp.setPolar(0.1, p3->angleTo(*p2));
+   pts[2] += tmp + *p3;
    Vector<DatabaseObject *> objects;
    Rect rect = Rect(Point(min(min(p1->x, p2->x), p3->x), min(min(p1->y, p2->y), p3->y)), Point(max(max(p1->x, p2->x), p3->x), max(max(p1->y, p2->y), p3->y)));
    gb->findObjects(BotNavMeshZoneType, objects, rect);
@@ -475,20 +479,10 @@ void makeBotMeshZones2part(Vector<Point> &data)
    {
       for(S32 j=i+1; j<data.size(); j++)
       {
-         bool botZoneAdded = false;
-         //bool usingFullRange = false;
-         const F32 ShortRange = 262144;     // 512^2
-         //F32 ij_angle = data[i].angleTo(data[j]);
-         //F32 ji_angle = data[j].angleTo(data[i]);
-         //if(//!angleUsed(&data[i], ij_angle) && !angleUsed(&data[j], ji_angle) &&
-         //   gb->pointCanSeePoint(data[i].point,data[j].point))
-         //do{
-         //if(data[i].distanceTo(data[j]) > minSize)
-         //{
+            bool botZoneAdded = false;
+            const F32 ShortRange = 262144;     // 512^2
             for(S32 k=j+1; k<data.size() && !botZoneAdded; k++)
             {
-            ////if(usingFullRange || (data[k].distanceTo(data[i])<ShortRange && data[k].distanceTo(data[j])<ShortRange))
-            //{
                if( //&& gb->pointCanSeePoint(data[k].point,data[i].point)
                   //&& gb->pointCanSeePoint(data[k].point,data[j].point)
                  !isBotZoneCollideWithOtherZone(&data[i], &data[j], &data[k]) &&
@@ -507,30 +501,24 @@ void makeBotMeshZones2part(Vector<Point> &data)
 		            botzone->addToGame(gServerGame);
 		            botzone->computeExtent();            // Adds zone to the database, needed for computation of further zones
 
-                  //PointData *datai = &data[i];
-                  //PointData *dataj = &data[j];
-                  //PointData *datak = &data[k];
-                  //datai->angle.push_back(i_angles); // angle checking is not working right - removes too many zones.
-                  //dataj->angle.push_back(j_angles);
-                  //datak->angle.push_back(k_angles);
-                  //botZoneAdded = true; // force next point..
                }
             }
-            //}
-            //usingFullRange = !usingFullRange;
-         //}//while(usingFullRange);
       }
    }
 }
 
 void makeBotMeshZones2(F32 x1, F32 y1, F32 x2, F32 y2)
 {
-   const S32 dataX = 16;
-   const S32 dataY = 16;
+   S32 dataX = S32((x2-x1)*.0035)+1;
+   S32 dataY = S32((y2-y1)*.0035)+1;
    F32 multX = dataX/(x2-x1);
    F32 multY = dataY/(y2-y1);
-   Vector<Point> data[dataX * dataY];
+   Vector<Vector<Point>> data;
+   data.setSize(dataX * dataY);
 
+   // since there is nothing in bot zone database, we can change BucketWidth size.
+   gServerGame->mDatabaseForBotZones.BucketWidth = S32(max(y2-y1,x2-x1)/GridDatabase::BucketRowCount) + 1;
+  
    for(S32 i=0; i < gServerGame->mGameObjects.size(); i++)
    {
       Barrier *object = dynamic_cast<Barrier *>(gServerGame->mGameObjects[i]);
@@ -539,6 +527,7 @@ void makeBotMeshZones2(F32 x1, F32 y1, F32 x2, F32 y2)
          Vector<Point> points;
          if(object->getCollisionPoly(points))
          {
+            /*
             Point prevPoint;
             Point currentPoint = points[points.size()-2];
             Point nextPoint = points.last();
@@ -554,16 +543,7 @@ void makeBotMeshZones2(F32 x1, F32 y1, F32 x2, F32 y2)
                if(y<0) y=0;
                if(y>=dataY) y=dataY-1;
                data[y*dataX + x].push_back(currentPoint);
-               /*F32 angle = (currentPoint.angleTo(prevPoint) + currentPoint.angleTo(nextPoint)) * 0.5;
-               Point newPoint;
-               newPoint.setPolar(0.01,angle);
-               if(!PolygonContains2(points.address(), points.size(), currentPoint + newPoint))
-                  data[y*dataX + x].push_back(currentPoint + newPoint);
-               else if(!PolygonContains2(points.address(), points.size(), currentPoint - newPoint))
-                  data[y*dataX + x].push_back(currentPoint - newPoint);
-               else
-                  TNLAssert(false, "unable to add point");*/
-            }
+            }*/
             object->prepareRenderingGeometry();
             for(S32 j = 0; j < object->mRenderLineSegments.size(); j++)
             {
@@ -576,7 +556,6 @@ void makeBotMeshZones2(F32 x1, F32 y1, F32 x2, F32 y2)
                if(y>=dataY) y=dataY-1;
                data[y*dataX + x].push_back(currentPoint);
             }
-
          }
       }
    }
@@ -755,15 +734,12 @@ static void initIoStruct(triangulateio *ioStruct)
 
 extern bool loadBarrierPoints(const BarrierRec &barrier, Vector<Point> &points);
 
+#define combine(x,y) pair<F32,F32>((x),(y))
+
 // Server only
 void BotNavMeshZone::buildBotMeshZones(Game *game)
 {
-	Rect bounds = game->computeWorldObjectExtents();
 
-#ifdef SAM_ONLY
-   makeBotMeshZones2(bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y);
-   return;
-#endif
 
 	//makeBotMeshZones(bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y);
  //  removeUnusedNavMeshZones();
@@ -773,7 +749,37 @@ void BotNavMeshZone::buildBotMeshZones(Game *game)
    Vector<F32> holes;
    Vector<S32> edges;
 
-   Point ctr;     // Reusable container
+   map<pair<F32,F32>, S32> points;
+
+	Rect bounds = game->computeWorldObjectExtents();
+//#ifdef SAM_ONLY
+   //makeBotMeshZones2(bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y);
+   //return;
+//#endif
+
+   F32 minx = bounds.min.x;  F32 miny = bounds.min.y;
+   F32 maxx = bounds.max.x;  F32 maxy = bounds.max.y;
+
+   coords.push_back(minx);   coords.push_back(miny);
+   coords.push_back(minx);   coords.push_back(maxy);
+   coords.push_back(maxx);   coords.push_back(maxy);
+   coords.push_back(maxx);   coords.push_back(miny);
+
+   points[combine(minx, miny)] = 0;
+   points[combine(minx, maxy)] = 1;
+   points[combine(maxx, maxy)] = 2;
+   points[combine(maxx, miny)] = 3;
+
+   edges.push_back(0);       edges.push_back(1);
+   edges.push_back(1);       edges.push_back(2);
+   edges.push_back(2);       edges.push_back(3);
+   edges.push_back(3);       edges.push_back(0);
+
+   S32 nextPt = 4;
+
+   U32 starttime = Platform::getRealMilliseconds();
+
+   Point ctr;     // Reusable container for hole calculations
 
    for(S32 i = 0; i < game->mGameObjects.size(); i++)
       if(game->mGameObjects[i]->getObjectTypeMask() & BarrierType)
@@ -783,35 +789,47 @@ void BotNavMeshZone::buildBotMeshZones(Game *game)
          if(barrier)
          {
             barrier->prepareRenderingGeometry();
-            for(S32 j = 0; j < barrier->mRenderLineSegments.size(); j++)
+            for(S32 j = 0; j < barrier->mRenderLineSegments.size(); j+=2)
             {
-               bool found = false;
-               for(S32 k = 0; k < coords.size(); k+=2)
-               {
-                  // TODO: Is this needed, or can we use Triangle's duplicate vertex removal process?
-                  if(coords[k] == barrier->mRenderLineSegments[j].x && coords[k+1] == barrier->mRenderLineSegments[j].y)
-                  {
-                     edges.push_back(k/2);
-                     found = true;
-                     break;
-                  }
-               }
+               F32 p1x = F32(S32((barrier->mRenderLineSegments[j].x + 0.5)));
+               F32 p1y = F32(S32((barrier->mRenderLineSegments[j].y + 0.5)));
+               F32 p2x = F32(S32((barrier->mRenderLineSegments[j+1].x + 0.5)));
+               F32 p2y = F32(S32((barrier->mRenderLineSegments[j+1].y + 0.5)));
+               
+               // Skip 0-length segments
+               if(p1x == p2x && p1y == p2y)
+                  continue;
 
-               if(!found)
+               for(S32 j = 0; j < 2; j++)
                {
-                  edges.push_back(coords.size() / 2);
-                  coords.push_back(barrier->mRenderLineSegments[j].x);
-                  coords.push_back(barrier->mRenderLineSegments[j].y);
+                  F32 x = j ? p1x : p2x;
+                  F32 y = j ? p1y : p2y;
+
+                  pair<F32,F32> index = pair<F32,F32>(x,y);
+
+                  S32 pt = points[index];
+
+                  if(pt == 0)
+                  {
+                     points[index] = nextPt;
+                     pt = nextPt;
+                     coords.push_back(x);
+                     coords.push_back(y);
+                     nextPt++;
+                  }
+
+                  edges.push_back(pt);
                }
             }
          }
          ctr.set(barrier->getExtent().getCenter());
          holes.push_back(ctr.x);
          holes.push_back(ctr.y);
-
       }
+U32 done1 = Platform::getRealMilliseconds();
 
    triangulateio in, out;
+
    initIoStruct(&in);
    initIoStruct(&out);
 
@@ -824,29 +842,39 @@ void BotNavMeshZone::buildBotMeshZones(Game *game)
    in.numberofholes = holes.size() / 2;
    in.holelist = holes.address();
 
-   logprintf("===============================================");
-   logprintf("%d 2 0 0", in.numberofpoints);
-   for(S32 i = 0; i < in.numberofpoints * 2; i+=2)
-      logprintf("%d %f %f", i/2, in.pointlist[i], in.pointlist[i+1]);
-   logprintf("%d 0", in.numberofsegments);
-   for(S32 i = 0; i < in.numberofsegments * 2; i+=2)
-      logprintf("%d %d %d", i/2, in.segmentlist[i], in.segmentlist[i+1]);
-   logprintf("%d", in.numberofholes);
-   for(S32 i = 0; i < in.numberofholes * 2; i+=2)
-      logprintf("%d %f %f", i/2, in.holelist[i], in.holelist[i+1]);
+   // Note the q param seems to make no difference in speed of trinagulation, but makes much prettier triangles!
+   // X option makes small but consistent improvement in performance
 
+   U32 done3 = Platform::getRealMilliseconds();
+      triangulate("zXqpV", &in, &out, NULL);  // TODO: Replace V with Q after debugging, also test F option
+U32 done4 = Platform::getRealMilliseconds();
 
+   // Build inputs for Recast step 6.5 -- simulates return of traingulate() method, 1034
 
-   triangulate("zqpcV", &in, &out, NULL);  // TODO: Replace V with Q after debugging
+   int ntris = out.numberoftriangles;
+   Vector<int> intPoints(out.numberofpoints * 4);     // 4 entries per point: x,y,?,?
+
+   for(S32 i = 0; i < out.numberofpoints; i+=2)
+   {
+      intPoints[i*4] = S32(out.pointlist[i]);            // x
+      intPoints[i*4 + 1] = S32(out.pointlist[i+1]);      // y
+      intPoints[i*4 + 2] = 0;                            // ?
+      intPoints[i*4 + 3] = 0;                            // ?
+   }
+   
+   
+   // cont.nverts = out.numberofpoints;
+   // cont.verts = intPoints.address();      //<== pointer to array of points in int format
+   // tris = out.trianglelist
 
 
    for(S32 i = 0; i < out.numberoftriangles * 3; i+=3)
    {
       BotNavMeshZone *botzone = new BotNavMeshZone();
 
-		botzone->mPolyBounds.push_back(Point(out.pointlist[out.trianglelist[i]*2], out.pointlist[out.trianglelist[i]*2 + 1]));
-		botzone->mPolyBounds.push_back(Point(out.pointlist[out.trianglelist[i+1]*2], out.pointlist[out.trianglelist[i+1]*2 + 1]));
-		botzone->mPolyBounds.push_back(Point(out.pointlist[out.trianglelist[i+2]*2], out.pointlist[out.trianglelist[i+2]*2 + 1]));
+		botzone->mPolyBounds.push_back(Point(F32(S32(out.pointlist[out.trianglelist[i]*2])), F32(S32(out.pointlist[out.trianglelist[i]*2 + 1]))));
+		botzone->mPolyBounds.push_back(Point(F32(S32(out.pointlist[out.trianglelist[i+1]*2])), F32(S32(out.pointlist[out.trianglelist[i+1]*2 + 1]))));
+		botzone->mPolyBounds.push_back(Point(F32(S32(out.pointlist[out.trianglelist[i+2]*2])), F32(S32(out.pointlist[out.trianglelist[i+2]*2 + 1]))));
       botzone->mCentroid.set(findCentroid(botzone->mPolyBounds));
 
 		botzone->mConvex = true;             // Avoid random red and green on /dzones, if this is uninitalized
@@ -854,7 +882,11 @@ void BotNavMeshZone::buildBotMeshZones(Game *game)
 		botzone->computeExtent();   
    }
 
-   //removeUnusedNavMeshZones();
+   U32 done5 = Platform::getRealMilliseconds();
+
+   logprintf("Timings: %d %d %d %d", done1-starttime, done3-done1, done4-done3, done5-done4);
+
+   // TODO: free memory allocated by triangles in out struct
 }
 
 
