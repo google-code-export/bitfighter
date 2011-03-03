@@ -754,7 +754,7 @@ void BotNavMeshZone::buildBotMeshZones(Game *game)
 	Rect bounds = game->computeWorldObjectExtents();
 
    // Recast only handles 16 bit coordinates
-   TNLAssert(bounds.min.x > S16_MIN && bounds.min.y > S16_MIN && bounds.min.x < S16_MAX && bounds.max.y < S16_MAX, "Level out of bounds!");
+   TNLAssert(bounds.min.x > S16_MIN && bounds.min.y > S16_MIN && bounds.max.x < S16_MAX && bounds.max.y < S16_MAX, "Level out of bounds!");
 
 //#ifdef SAM_ONLY
    //makeBotMeshZones2(bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y);
@@ -850,7 +850,7 @@ void BotNavMeshZone::buildBotMeshZones(Game *game)
    // X option makes small but consistent improvement in performance
 
    U32 done3 = Platform::getRealMilliseconds();
-   triangulate((char*)"zXqpOV", &in, &out, NULL);  // TODO: Replace V with Q after debugging, also test F option
+   triangulate((char*)"zXqpV", &in, &out, NULL);  // TODO: Replace V with Q after debugging, also test F option
    U32 done4 = Platform::getRealMilliseconds();
 
    bool useRecast = true;
