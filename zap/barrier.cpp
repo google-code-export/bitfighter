@@ -325,24 +325,23 @@ void Barrier::clipRenderLinesToPoly(const Vector<Point> &polyPoints, Vector<Poin
    lineSegmentPoints = clippedSegments;
 }
 
+
 S32 QSORT_CALLBACK pointDataSortX(Point *a, Point *b)
 {
    if(a->x == b->x)
       return 0;
-   else if(a->x > b->x)
-      return 1;
-   else
-      return -1;
+   else return (a->x > b->x) ? 1 : -1;
 }
+
+
 S32 QSORT_CALLBACK pointDataSortY(Point *a, Point *b)
 {
    if(a->y == b->y)
       return 0;
-   else if(a->y > b->y)
-      return 1;
-   else
-      return -1;
+   else return (a->y > b->y) ? 1 : -1;
 }
+
+
 void getPolygonLineCollisionPoints(Vector<Point> &output, Vector<Point> &input, Point p1, Point p2);
 
 // Clean up edge geometry and get barriers ready for proper rendering -- client and server (client for rendering, server for building zones)
@@ -389,7 +388,7 @@ void Barrier::prepareRenderingGeometry2()
          {
             Barrier *obj = dynamic_cast<Barrier *>(objects[k]);
             isInside = isInside || (PolygonContains2(obj->mPoints.address(), obj->mPoints.size(), midPoint)
-                  && PolygonContains2(obj->mPoints.address(), obj->mPoints.size(), midPoint2));
+               && PolygonContains2(obj->mPoints.address(), obj->mPoints.size(), midPoint2));
          }
          if(!isInside)
          {
@@ -401,40 +400,37 @@ void Barrier::prepareRenderingGeometry2()
    }
 }
 
+
+static void prepareRenderGeom(Vector<Point> &outlines, Vector<Point> &segments)
+{
+   resetEdges(outlines, segments);
+
+   static Vector<DatabaseObject *> fillObjects;
+   fillObjects.clear();
+
+   findObjects(BarrierType, fillObjects, getExtent());      // Find all potentially colliding wall segments (fillObjects)
+
+   for(S32 i = 0; i < fillObjects.size(); i++)
+   {
+      outlines.clear();
+      if(fillObjects[i] != this && dynamic_cast<GameObject *>(fillObjects[i])->getCollisionPoly(outlines))
+         clipRenderLinesToPoly(outlines, segments);     // Populates segments
+   }
+}
+
+
 void Barrier::prepareRenderingGeometry()
 {
-   resetEdges(mRenderOutlineGeometry, mRenderLineSegments);
-
-   static Vector<DatabaseObject *> fillObjects;
-   fillObjects.clear();
-
-   findObjects(BarrierType, fillObjects, getExtent());      // Find all potentially colliding wall segments (fillObjects)
-
-   for(S32 i = 0; i < fillObjects.size(); i++)
-   {
-      mRenderOutlineGeometry.clear();
-      if(fillObjects[i] != this && dynamic_cast<GameObject *>(fillObjects[i])->getCollisionPoly(mRenderOutlineGeometry))
-         clipRenderLinesToPoly(mRenderOutlineGeometry, mRenderLineSegments);     // Populates mRenderLineSegments
-   }
+   prepareRenderGeom(mRenderOutlineGeometry, mRenderLineSegments);
 }
 
-// create buffered edge geometry around the barrier for bot zone generation
+
+// Create buffered edge geometry around the barrier for bot zone generation
 void Barrier::prepareBotZoneGeometry()
 {
-   resetEdges(mBotZoneBufferGeometry, mBotZoneBufferLineSegments);
-
-   static Vector<DatabaseObject *> fillObjects;
-   fillObjects.clear();
-
-   findObjects(BarrierType, fillObjects, getExtent());      // Find all potentially colliding wall segments (fillObjects)
-
-   for(S32 i = 0; i < fillObjects.size(); i++)
-   {
-      mBotZoneBufferGeometry.clear();
-      if(fillObjects[i] != this && dynamic_cast<GameObject *>(fillObjects[i])->getCollisionPoly(mBotZoneBufferGeometry))
-         clipRenderLinesToPoly(mBotZoneBufferGeometry, mBotZoneBufferLineSegments);
-   }
+   prepareRenderGeom(mBotZoneBufferGeometry, mBotZoneBufferLineSegments);
 }
+
 
 void Barrier::render(S32 layerIndex)
 {
@@ -451,5 +447,6 @@ void Barrier::render(S32 layerIndex)
    else if(layerIndex == 1)      // Second pass: draw the outlines
       renderWallEdges(mRenderLineSegments);
 }
+
 
 };
