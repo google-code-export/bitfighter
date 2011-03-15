@@ -24,6 +24,7 @@
 //------------------------------------------------------------------------------------
 
 #include "barrier.h"
+#include "BotNavMeshZone.h"
 #include "gameObjectRender.h"
 #include "SweptEllipsoid.h"    // For polygon triangulation
 
@@ -119,12 +120,10 @@ Barrier::Barrier(const Vector<Point> &points, F32 width, bool solid)
 
    if(mSolid)
        Triangulate::Process(mPoints, mRenderFillGeometry);
-
    else if(mPoints.size() == 2 && mWidth > 0)   // It's a regular segment, so apply width
    {
-      expandCenterlineToOutline(mPoints[0], mPoints[1], mWidth, mRenderFillGeometry);      // Fills mRenderFillGeometry with 4 points
-      bufferBarrierForBotZone(mPoints[0], mPoints[1], mWidth, mBotZoneBufferGeometry);     // Fills mBotZoneBufferGeometry with 4 points
-
+      expandCenterlineToOutline(mPoints[0], mPoints[1], mWidth, mRenderFillGeometry);     // Fills with 4 points
+      bufferBarrierForBotZone(mPoints[0], mPoints[1], mWidth, mBotZoneBufferGeometry);     // Fills with 4 points
       mPoints = mRenderFillGeometry;
    }
 
@@ -247,10 +246,10 @@ void Barrier::bufferBarrierForBotZone(const Point &start, const Point &end, F32 
 
    Point difference = end - start;
    Point crossVector(difference.y, -difference.x);  // create a point whose vector from 0,0 is perpenticular to the original vector
-   crossVector.normalize((barrierWidth * 0.5) + Ship::CollisionRadius);  // reduce point so the vector has length of barrier width + ship radius
+   crossVector.normalize((barrierWidth * 0.5) + BotNavMeshZone::BufferRadius);  // reduce point so the vector has length of barrier width + ship radius
 
    Point parallelVector(difference.x, difference.y); // create a vector parallel to original segment
-   parallelVector.normalize(Ship::CollisionRadius);  // reduce point so vector has length of ship radius
+   parallelVector.normalize(BotNavMeshZone::BufferRadius);  // reduce point so vector has length of ship radius
 
    // now add/subtract perpendicular and parallel vectors to buffer the segments
    bufferedPoints.push_back(Point((start.x - parallelVector.x) + crossVector.x, (start.y - parallelVector.y) + crossVector.y));
@@ -327,15 +326,12 @@ void Barrier::clipRenderLinesToPoly(const Vector<Point> &polyPoints, Vector<Poin
    lineSegmentPoints = clippedSegments;
 }
 
-
 S32 QSORT_CALLBACK pointDataSortX(Point *a, Point *b)
 {
    if(a->x == b->x)
       return 0;
    else return (a->x > b->x) ? 1 : -1;
 }
-
-
 S32 QSORT_CALLBACK pointDataSortY(Point *a, Point *b)
 {
    if(a->y == b->y)
@@ -346,6 +342,7 @@ S32 QSORT_CALLBACK pointDataSortY(Point *a, Point *b)
 
 void getPolygonLineCollisionPoints(Vector<Point> &output, Vector<Point> &input, Point p1, Point p2);
 
+// Sam's optimized version, replaces prepareRenderingGeometry(), leaves small holes
 // Clean up edge geometry and get barriers ready for proper rendering -- client and server (client for rendering, server for building zones)
 void Barrier::prepareRenderingGeometry2()
 {
@@ -376,21 +373,25 @@ void Barrier::prepareRenderingGeometry2()
          points.sort(pointDataSortX);
       else
          points.sort(pointDataSortY);
+
+      // Remove duplicate points
       for(S32 j=points.size()-1; j>=1; j--)
       {
          if(points[j] == points[j-1])
             points.erase(j);
       }
+
       for(S32 j=1; j<points.size(); j++)
       {
          Point midPoint = (points[j] + points[j-1]) * 0.5 + Point(0.003,0.007); // to avoid mssing lines, duplicate segments is better then mising segments.
          Point midPoint2 = (points[j] + points[j-1]) * 0.5 - Point(0.003,0.007);
+
          bool isInside = false;
          for(S32 k=0; k<objects.size() && !isInside; k++)
          {
             Barrier *obj = dynamic_cast<Barrier *>(objects[k]);
             isInside = isInside || (PolygonContains2(obj->mPoints.address(), obj->mPoints.size(), midPoint)
-               && PolygonContains2(obj->mPoints.address(), obj->mPoints.size(), midPoint2));
+                  && PolygonContains2(obj->mPoints.address(), obj->mPoints.size(), midPoint2));
          }
          if(!isInside)
          {
@@ -403,7 +404,8 @@ void Barrier::prepareRenderingGeometry2()
 }
 
 
-void Barrier::prepareRenderGeom(Vector<Point> &outlines, Vector<Point> &segments)
+// Original method, creates too many segments
+void Barrier::prepareRenderingGeometry()
 {
    resetEdges(outlines, segments);
 
@@ -449,6 +451,5 @@ void Barrier::render(S32 layerIndex)
    else if(layerIndex == 1)      // Second pass: draw the outlines
       renderWallEdges(mRenderLineSegments);
 }
-
 
 };
