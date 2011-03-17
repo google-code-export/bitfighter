@@ -950,7 +950,7 @@ static void makeBotMeshZones3(Rect& bounds, Game* game, bool useRecast)
 
    TPolyPolygon solution;
    Clipper clipper;
-   clipper.IgnoreOrientation(true);      // Will improve speed by 60%!, needs to be tested
+   clipper.IgnoreOrientation(true);
 
    for(S32 i = 0; i < game->mGameObjects.size(); i++)
    {
@@ -1085,7 +1085,7 @@ static void makeBotMeshZones3(Rect& bounds, Game* game, bool useRecast)
          {
             if(mesh.polys[(i * mesh.nvp + j)] == U16_MAX)     // We've read past the end of the polygon
                break;
-
+         
 
          
             const U16 *vert = &mesh.verts[mesh.polys[(i * mesh.nvp + j)] * bytesPerVertex];
@@ -1100,7 +1100,7 @@ static void makeBotMeshZones3(Rect& bounds, Game* game, bool useRecast)
             //if(!(vert[0] - FIX == lastx && vert[1] - FIX == lasty) && 
             //      !((j == mesh.nvp || mesh.polys[(i * mesh.nvp + j+1)] == U16_MAX) && vert[0] - FIX == firstx && vert[1] - FIX == firsty))
             //{
-               botzone->mPolyBounds.push_back(Point(vert[0] - FIX, vert[1] - FIX));
+            botzone->mPolyBounds.push_back(Point(vert[0] - FIX, vert[1] - FIX));
             //   lastx = vert[0] - FIX;
             //   lasty = vert[1] - FIX;
             //}
@@ -1109,7 +1109,7 @@ static void makeBotMeshZones3(Rect& bounds, Game* game, bool useRecast)
    
          if(botzone->mPolyBounds.size() > 0)
          {
-            botzone->mCentroid.set(findCentroid(botzone->mPolyBounds)); 
+            botzone->mCentroid.set(findCentroid(botzone->mPolyBounds));
 
 		      botzone->mConvex = true;             
 		      botzone->addToGame(gServerGame);
@@ -1117,8 +1117,8 @@ static void makeBotMeshZones3(Rect& bounds, Game* game, bool useRecast)
 
             polyToZoneMap[i] = botzone->getZoneId();
 
-            Vector<Point> collp;
-            botzone->getCollisionPoly(collp);
+            //Vector<Point> collp;
+            //botzone->getCollisionPoly(collp);
             //logprintf("====== zone %d ======", botzone->getZoneId());
             //for(S32 j = 0; j < collp.size(); j++)
             //{
