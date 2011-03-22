@@ -167,7 +167,7 @@ public:
    S32 getRadius(F32 scale);
    Point getSelectionOffset(F32 scale);      // For turrets, apparent selection center is not the same as the item's actual location
 
-   Vector<Point> mRenderLineSegments;  // Used only by barriers
+   //Vector<Point> mRenderLineSegments;  // Used only by barriers
 
    GameItems index;
    S32 team;
@@ -242,7 +242,7 @@ public:
    virtual bool isConvex() { return Zap::isConvex(mVerts); }      // Only used for navmeshzones
 
    Vector<Point> &getVerts() { return mVerts; }
-   Vector<Point> extendedEndPoints;
+   Vector<Point> extendedEndPoints;                               // a-b b-c format
 
    S32 vertCount() { return mVerts.size(); }
    Point vert(S32 vertIndex) { return mVerts[vertIndex]; }
@@ -260,8 +260,8 @@ public:
    ////////////////////
    //  DatabaseObject methods
    GridDatabase *getGridDatabase();
-   bool getCollisionPoly(Vector<Point> &polyPoints);
-   bool getCollisionCircle(U32 stateIndex, Point &point, float &radius);
+   bool getCollisionPoly(Vector<Point> &polyPoints) { return false; }
+   bool getCollisionCircle(U32 stateIndex, Point &point, float &radius) { return false; }
    bool isCollisionEnabled() { return true; }
 };
 
