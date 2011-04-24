@@ -104,7 +104,7 @@ void BotNavMeshZone::render(S32 layerIndex)
       return;
 
    // TODO: Move to constructor, only doing this when there is a local client?
-   if(mPolyFill.size() == 0)    // Need to process PolyFill here, rendering server objects into client.  
+   if(getPolyFillPoints()->size() == 0)    // Need to process PolyFill here, rendering server objects into client.  
       Triangulate::Process(mPolyBounds, mPolyFill);
 
    if(layerIndex == 0)
@@ -705,8 +705,9 @@ bool BotNavMeshZone::buildBotMeshZones(Game *game)
          botzone->mConvex = true;             // Avoid random red and green on /showzones.
          botzone->addToGame(game);
          botzone->computeExtent();   
+
          if(gClientGame)      // Only triangulate when there is client
-            Triangulate::Process(botzone->mPolyBounds, botzone->mPolyFill);
+            Triangulate::Process(botzone->mPolyBounds, *botzone->getPolyFillPoints());
        }
 
       BotNavMeshZone::buildBotNavMeshZoneConnections();
@@ -796,16 +797,16 @@ void BotNavMeshZone::linkTeleportersBotNavMeshZoneConnections(Game *game)
       BotNavMeshZone *origZone = findZoneContainingPoint(teleporter->getActualPos());
 
       if(origZone != NULL)
-      for(S32 j = 0; j < teleporter->mDest.size(); j++)     // Review each teleporter destination
+      for(S32 j = 0; j < teleporter->mDests.size(); j++)     // Review each teleporter destination
       {
-         BotNavMeshZone *destZone = findZoneContainingPoint(teleporter->mDest[j]);
+         BotNavMeshZone *destZone = findZoneContainingPoint(teleporter->mDests[j]);
 
          if(destZone != NULL && origZone != destZone)      // Ignore teleporters that begin and end in the same zone
          {
             // Teleporter is one way path
             neighbor.zoneID = destZone->mZoneId;
             neighbor.borderStart.set(teleporter->getActualPos());
-            neighbor.borderEnd.set(teleporter->mDest[j]);
+            neighbor.borderEnd.set(teleporter->mDests[j]);
             neighbor.borderCenter.set(teleporter->getActualPos());
 
             // Teleport instantly, at no cost -- except this is wrong... if teleporter has multiple dests, actual cost could be quite high.

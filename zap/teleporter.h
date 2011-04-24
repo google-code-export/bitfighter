@@ -25,31 +25,22 @@
 
 #include "gameConnection.h"
 #include "gameObject.h"
-#include "projectile.h"   // For LuaItem
+#include "projectile.h"    // For LuaItem
 #include "Point.h"
+#include "UIEditor.h"      // For EditorObject 
 
 #include "tnlNetObject.h"
 
 namespace Zap
 {
 
-class Teleporter : public GameObject, public LuaItem
+////////////////////////////////////////
+////////////////////////////////////////
+
+class Teleporter : public EditorObject, public LuaItem
 {
-private:
-   S32 mLastDest;    // Destination of last ship through
-   Point mPos;
-
 public:
-   Vector<Point> mDest;   // need public for BotNavMeshZones
-
-   bool doSplash;
-   U32 timeout;
-   U32 mTime;
-
-   static const S32 TELEPORTER_RADIUS = 75;  // Overall size of the teleporter
-
-
-   enum {
+      enum {
       InitMask     = BIT(0),
       TeleportMask = BIT(1),
 
@@ -60,8 +51,20 @@ public:
       TeleportInRadius = 120,
    };
 
+private:
+   S32 mLastDest;    // Destination of last ship through
+   Point mPos;
+   Point mDest;
+
+public:
    Teleporter();     // Constructor
-   bool processArguments(S32 argc, const char **argv);
+
+   bool doSplash;
+   U32 timeout;
+   U32 mTime;
+
+   static const S32 TELEPORTER_RADIUS = 75;  // Overall size of the teleporter
+   virtual bool processArguments(S32 argc, const char **argv);
 
    U32 packUpdate(GhostConnection *connection, U32 updateMask, BitStream *stream);
    void unpackUpdate(GhostConnection *connection, BitStream *stream);
@@ -71,7 +74,10 @@ public:
 
    void onAddedToGame(Game *theGame);
 
-   Teleporter findTeleporterAt(Point pos);      // Find a teleporter at pos
+   //Teleporter findTeleporterAt(Point pos);      // Find a teleporter at pos
+
+   Vector<Point> mDests;   // need public for BotNavMeshZones
+
 
    TNL_DECLARE_CLASS(Teleporter);
 
@@ -84,11 +90,11 @@ public:
    S32 getClassID(lua_State *L) { return returnInt(L, TeleportType); }   // Object's class
    void push(lua_State *L) { Lunar<Teleporter>::push(L, this); }         // Push item onto stack
 
-   S32 getLoc(lua_State *L) { return returnPoint(L, mPos); }                     // Center of item (returns point)
-   S32 getRad(lua_State *L) { return returnInt(L, TeleporterTriggerRadius); }    // Radius of item (returns number)
-   S32 getVel(lua_State *L) { return returnPoint(L, Point(0,0)); }               // Speed of item (returns point)
+   S32 getLoc(lua_State *L) { return returnPoint(L, mPos); }                         // Center of item (returns point)
+   S32 getRad(lua_State *L) { return returnInt(L, TeleporterTriggerRadius); }        // Radius of item (returns number)
+   S32 getVel(lua_State *L) { return returnPoint(L, Point(0,0)); }                   // Speed of item (returns point)
    S32 getTeamIndx(lua_State *L) { return returnInt(L, Item::TEAM_NEUTRAL + 1); }    // All teleporters are neutral
-   GameObject *getGameObject() { return this; }                                  // Return the underlying GameObject
+   GameObject *getGameObject() { return this; }                                      // Return the underlying GameObject
 };
 
 };

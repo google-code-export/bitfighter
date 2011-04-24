@@ -262,7 +262,7 @@ public:
 
    // Draw strings centered at point
    static void drawStringfc(F32 x, F32 y, U32 size, const char *format, ...);
-   static void drawStringc(F32 x, F32 y, U32 size, const char *string);
+   static void drawStringc(F32 x, F32 y, F32 size, const char *string);
 
    // Draw strings right-aligned at point
    static void drawStringfr(F32 x, F32 y, U32 size, const char *format, ...);
@@ -273,22 +273,19 @@ public:
 
 
    // Draw text at an angle...
-   static void drawAngleString(S32 x, S32 y, F32 size, F32 angle, const char *string);
+   static void drawAngleString(F32 x, F32 y, F32 size, F32 angle, const char *string);
    static void drawAngleString(S32 x, S32 y, U32 size, F32 angle, const char *string);
-   static void drawAngleStringf(S32 x, S32 y, F32 size, F32 angle, const char *format, ...);
    
 
    // Original drawAngleString has a bug in positioning, but fixing it everywhere in the app would be a huge pain, so
    // we've created a new drawAngleString function without the bug, called xx_fixed.  Actual work now moved to doDrawAngleString,
-   // which is marked private.
-   static void drawAngleString(F32 x, F32 y, F32 size, F32 angle, const char *string);
+   // which is marked private.  I think all usage of broken function has been removed, and _fixed can be renamed to something better.
    static void drawAngleString_fixed(F32 x, F32 y, F32 size, F32 angle, const char *string);
    static void drawAngleString_fixed(S32 x, S32 y, F32 size, F32 angle, const char *string);
-   static void drawAngleStringf(F32 x, F32 y, F32 size, F32 angle, const char *format, ...);
    static void drawAngleStringf_fixed(F32 x, F32 y, F32 size, F32 angle, const char *format, ...);
 
    // Center text between two points
-   void drawStringf_2pt(Point p1, Point p2, F32 size, F32 vert_offset, const char *format, ...);
+   static void drawStringf_2pt(Point p1, Point p2, F32 size, F32 vert_offset, const char *format, ...);
 
    // Draw text centered on screen (normal and formatted versions)  --> now return starting location
    static S32 drawCenteredString(S32 y, U32 size, const char *str);
