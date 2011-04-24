@@ -1,4 +1,5 @@
 --- from quickBot v2, modified by sam686
+--- plays on all level types
 
 game = nil
 difficulty = nil
@@ -104,7 +105,7 @@ function fireAtObject(obj, weapon)
 		obj:getClassID() == RobotType or
 		obj:getClassID() == TurretType or
 		obj:getClassID() == ForceFieldProjectorType) then
-			if obj:getTeamIndx() == bot:getTeamIndx() and game:isTeamGame() and obj:getTeamIndx() == NeutralTeamIndx then
+			if obj:getTeamIndx() == bot:getTeamIndx() and game:isTeamGame() or obj:getTeamIndx() == NeutralTeamIndx then
 				--logprint("It's an ally.")
 				return(false)
 			end
@@ -112,7 +113,7 @@ function fireAtObject(obj, weapon)
 	
 	local angle = getFiringSolution(obj)
 	if angle ~= nil and bot:hasWeapon(weapon) then
-		bot:setAngle(angle + math.rad((math.random()-1)*20*(1-difficulty)))
+		bot:setAngle(angle + math.rad((math.random()-0.5)*20*(1-difficulty)))
 		bot:setWeapon(weapon)
 		bot:fire()
 		--logprint("bot:fire() called!");
