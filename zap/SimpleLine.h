@@ -23,47 +23,49 @@
 //
 //------------------------------------------------------------------------------------
 
-#ifndef _GAMELOADER_H_
-#define _GAMELOADER_H_
+#ifndef _SIMPLELINE_H_
+#define _SIMPLELINE_H_
 
-#include "tnl.h"
-#include "tnlNetStringTable.h"
-#include "tnlVector.h"
-
-using namespace TNL;
+#include "UIEditor.h"      // For EditorObject (to be moved!)
 
 namespace Zap
 {
 
-class LevelLoader
+class SimpleLine : public EditorObject, public GameObject
 {
+   typedef GameObject Parent;
+   typedef EditorObject EditorParent;
+
+private:
+   virtual Color getEditorRenderColor() = 0;
+
+   virtual const char *getVertLabel(S32 index) = 0;          
+   virtual const char *getEditMessage(S32 line) { return ""; }
+
+protected:
+   virtual void initializeEditor(F32 gridSize);
+   virtual S32 getDockRadius() { return 8; }                       // Size of object on dock
+   virtual S32 getEditorRadius(F32 currentScale) { return 7; }     // Size of object (or in this case vertex) in editor
+
 public:
-   // Put these in here so we can access them from luaLevelGenerator
-   static const S32 MAX_LEVEL_LINE_ARGS = 128;     // Most args on a single line,
-   static const S32 MaxArgLen = 100;               // Each at most MaxArgLen bytes long  (enforced in addCharToArg)
-   static const S32 MaxIdLen = 11;                 // Max 32-bit int is 10 digits, plus room for a null
+   SimpleLine();           // Constructor
 
-   static const S32 MAX_LEVEL_LINE_LENGTH = 4096;  // Max total level line length we'll tolerate
+   // Some properties about the item that will be needed in the editor
+   GeomType getGeomType() { return geomSimpleLine; }
 
-   bool loadLevelFromFile(const char *file);
-   void parseLevelLine(const char *string);
+   virtual Point getVert(S32 index) = 0;
+   virtual const char *getOnDockName() = 0;
 
-   // Implementers of this class need to provide the following implementations:
-   virtual void processLevelLoadLine(U32 argc, U32 id, const char **argv) = 0;
-   virtual void setGameTime(F32 time) = 0;
-};
+   void renderDock();     // Render item on the dock
+   void renderEditor(F32 currentScale);
+   virtual void renderEditorItem(F32 currentScale) = 0;
 
-// Provide a class to help organize loading of levels from disk
-class LevelListLoader
-{
-public:
-   static Vector<std::string> buildLevelList();
-   static void removeSkippedLevels(Vector<std::string> &levelList);
+   virtual S32 getVertCount() { return 2; }
+
+   void deleteVert(S32 vertIndex) { /* Do nothing */ }
 };
 
 
 };
 
 #endif
-
-

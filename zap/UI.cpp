@@ -371,15 +371,7 @@ void UserInterface::drawAngleString_fixed(F32 x, F32 y, F32 size, F32 angle, con
 }
 
 
-// Old, broken version
-void UserInterface::drawAngleStringf(F32 x, F32 y, F32 size, F32 angle, const char *format, ...)
-{
-   makeBuffer;
-   doDrawAngleString((S32) x, (S32) y, size, angle, buffer, false);
-}
-
-
-void UserInterface::drawAngleString(S32 x, S32 y, F32 size, F32 angle, const char *string)
+void UserInterface::drawAngleString(F32 x, F32 y, F32 size, F32 angle, const char *string)
 {
    doDrawAngleString(x, y, size, angle, string, false);
 }
@@ -391,7 +383,7 @@ void UserInterface::drawAngleString(S32 x, S32 y, U32 size, F32 angle, const cha
 }
 
 
-void UserInterface::doDrawAngleString(S32 x, S32 y, F32 size, F32 angle, const char *string, bool fix)
+void UserInterface::doDrawAngleString(F32 x, F32 y, F32 size, F32 angle, const char *string, bool fix)
 {
    F32 scaleFactor = size / 120.0f;
    glPushMatrix();
@@ -403,27 +395,11 @@ void UserInterface::doDrawAngleString(S32 x, S32 y, F32 size, F32 angle, const c
    glPopMatrix();
 }
 
-// Same but accepts F32 args
-void UserInterface::doDrawAngleString(F32 x, F32 y, F32 size, F32 angle, const char *string, bool fix)
+// Same but accepts S32 args
+void UserInterface::doDrawAngleString(S32 x, S32 y, F32 size, F32 angle, const char *string, bool fix)
 {
-   doDrawAngleString((S32) x, (S32) y, size, angle, string, fix);
+   doDrawAngleString(F32(x), F32(y), size, angle, string, fix);
 }
-
-
-//void UserInterface::drawAngleString(S32 x, S32 y, U32 size, F32 angle, const char *string)
-//{
-//   drawAngleString(x, y, (F32) size, angle, string);
-//}
-//
-//void UserInterface::drawAngleStringf(S32 x, S32 y, U32 size, F32 angle, const char *format, ...)
-//{
-//   va_list args;
-//   va_start(args, format);
-//   char buffer[2048];
-//
-//   dVsprintf(buffer, sizeof(buffer), format, args);
-//   drawAngleString(x, y, (F32) size, angle, buffer);
-//}
 
 
 void UserInterface::drawString(S32 x, S32 y, U32 size, const char *string)
@@ -482,18 +458,24 @@ S32 UserInterface::drawStringAndGetWidthf(F32 x, F32 y, U32 size, const char *fo
 }
 
 
-void UserInterface::drawStringc(F32 x, F32 y, U32 size, const char *string)
+void UserInterface::drawStringc(F32 x, F32 y, F32 size, const char *string)
 {
-   S32 len = getStringWidth(size, string);
-   drawAngleString((S32) x - len / 2, (S32) y, size, 0, string);
+   F32 len = getStringWidth(size, string);
+   drawAngleString(x - len / 2, y, size, 0, string);
 }
 
 
 S32 UserInterface::drawCenteredString(S32 y, U32 size, const char *string)
 {
-   S32 x = (gScreenInfo.getGameCanvasWidth() - getStringWidth(size, string)) / 2;
-   drawString(x, y, size, string);
-   return x;
+   return drawCenteredString(gScreenInfo.getGameCanvasWidth() / 2, y, size, string);
+}
+
+
+S32 UserInterface::drawCenteredString(S32 x, S32 y, U32 size, const char *string)
+{
+   S32 xpos = x - getStringWidth(size, string) / 2 ;
+   drawString(xpos, y, size, string);
+   return xpos;
 }
 
 
@@ -501,6 +483,14 @@ S32 UserInterface::drawCenteredStringf(S32 y, U32 size, const char *format, ...)
 {
    makeBuffer;
    return drawCenteredString(y, size, buffer);
+}
+
+
+S32 UserInterface::drawCenteredStringf(S32 x, S32 y, U32 size, const char *format, ...)
+{
+   makeBuffer;
+
+   return drawCenteredString(x, y, size, buffer);
 }
 
 
@@ -563,16 +553,25 @@ extern void glColor(const Color &c, float alpha = 1.0);
 S32 UserInterface::drawCenteredStringPair(S32 ypos, U32 size, const Color &leftColor, const Color &rightColor, 
                                           const char *leftStr, const char *rightStr)
 {
-   S32 xpos = getCenteredStringStartingPosf(size, "%s %s", leftStr, rightStr);
+   return drawCenteredStringPair(gScreenInfo.getGameCanvasWidth() / 2, ypos, size, leftColor, rightColor, leftStr, rightStr);
+}
+
+
+// Returns starting position of value, which is useful for positioning the cursor in an editable menu entry
+S32 UserInterface::drawCenteredStringPair(S32 xpos, S32 ypos, U32 size, const Color &leftColor, const Color &rightColor, 
+                                          const char *leftStr, const char *rightStr)
+{
+   S32 xpos2 = getCenteredStringStartingPosf(size, "%s %s", leftStr, rightStr) + xpos - gScreenInfo.getGameCanvasWidth() / 2;
 
    glColor(leftColor);
-   xpos += UserInterface::drawStringAndGetWidthf(xpos, ypos, size, "%s ", leftStr);
+   xpos2 += UserInterface::drawStringAndGetWidthf(xpos2, ypos, size, "%s ", leftStr);
 
    glColor(rightColor);
-   UserInterface::drawString(xpos, ypos, size, rightStr);
+   UserInterface::drawString(xpos2, ypos, size, rightStr);
 
-   return xpos;
+   return xpos2;
 }
+
 
 //// Draws a string centered on the screen, with different parts colored differently
 //S32 UserInterface::drawCenteredStringPair(S32 y, U32 size, const Color &col1, const Color &col2, const char *left, const char *right)
@@ -626,14 +625,20 @@ void UserInterface::drawString4Colf(S32 y, U32 size, U32 col, const char *format
 }
 
    
-
-S32 UserInterface::getStringWidth(F32 size, const char *string)
+F32 UserInterface::getStringWidthF32(F32 size, const char *string)
 {
 #ifndef ZAP_DEDICATED
-   return (S32) glutStrokeLength(GLUT_STROKE_ROMAN, (const unsigned char *) string) * size / 120.0;
+   return F32( glutStrokeLength(GLUT_STROKE_ROMAN, (const unsigned char *) string) ) * size / 120.0;
 #else
    return 1;
 #endif
+
+}
+
+
+S32 UserInterface::getStringWidth(F32 size, const char *string)
+{
+   return S32(getStringWidthF32(size, string));
 }
 
 

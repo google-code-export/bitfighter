@@ -1786,11 +1786,12 @@ extern Color gNeutralTeamColor;
 extern Color gHostileTeamColor;
 
 // This method can be overridden by other game types that handle colors differently
+// TODO: Combine with EditorGame::getTeamColor
 Color GameType::getTeamColor(S32 team)
 {
-   if(team == -1 || team >= mTeams.size() || team < -2)
+   if(team == Item::TEAM_NEUTRAL || team >= mTeams.size() || team < Item::TEAM_HOSTILE)
       return gNeutralTeamColor;
-   else if(team == -2)
+   else if(team == Item::TEAM_HOSTILE)
       return gHostileTeamColor;
    else
       return mTeams[team].color;
@@ -2227,7 +2228,7 @@ static void switchTeamsCallback(U32 unused)
    else
    {
       gTeamMenuUserInterface.activate();     // Show menu to let player select a new team
-      gTeamMenuUserInterface.nameToChange = gClientInfo.name.c_str();
+      gTeamMenuUserInterface.nameToChange = gClientInfo.name;
    }
  }
 
@@ -2243,8 +2244,8 @@ void GameType::addClientGameMenuOptions(Vector<MenuItem *> &menuOptions)
          menuOptions.push_back(new MenuItem(0, "SWITCH TEAMS", switchTeamsCallback, "", KEY_S, KEY_T));
       else
       {
-         menuOptions.push_back(new MenuItem(0, "WAITING FOR SERVER TO ALLOW", NULL, "", KEY_UNKNOWN, KEY_UNKNOWN, Color(1,0,0)));
-         menuOptions.push_back(new MenuItem(0, "YOU TO SWITCH TEAMS",         NULL, "", KEY_UNKNOWN, KEY_UNKNOWN, Color(1,0,0)));
+         menuOptions.push_back(new MessageMenuItem("WAITING FOR SERVER TO ALLOW", red));
+         menuOptions.push_back(new MessageMenuItem("YOU TO SWITCH TEAMS AGAIN", red));
       }
    }
 }
@@ -2859,10 +2860,10 @@ void GameType::processServerCommand(ClientRef *clientRef, const char *cmd, Vecto
          Robot *robot = new Robot();
          robot->addToGame(getGame());
          S32 args_count = 0;
-         const char *args_char[128];  // Convert to a format processArgs will allow
+         const char *args_char[LevelLoader::MAX_LEVEL_LINE_ARGS];  // Convert to a format processArgs will allow
          
          // The first arg = team number, the second arg = robot script filename, the rest of args get passed as script arguments
-         for(S32 i = 0; i < args.size() && i < 128; i++)    // TODO: Tie 128 to some constant
+         for(S32 i = 0; i < args.size() && i < LevelLoader::MAX_LEVEL_LINE_ARGS; i++)   
          {
             args_char[i] = args[i].getString();
             args_count++;

@@ -32,6 +32,10 @@
 #include "luaObject.h"     // For LuaObject def and returnInt method
 #include "lua.h"           // For push prototype
 
+#ifdef TNL_OS_WIN32 
+#  pragma warning( disable : 4250)
+#endif
+
 namespace Zap
 {
 
@@ -41,11 +45,11 @@ enum GameObjectType
 {
    UnknownType         = BIT(0),    // First bit, BIT(0) == 1, NOT 0!  (Well, yes, 0!, but not 0.  C'mon... get a life!)
    ShipType            = BIT(1),
-   BarrierType         = BIT(2),
+   BarrierType         = BIT(2),    // Used in both editor and game
    MoveableType        = BIT(3),
    ItemType            = BIT(4),    // Not made available to Lua... could we get rid of this altogether?  Or make it a aggregate of other masks?
    ResourceItemType    = BIT(5),
-         // slot available
+   TextItemType        = BIT(6),    // Added during editor refactor, only used in editor
    ForceFieldType      = BIT(7),
    LoadoutZoneType     = BIT(8),
    TestItemType        = BIT(9),
@@ -62,10 +66,10 @@ enum GameObjectType
    TeleportType        = BIT(19),
    GoalZoneType        = BIT(20),
 
-   AsteroidType        = BIT(21),      // Only needed for Lua...
+   AsteroidType        = BIT(21),      // Only needed for Lua and editor...
    RepairItemType      = BIT(22),      // Only needed for Lua...
    EnergyItemType      = BIT(23),      // Only needed for Lua...
-   SoccerBallItemType  = BIT(24),      // Only needed for Lua and indicating what the ship is carrying...
+   SoccerBallItemType  = BIT(24),      // Only needed for Lua and indicating what the ship is carrying and editor...
    WormType            = BIT(25),
 
    TurretType          = BIT(26),      // Formerly EngineeredType
@@ -80,7 +84,14 @@ enum GameObjectType
    DamagableTypes     = ShipType | RobotType | MoveableType | BulletType | ItemType | ResourceItemType | EngineeredType | MineType | AsteroidType,
    MotionTriggerTypes = ShipType | RobotType | ResourceItemType | TestItemType | AsteroidType,
    CollideableType    = BarrierType | TurretType | ForceFieldProjectorType,
-   AllObjectTypes     = 0xFFFFFFFF
+   AllObjectTypes     = 0xFFFFFFFF,
+  
+   //////////
+   // Types used exclusively in the editor -- will reuse some values from above
+   EditorWallSegmentType = BIT(3),
+   SpawnType = BIT(13),
+   FlagSpawnType = BIT(11),
+   PolyWallType = BIT(25)
 };
 
 const S32 gSpyBugRange = 300;     // How far can a spy bug see?
@@ -114,43 +125,73 @@ struct DamageInfo
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-class GameObject : public NetObject, public DatabaseObject
+// Interface class that feeds GameObject and EditorObject -- these things are common to in-game and editor instances of an object
+class XObject : public DatabaseObject
 {
-private:
-   typedef NetObject Parent;
+protected:
    Game *mGame;
+   S32 mTeam;
+
+public:
+   virtual ~XObject() { };     // Provide virtual destructor
+
+   S32 getTeam() { return mTeam; }
+   void setTeam(S32 team) { mTeam = team; }    
+
+
+   Game *getGame() { return mGame; }
+   void setGame(Game *game) { mGame = game; }
+
+   // DatabaseObject methods
+   virtual GridDatabase *getGridDatabase();     // BotNavMeshZones have their own GridDatabase
+   virtual bool getCollisionPoly(Vector<Point> &polyPoints);
+   virtual bool getCollisionCircle(U32 stateIndex, Point &point, float &radius);
+
+   virtual bool processArguments(S32 argc, const char**argv) { return true; }
+
+   // Render is called twice for every object that is in the
+   // render list.  By default GameObject will call the render()
+   // method one time (when layerIndex == 0).
+   virtual void render(S32 layerIndex);
+   virtual void render();
+};
+
+////////////////////////////////////////
+////////////////////////////////////////
+
+class GameObject : public virtual XObject, public NetObject
+{
+   typedef NetObject Parent;
+
+private:
    U32 mCreationTime;
    SafePtr<GameConnection> mControllingClient;     // Only has meaning on the server, will be null on the client
    SafePtr<GameConnection> mOwner;
    U32 mDisableCollisionCount;                     // No collisions when > 0, use of counter allows "nested" collision disabling
 
-
 protected:
    Move mLastMove;      // The move for the previous update
    Move mCurrentMove;   // The move for the current update
-   S32 mTeam;
    StringTableEntry mKillString;     // Alternate descr of what shot projectile (e.g. "Red turret"), used when shooter is not a ship or robot
 
 public:
-
    GameObject();                             // Constructor
    ~GameObject() { removeFromGame(); }       // Destructor
 
    virtual void addToGame(Game *game);       // BotNavMeshZone has its own addToGame
    virtual void onAddedToGame(Game *game);
    void removeFromGame();
-
-   Game *getGame() { return mGame; }
+   
 
    void deleteObject(U32 deleteTimeInterval = 0);
    U32 getCreationTime() { return mCreationTime; }
    
    
    StringTableEntry getKillString() { return mKillString; }
-   S32 getTeam() { return mTeam; }
-   void setTeam(S32 team) { mTeam = team; }    //needed for robot change team
+
    F32 getRating() { return 0; }    // TODO: Fix this
    S32 getScore() { return 0; }     // TODO: Fix this
+
    void findObjects(U32 typeMask, Vector<DatabaseObject *> &fillVector, const Rect &extents);
 
    GameObject *findObjectLOS(U32 typeMask, U32 stateIndex, Point rayStart, Point rayEnd, float &collisionTime, Point &collisionNormal);
@@ -163,20 +204,11 @@ public:
    void setControllingClient(GameConnection *c) { mControllingClient = c; }         // This only gets run on the server
 
    GameConnection *getOwner();
-   virtual GridDatabase *getGridDatabase();    // BotNavMeshZone have their own GridDatabase
 
    F32 getUpdatePriority(NetObject *scopeObject, U32 updateMask, S32 updateSkips);
 
    virtual S32 getRenderSortValue() { return 2; }
-   virtual void render();
 
-   // Render is called twice for every object that is in the
-   // render list.  By default GameObject will call the render()
-   // method one time (when layerIndex == 0).
-   virtual void render(S32 layerIndex);
-
-   virtual bool getCollisionPoly(Vector<Point> &polyPoints);
-   virtual bool getCollisionCircle(U32 stateIndex, Point &point, float &radius);
    Rect getBounds(U32 stateIndex);
 
    const Move &getCurrentMove() { return mCurrentMove; }
@@ -204,8 +236,8 @@ public:
    void writeCompressedVelocity(Point &vel, U32 max, BitStream *stream);
    void readCompressedVelocity(Point &vel, U32 max, BitStream *stream);
 
-   virtual Point getRenderPos();
    virtual Point getActualPos();
+   virtual Point getRenderPos();
    virtual Point getRenderVel() { return Point(); }
    virtual Point getActualVel() { return Point(); }
 
@@ -217,7 +249,7 @@ public:
    virtual void damageObject(DamageInfo *damageInfo);
 
    bool onGhostAdd(GhostConnection *theConnection);
-   void disableCollision() { TNLAssert(mDisableCollisionCount < 10, "Too many disabled collision"); mDisableCollisionCount++; }
+   void disableCollision() { TNLAssert(mDisableCollisionCount < 10, "Too many disabled collisions"); mDisableCollisionCount++; }
    void enableCollision() { TNLAssert(mDisableCollisionCount != 0, "Trying to enable collision, already enabled"); mDisableCollisionCount--; }
    bool isCollisionEnabled() { return mDisableCollisionCount == 0; }
 
@@ -225,12 +257,12 @@ public:
    bool collisionPolyPointIntersect(Vector<Point> points);
    bool collisionPolyPointIntersect(Point center, F32 radius);
 
-   virtual bool processArguments(S32 argc, const char**argv);
    void setScopeAlways();
 
    S32 getTeamIndx(lua_State *L) { return LuaObject::returnInt(L, mTeam + 1); }             // Return item team to Lua
    virtual void push(lua_State *L) { TNLAssert(false, "Unimplemented push function!"); }    // Lua-aware classes will implement this
 };
+
 
 };
 

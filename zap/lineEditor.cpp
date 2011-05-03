@@ -109,20 +109,12 @@ void LineEditor::drawCursor(S32 x, S32 y, U32 fontSize, S32 startingWidth)
 // Draw our cursor, assuming string is drawn at x,y at specified angle 
 void LineEditor::drawCursorAngle(F32 x, F32 y, F32 fontSize, F32 angle)
 {
-   drawCursorAngle(S32(x + 0.5), S32(y + 0.5), fontSize, angle);
-}
-
-
-void LineEditor::drawCursorAngle(S32 x, S32 y, F32 fontSize, F32 angle)
-{
    if(cursorBlink)
    {
-      S32 w = UserInterface::getStringWidth(fontSize, mLine.c_str());
-      F32 cosang = cos(angle); 
-      F32 sinang = sin(angle);
+      F32 w = UserInterface::getStringWidthF32(fontSize, mLine.c_str());
 
-      F32 xpos = x + (w * cosang ); 
-      F32 ypos = y + (w * sinang ); 
+      F32 xpos = x + (w * cos(angle)); 
+      F32 ypos = y + (w * sin(angle)); 
 
       UserInterface::drawAngleString_fixed(xpos, ypos, (F32)fontSize, angle, "_");
    }

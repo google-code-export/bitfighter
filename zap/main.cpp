@@ -1623,10 +1623,11 @@ void processStartupParams()
 
    // Note that we can be in both clientMode and serverMode (such as when we're hosting a game interactively)
 
-   if(gCmdLineSettings.clientMode)               // Create ClientGame object
+   if(gCmdLineSettings.clientMode)                // Create ClientGame object
    {
       gClientGame1 = new ClientGame(Address());   //   Let the system figure out IP address and assign a port
       gClientGame = gClientGame1;
+      gEditorGame = new EditorGame();
    }
       //gClientGame2 = new ClientGame(Address());   //  !!! 2-player split-screen game in same game.
 
@@ -1656,6 +1657,7 @@ void processStartupParams()
             gClientGame = gClientGame2;
             gClientGame1->mUserInterfaceData->get();
             gMainMenuUserInterface.activate();
+
             gClientGame2->mUserInterfaceData->get();
             gClientGame1->mUserInterfaceData->set();
             gClientGame = gClientGame1;
@@ -1965,6 +1967,8 @@ void setJoystick(ControllerTypeType jsType)
 extern void clearINIComments();
 
 // Function to handle one-time update tasks
+// Use this when upgrading, and changing something like the name of an INI parameter.  The old version is stored in
+// gIniSettings.version, and the new version is in BUILD_VERSION.
 void checkIfThisIsAnUpdate()
 {
    if(gIniSettings.version == BUILD_VERSION)

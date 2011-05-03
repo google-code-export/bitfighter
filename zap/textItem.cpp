@@ -24,8 +24,10 @@
 //------------------------------------------------------------------------------------
 
 #include "textItem.h"
+#include "UIEditorMenus.h"       // For TextItemEditorAttributeMenuUI def
 #include "gameNetInterface.h"
 #include "glutInclude.h"
+#include "gameObjectRender.h"    // For renderPointVector()
 
 namespace Zap
 {
@@ -39,18 +41,61 @@ const U32 TextItem::MAX_TEXT_SIZE;
 const U32 TextItem::MIN_TEXT_SIZE;
 #endif
 
+
+EditorAttributeMenuUI *TextItem::mAttributeMenuUI = NULL;
+
+
 // Constructor
 TextItem::TextItem()
 {
    mNetFlags.set(Ghostable);
-   mObjectTypeMask |= CommandMapVisType;     // Or not?
+   mObjectTypeMask = TextItemType | CommandMapVisType;     // Or not?
+
+   // Some default values
+   mSize = 20;
+   mTeam = Item::TEAM_NEUTRAL;
 }
 
 
+// Destructor
+TextItem::~TextItem()
+{
+   // Do nothing
+}
+
+
+void TextItem::initializeEditor(F32 gridSize)
+{
+   SimpleLine::initializeEditor(gridSize);
+
+   mText = "Your text here";
+   recalcTextSize();
+}
+
+
+// In game rendering
 void TextItem::render()
 {
-   renderTextItem(pos, dir, mSize, mTeam, mText);
+   ClientGame *game = dynamic_cast<ClientGame *>(getGame());
+   
+   // Don't render opposing team's text items
+   if(!game || !game->getConnectionToServer() || !game->getGameType())
+      return;
+
+   Ship *ship = dynamic_cast<Ship *>(game->getConnectionToServer()->getControlObject());
+   if( (!ship && mTeam != -1) || (ship && ship->getTeam() != mTeam && mTeam != -1) )
+      return;
+
+   renderTextItem(mPos, mDir, mSize, mText, game->getGameType()->getTeamColor(mTeam));
 }
+
+
+// Called by SimpleItem::renderEditor()
+void TextItem::renderEditorItem(F32 currentScale)
+{
+   renderTextItem(mPos, mDir, mSize, mText, getGame()->getTeamColor(mTeam));
+}
+
 
 // This object should be drawn below others
 S32 TextItem::getRenderSortValue()
@@ -68,18 +113,17 @@ bool TextItem::processArguments(S32 argc, const char **argv)
 
    mTeam = atoi(argv[0]);
 
-   pos.read(argv + 1);
-   pos *= getGame()->getGridSize();
+   mPos.read(argv + 1);
+   mPos *= getGame()->getGridSize();
 
-   dir.read(argv + 3);
-   dir *= getGame()->getGridSize();
+   mDir.read(argv + 3);
+   mDir *= getGame()->getGridSize();
 
-   mSize = atoi(argv[5]);
-   if (mSize > MAX_TEXT_SIZE)
-      mSize = MAX_TEXT_SIZE;
-   else if(mSize < MIN_TEXT_SIZE)
-      mSize = MIN_TEXT_SIZE;
+   mSize = atof(argv[5]);
+   mSize = max(min(mSize, MAX_TEXT_SIZE), MIN_TEXT_SIZE);      // Note that same line exists below, in recalcXXX()... combine?
 
+   // Assemble any remainin args into a string
+   mText = "";
    for(S32 i = 6; i < argc; i++)
    {
       mText += argv[i];
@@ -87,12 +131,34 @@ bool TextItem::processArguments(S32 argc, const char **argv)
          mText += " ";
    }
 
-   mText = mText.substr(0, MAX_TEXTITEM_LEN-1);      // Limit length to MAX_TEXTITEM_LEN chars (leaving room for a trailing null)
-
-
    computeExtent();
 
    return true;
+}
+
+
+string TextItem::toString()
+{
+   F32 gs = getGame()->getGridSize();
+
+   char outString[LevelLoader::MAX_LEVEL_LINE_LENGTH];
+   dSprintf(outString, sizeof(outString), "%s %d %g %g %g %g %g %s", Object::getClassName(), mTeam, 
+                                          mPos.x / gs, mPos.y / gs, mDir.x / gs, mDir.y / gs, mSize, mText.c_str());
+   return outString;
+}
+
+
+// Editor
+void TextItem::recalcTextSize()
+{
+   const F32 dummyTextSize = 120;
+
+   F32 lineLen = getVert(0).distanceTo(getVert(1));      // In in-game units
+   F32 strWidth = F32(UserInterface::getStringWidth(dummyTextSize, mText.c_str())) / dummyTextSize; 
+   F32 size = lineLen / strWidth;
+
+   // Compute text size subject to min and max defined in TextItem
+   mSize = max(min(size, MAX_TEXT_SIZE), MIN_TEXT_SIZE);
 }
 
 
@@ -111,15 +177,15 @@ void TextItem::computeExtent()
    U32 len = UserInterface::getStringWidth(mSize, mText.c_str());
    U32 buf = mSize / 2;     // Provides some room to accomodate descenders on letters like j and g.
 
-   F32 angle =  pos.angleTo(dir);
+   F32 angle =  mPos.angleTo(mDir);
    F32 sinang = sin(angle);
    F32 cosang = cos(angle);
 
    F32 descenderFactor = .35;    // To account for y, g, j, etc.
    F32 h = mSize * (1 + descenderFactor);
    F32 w = len * 1.05;           // 1.05 adds just a little horizontal padding for certain words with trailing ys or other letters that are just a tiny bit longer than calculated
-   F32 x = pos.x + mSize * descenderFactor * sinang;
-   F32 y = pos.y + mSize * descenderFactor * cosang;
+   F32 x = mPos.x + mSize * descenderFactor * sinang;
+   F32 y = mPos.y + mSize * descenderFactor * cosang;
 
    F32 c1x = x - h * sinang * .5;
    F32 c1y = y;
@@ -162,11 +228,11 @@ void TextItem::idle(GameObject::IdleCallPath path)
 
 U32 TextItem::packUpdate(GhostConnection *connection, U32 updateMask, BitStream *stream)
 {
-   stream->write(pos.x);
-   stream->write(pos.y);
+   stream->write(mPos.x);
+   stream->write(mPos.y);
 
-   stream->write(dir.x);
-   stream->write(dir.y);
+   stream->write(mDir.x);
+   stream->write(mDir.y);
 
    stream->writeRangedU32(mSize, 0, MAX_TEXT_SIZE);
    stream->write(mTeam);
@@ -180,11 +246,11 @@ void TextItem::unpackUpdate(GhostConnection *connection, BitStream *stream)
 {
    char txt[MAX_TEXTITEM_LEN];
 
-   stream->read(&pos.x);
-   stream->read(&pos.y);
+   stream->read(&mPos.x);
+   stream->read(&mPos.y);
 
-   stream->read(&dir.x);
-   stream->read(&dir.y);
+   stream->read(&mDir.x);
+   stream->read(&mDir.y);
 
    mSize = stream->readRangedU32(0, MAX_TEXT_SIZE);
    stream->read(&mTeam);
@@ -194,6 +260,51 @@ void TextItem::unpackUpdate(GhostConnection *connection, BitStream *stream)
    mText = txt;
    computeExtent();
 }
+
+
+///// Editor Methods
+
+// Runs when text is being changed in the editor
+void TextItem::onAttrsChanging()
+{
+   onGeomChanged();
+}
+
+void TextItem::onAttrsChanged()
+{
+   onGeomChanged();
+}
+
+void TextItem::onGeomChanging()
+{
+   onGeomChanged();
+}
+
+void TextItem::onGeomChanged()
+{
+   recalcTextSize();
+}
+
+
+// Static method: Provide hook into the object currently being edited with the attrubute editor for callback purposes
+EditorObject *TextItem::getAttributeEditorObject()     
+{ 
+   return mAttributeMenuUI->getObject(); 
+}
+
+
+EditorAttributeMenuUI *TextItem::getAttributeMenu()
+{
+   // Lazily initialize this -- if we're in the game, we'll never need this to be instantiated
+   if(!mAttributeMenuUI)
+      mAttributeMenuUI = new TextItemEditorAttributeMenuUI;
+
+   // Udate the editor with attributes from our current object
+   mAttributeMenuUI->menuItems[0]->setValue(mText);
+
+   return mAttributeMenuUI;
+}
+
 
 ////////////////////////////////////////
 ////////////////////////////////////////
@@ -223,12 +334,7 @@ void LineItem::render()
 
    glColor(gt->getTeamColor(mTeam));
 
-   //TNLAssert(mRenderPoints.size() % 4 == 0, "Invalid number of points in mRenderPoints vector!");
-
-   glBegin(GL_LINE_STRIP); 
-      for(S32 i = 0; i < mPolyBounds.size(); i++)
-         glVertex(mPolyBounds[i]);
-   glEnd();
+   renderPointVector(mPolyBounds, GL_LINE_STRIP);
 }
 
 // This object should be drawn below others

@@ -84,15 +84,14 @@ public:
    string getString() const { return mLine; }                              // Return the string in string format
    const string *getStringPtr() const { return &mLine; }
    string getDisplayString() const { return mSecret ? string(mLine.length(), '*') : mLine; }
-   void setString(string str) { mLine.assign(str.substr(0, mMaxLen)); }    // Set the string
-   void setPrompt(string prompt) { mPrompt = prompt; }
+   void setString(const string &str) { mLine.assign(str.substr(0, mMaxLen)); }    // Set the string
+   void setPrompt(const string &prompt) { mPrompt = prompt; }
    string getPrompt() { return mPrompt; }
-   const char *c_str() { return mLine.c_str(); }                 // Return the string in c_str format
+   const char *c_str() { return mLine.c_str(); }                     // Return the string in c_str format
 
-   void drawCursor(S32 x, S32 y, U32 fontSize);                     // Draw our cursor, assuming string is drawn at x,y
-   void drawCursor(S32 x, S32 y, U32 fontSize, S32 startingWidth);  // Draw cursor starting at a given width
-   void drawCursorAngle(S32 x, S32 y, F32 fontSize, F32 angle);    // Draw our cursor, assuming string is drawn at x,y at specified angle
-   void drawCursorAngle(F32 x, F32 y, F32 fontSize, F32 angle);
+   void drawCursor(S32 x, S32 y, U32 fontSize);                      // Draw our cursor, assuming string is drawn at x,y
+   void drawCursor(S32 x, S32 y, U32 fontSize, S32 startingWidth);   // Draw cursor starting at a given width
+   void drawCursorAngle(F32 x, F32 y, F32 fontSize, F32 angle);      // Draw our cursor, assuming string is drawn at x,y at specified angle
 
    // For tab expansion 
    Vector<string> matchList;

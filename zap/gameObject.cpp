@@ -40,6 +40,41 @@ using namespace TNL;
 namespace Zap
 {
 
+////////////////////////////////////////
+////////////////////////////////////////
+
+GridDatabase *XObject::getGridDatabase() 
+{ 
+   return mGame ? mGame->getGridDatabase() : NULL; 
+}
+
+
+bool XObject::getCollisionPoly(Vector<Point> &polyPoints)
+{
+   return false;
+}
+
+
+bool XObject::getCollisionCircle(U32 stateIndex, Point &point, float &radius)
+{
+   return false;
+}
+
+
+void XObject::render()
+{
+   // Do nothing
+}
+
+
+void XObject::render(S32 layerIndex)
+{
+   if(layerIndex == 1)
+      render();
+}
+
+////////////////////////////////////////
+////////////////////////////////////////
 // Constructor
 GameObject::GameObject()
 {
@@ -94,12 +129,6 @@ void GameObject::setScopeAlways()
 void GameObject::setActualPos(Point p)
 {
    // Do nothing
-}
-
-
-GridDatabase *GameObject::getGridDatabase() 
-{ 
-   return mGame ? mGame->getGridDatabase() : NULL; 
 }
 
 
@@ -289,16 +318,6 @@ void GameObject::removeFromGame()
    }
 }
 
-bool GameObject::getCollisionPoly(Vector<Point> &polyPoints)
-{
-   return false;
-}
-
-bool GameObject::getCollisionCircle(U32 stateIndex, Point &point, float &radius)
-{
-   return false;
-}
-
 
 Rect GameObject::getBounds(U32 stateIndex)
 {
@@ -384,19 +403,6 @@ bool GameObject::collisionPolyPointIntersect(Point center, F32 radius)
 }
 
 
-void GameObject::render()
-{
-   // Do nothing
-}
-
-
-void GameObject::render(S32 layerIndex)
-{
-   if(layerIndex == 1)
-      render();
-}
-
-
 void GameObject::idle(IdleCallPath path)
 {
    // Do nothing
@@ -466,18 +472,12 @@ void GameObject::readCompressedVelocity(Point &vel, U32 max, BitStream *stream)
    }
 }
 
-// Gets overridden by child classes
-bool GameObject::processArguments(S32 argc, const char**argv)
-{
-   return true;
-}
 
 bool GameObject::onGhostAdd(GhostConnection *theConnection)
 {
    addToGame(gClientGame);
    return true;
 }
-
 
 
 };

@@ -60,15 +60,24 @@ protected:
 class Polygon : public Polyline
 {
 protected:
+   Vector<Point> mPolyFill;      // Triangles used for rendering polygon fill
+   Point mCentroid;
    void processPolyBounds(S32 argc, const char **argv, S32 firstCoord, F32 gridSize);
 
 public:
    typedef Polyline Parent;
-   Point mCentroid;
-   Vector<Point> mPolyFill;      // Triangles used for rendering polygon fill
    F32 mLabelAngle;
 
+   Point getCentroid() { return mCentroid; }
+
+   Vector<Point> *getPolyFillPoints() { return &mPolyFill; }
+
    U32 unpackUpdate(GhostConnection *connection, BitStream *stream);
+
+   // Editor methods... to move?
+   // Offset lets us drag an item out from the dock by an amount offset from the 0th vertex.  This makes placement seem more natural.
+   Point getInitialPlacementOffset() { return Point(.25, .15); }
+
 };
 
 

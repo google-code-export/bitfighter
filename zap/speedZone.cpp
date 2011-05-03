@@ -29,6 +29,7 @@
 #include "gameNetInterface.h"
 #include "gameObjectRender.h"
 #include "ship.h"
+#include "UIEditorMenus.h"    // For GoFastEditorAttributeMenuUI def
 #include "UI.h"
 #include "../glut/glutInclude.h"
 
@@ -44,74 +45,92 @@ const U16 SpeedZone::defaultSpeed;
 
 TNL_IMPLEMENT_NETOBJECT(SpeedZone);
 
+EditorAttributeMenuUI *SpeedZone::mAttributeMenuUI = NULL;
+
+
 // Constructor
 SpeedZone::SpeedZone()
 {
    mNetFlags.set(Ghostable);
    mObjectTypeMask = SpeedZoneType | CommandMapVisType;
+
    mSpeed = defaultSpeed;
    mSnapLocation = false;     // Don't snap unless specified
    mRotateSpeed = 0;
-   mUnpackInit = 0;    // Some form of counter, to know that it is a rotating speed zone.
+   mUnpackInit = 0;           // Some form of counter, to know that it is a rotating speed zone
 }
 
+
+// Destructor
+SpeedZone::~SpeedZone()
+{
+   //delete mAttributeMenuUI;
+}
 
 // Take our basic inputs, pos and dir, and expand them into a three element
 // vector (the three points of our triangle graphic), and compute its extent
 void SpeedZone::preparePoints()
 {
-   mPolyBounds = generatePoints(pos, dir);
+   Game *game = getGame();
+
+   TNLAssert(game, "game should not be null here!");
+   generatePoints(pos, dir, 1, mPolyBounds);
+
    computeExtent();
 }
 
-Vector<Point> SpeedZone::generatePoints(Point pos, Point dir)
+
+void SpeedZone::generatePoints(const Point &pos, const Point &dir, F32 gridSize, Vector<Point> &points)
 {
-   Vector<Point> points;
+   const S32 inset = 3;
+   const F32 halfWidth = SpeedZone::halfWidth;
+   const F32 height = SpeedZone::height;
 
-   //// Yes, we already did this if we came from processArguments,
-   //// but not if we came from elsewhere, like UIInstructions
-   //Point offset(dir - pos);
-   //offset.normalize();
-   //dir = Point(pos + offset * SpeedZone::height);
-
-   //Point perpendic(pos.y - dir.y, dir.x - pos.x);
-   //perpendic.normalize();
-
-   //points.push_back(pos + perpendic * SpeedZone::halfWidth);
-   //points.push_back(dir);
-   //points.push_back(pos - perpendic * SpeedZone::halfWidth);
+   points.resize(12);
 
    Point parallel(dir - pos);
    parallel.normalize();
 
-   Point tip = pos + parallel * SpeedZone::height;
+   const F32 chevronThickness = height / 3;
+   const F32 chevronDepth = halfWidth - inset;
+
+   Point tip = pos + parallel * height;
    Point perpendic(pos.y - tip.y, tip.x - pos.x);
    perpendic.normalize();
 
-   const S32 inset = 3;
-   const F32 chevronThickness = SpeedZone::height / 3;
-   const F32 chevronDepth = SpeedZone::halfWidth - inset;
    
-   for(S32 j = 0; j < 2; j++)
+   S32 index = 0;
+
+   for(S32 i = 0; i < 2; i++)
    {
-      S32 offset = SpeedZone::halfWidth * 2 * j - (j * 4);
+      F32 offset = halfWidth * 2 * i - (i * 4);
 
       // Red chevron
-      points.push_back(pos + parallel * (chevronThickness + offset));                                          
-      points.push_back(pos + perpendic * (SpeedZone::halfWidth-2*inset) + parallel * (inset + offset));                                   //  2   3
-      points.push_back(pos + perpendic * (SpeedZone::halfWidth-2*inset) + parallel * (chevronThickness + inset + offset));                //    1    4
-      points.push_back(pos + parallel * (chevronDepth + chevronThickness + inset + offset));                                              //  6    5
-      points.push_back(pos - perpendic * (SpeedZone::halfWidth-2*inset) + parallel * (chevronThickness + inset + offset));
-      points.push_back(pos - perpendic * (SpeedZone::halfWidth-2*inset) + parallel * (inset + offset));
+      points[index++] = pos + parallel *  (chevronThickness + offset);                                          
+      points[index++] = pos + perpendic * (halfWidth-2*inset) + parallel * (inset + offset);                             //  2   3
+      points[index++] = pos + perpendic * (halfWidth-2*inset) + parallel * (chevronThickness + inset + offset);          //    1    4
+      points[index++] = pos + parallel *  (chevronDepth + chevronThickness + inset + offset);                            //  6    5
+      points[index++] = pos - perpendic * (halfWidth-2*inset) + parallel * (chevronThickness + inset + offset);
+      points[index++] = pos - perpendic * (halfWidth-2*inset) + parallel * (inset + offset);
    }
-
-   return points;
 }
 
 
 void SpeedZone::render()
 {
-   renderSpeedZone(mPolyBounds, gClientGame->getCurrentTime());
+   renderSpeedZone(mPolyBounds, getGame()->getCurrentTime());
+}
+
+
+void SpeedZone::renderEditorItem(F32 currentScale)
+{
+   render();
+}
+
+
+void SpeedZone::onGeomChanged()   
+{  
+   generatePoints(pos, dir, 1, mPolyBounds); 
 }
 
 
@@ -122,32 +141,69 @@ S32 SpeedZone::getRenderSortValue()
 }
 
 
+// Runs on server and client
+void SpeedZone::onAddedToGame(Game *theGame)
+{
+   if(!isGhost())
+      setScopeAlways();    // Runs on server
+   else
+      preparePoints();     // Runs on client
+
+   theGame->mObjectsLoaded++;
+}
+
+
+// Bounding box for quick collision-possibility elimination
+void SpeedZone::computeExtent()
+{
+   setExtent(Rect(mPolyBounds));
+}
+
+
+// More precise boundary for more precise collision detection
+bool SpeedZone::getCollisionPoly(Vector<Point> &polyPoints)
+{
+   polyPoints.resize(mPolyBounds.size());
+
+   for(S32 i = 0; i < mPolyBounds.size(); i++)
+      polyPoints[i] = mPolyBounds[i];
+
+   return true;
+}
+
+
 // Create objects from parameters stored in level file
 bool SpeedZone::processArguments(S32 argc2, const char **argv2)
 {
    S32 argc = 0;
-   const char *argv[8];  // 8 is ok, SpeedZone only supports 4 numbered args.
-   for(S32 i=0; i<argc2; i++)  // the idea here is to allow optional R3.5 for rotate at speed of 3.5
+   const char *argv[8];                // 8 is ok, SpeedZone only supports 4 numbered args
+
+   for(S32 i = 0; i < argc2; i++)      // The idea here is to allow optional R3.5 for rotate at speed of 3.5
    {
-      char c = argv2[i][0];
-      switch(c)
+      char firstChar = argv2[i][0];    // First character of arg
+
+      switch(firstChar)
       {
-      case 'R': mRotateSpeed = atof(&argv2[i][1]); break;  // using second char to handle number, "R3.4" or "R-1.7"
-      case 'S':
-         if(strcmp(argv2[i], "SnapEnable"))
-            mSnapLocation = true;
-         break;
+         case 'R': 
+            mRotateSpeed = atof(&argv2[i][1]); 
+            break;  // using second char to handle number, "R3.4" or "R-1.7"
+         case 'S':
+            if(!strcmp(argv2[i], "SnapEnable"))
+               mSnapLocation = true;
+            break;
       }
-      if((c < 'a' || c > 'z') && (c < 'A' || c > 'Z'))
+
+      if((firstChar < 'a' || firstChar > 'z') && (firstChar < 'A' || firstChar > 'Z'))    // firstChar is not a letter
       {
          if(argc < 8)
-         {  argv[argc] = argv2[i];
+         {  
+            argv[argc] = argv2[i];
             argc++;
          }
       }
    }
 
-   // all string and chars args is processed, numbered arguments left from here down.
+   // All "special" args have been processed, now we process the standard args
 
    if(argc < 4)      // Need two points at a minimum, with an optional speed item
       return false;
@@ -163,45 +219,44 @@ bool SpeedZone::processArguments(S32 argc2, const char **argv2)
    offset.normalize();
    dir = Point(pos + offset * height);
 
-   preparePoints();
-
    if(argc >= 5)
       mSpeed = max(minSpeed, min(maxSpeed, (U16)(atoi(argv[4]))));
 
+   preparePoints();
+
    return true;
 }
 
 
-void SpeedZone::onAddedToGame(Game *theGame)
+// Editor
+string SpeedZone::toString()
 {
-   if(!isGhost())
-      setScopeAlways();
+   F32 gs = getGame()->getGridSize();
 
-   getGame()->mObjectsLoaded++;
+   char outString[LevelLoader::MAX_LEVEL_LINE_LENGTH];
+   dSprintf(outString, sizeof(outString), "%s %g %g %g %g %d", getClassName(), pos.x / gs, pos.y / gs, dir.x /gs, dir.y /gs, mSpeed);
+   return outString;
 }
 
 
-// Bounding box for quick collision-possibility elimination
-void SpeedZone::computeExtent()
+const char *SpeedZone::getEditMessage(S32 line)
 {
-   Rect extent(mPolyBounds[0], mPolyBounds[0]);
-   for(S32 i = 1; i < mPolyBounds.size(); i++)
-      extent.unionPoint(mPolyBounds[i]);
-
-   setExtent(extent);
+   return line == 0 ? "[Enter] to edit attributes" : "";
 }
 
 
-// More precise boundary for more precise collision detection
-bool SpeedZone::getCollisionPoly(Vector<Point> &polyPoints)
+EditorAttributeMenuUI *SpeedZone::getAttributeMenu()
 {
-   for(S32 i = 0; i < mPolyBounds.size(); i++)
-      polyPoints.push_back(mPolyBounds[i]);
-   return true;
+   // Lazily initialize this -- if we're in the game, we'll never need this to be instantiated
+   if(!mAttributeMenuUI)
+      mAttributeMenuUI = new GoFastEditorAttributeMenuUI;
+
+   return mAttributeMenuUI;
 }
 
 
 static bool ignoreThisCollision = false;
+
 // Checks collisions with a SpeedZone
 bool SpeedZone::collide(GameObject *hitObject)
 {
@@ -229,87 +284,63 @@ bool SpeedZone::collide(GameObject *hitObject)
    return false;
 }
 
+
 // Handles collisions with a SpeedZone
 void SpeedZone::collided(MoveObject *s, U32 stateIndex)
 {
+   MoveObject::MoveState *moveState = &s->mMoveState[stateIndex];
+
+   Point impulse = (dir - pos);
+   impulse.normalize(mSpeed);
+   Point shipNormal = moveState->vel;
+   shipNormal.normalize(mSpeed);
+   F32 angleSpeed = mSpeed * 0.5f;
+
+   // Using mUnpackInit, as client does not know that mRotateSpeed is not zero.
+   if(mSnapLocation && mRotateSpeed == 0 && mUnpackInit < 3)
+      angleSpeed *= 0.01f;
+   if(shipNormal.distanceTo(impulse) < angleSpeed && moveState->vel.len() > mSpeed)
+      return;
+
+   // This following line will cause ships entering the speedzone to have their location set to the same point
+   // within the zone so that their path out will be very predictable.
+   if(mSnapLocation)
    {
-      MoveObject::MoveState *moveState = &s->mMoveState[stateIndex];
-     // Make sure ship hasn't been excluded
-      //for(S32 i = 0; i < mExclusions.size(); i++)
-         //if(mExclusions[i].ship == s)
-            //return false;
-      // Using ship's velosity and position to determine if it should be excluded
+      Point diffpos = moveState->pos - pos;
+      Point thisAngle = dir - pos;
+      thisAngle.normalize();
+      Point newPos = thisAngle * diffpos.dot(thisAngle) + pos + impulse * 0.001;
 
+      Point oldVel = moveState->vel;
+      Point oldPos = moveState->pos;
 
-      Point impulse = (dir - pos);
-      impulse.normalize(mSpeed);
-      Point shipNormal = moveState->vel;
-      shipNormal.normalize(mSpeed);
-      F32 angleSpeed = mSpeed * 0.5f;
+      ignoreThisCollision = true;
+      moveState->vel = newPos - moveState->pos;
+      s->move(1, stateIndex, false);
+      ignoreThisCollision = false;
 
-         // using mUnpackInit, as client does not know that mRotateSpeed is not zero.
-      if(mSnapLocation && mRotateSpeed == 0 && mUnpackInit < 3)
-         angleSpeed *= 0.01f;
-      if(shipNormal.distanceTo(impulse) < angleSpeed && moveState->vel.len() > mSpeed)
+      if(s->getActualPos().distSquared(newPos) > 1)  // make sure we can get to the position without going through walls.
+      {
+         moveState->pos = oldPos;
+         moveState->vel = oldVel;
+         return;
+      }
+      moveState->vel = impulse * 1.5;     // Why multiply by 1.5?
+   }
+   else
+   {
+      if(shipNormal.distanceTo(impulse) < mSpeed && moveState->vel.len() > mSpeed * 0.8)
          return;
 
-      // This following line will cause ships entering the speedzone to have their location set to the same point
-      // within the zone so that their path out will be very predictable.
-      if(mSnapLocation)
-      {
-         //s->setActualPos(pos, false);
+      moveState->vel += impulse * 1.5;    // Why multiply by 1.5?
+   }
 
-         Point diffpos = moveState->pos - pos;
-         Point thisAngle = dir - pos;
-         thisAngle.normalize();
-         Point newPos = thisAngle * diffpos.dot(thisAngle) + pos + impulse * 0.001;
-         //s->setActualPos(newpos, false);
-
-         Point oldVel = moveState->vel;
-         Point oldPos = moveState->pos;
-
-         ignoreThisCollision = true;
-         moveState->vel = newPos - moveState->pos;
-         s->move(1, stateIndex, false);
-         ignoreThisCollision = false;
-
-         if(s->getActualPos().distSquared(newPos) > 1)  // make sure we can get to the position without going through walls.
-         {
-            moveState->pos = oldPos;
-            moveState->vel = oldVel;
-            return;
-         }
-         //s->mImpulseVector = impulse * 1.5;     // <-- why???
-         moveState->vel = impulse * 1.5;
-         //moveState->pos = newPos;
-
-      }
-      else
-      {
-         if(shipNormal.distanceTo(impulse) < mSpeed && moveState->vel.len() > mSpeed * 0.8)
-            return;
-         //s->mImpulseVector = impulse * 1.5;     // <-- why???
-         moveState->vel += impulse * 1.5;
-      }
-
-
-
-      // To ensure we don't give multiple impulses to the same ship, we'll exclude it from
-      // further action for about 300ms.  That should do the trick.
-
-      //Exclusion exclusion;
-      //exclusion.ship = s;
-      //exclusion.time = getGame()->getCurrentTime() + 300;
-
-      //mExclusions.push_back(exclusion);
-
-      if(!s->isGhost() && stateIndex == MoveObject::ActualState) // only server needs to send information.
-      {
-         setMaskBits(HitMask);
-         if(s->getControllingClient().isValid())
-            // Trigger a sound on the player's machine: They're going to be so far away they'll never hear the sound emitted by the gofast itself...
-            s->getControllingClient()->s2cDisplayMessage(0, SFXGoFastInside, "");
-      }
+   if(!s->isGhost() && stateIndex == MoveObject::ActualState)  // Only server needs to send information
+   {
+      setMaskBits(HitMask);
+      if(s->getControllingClient().isValid())
+         // Trigger a sound on the player's machine: They're going to be so far away they'll never hear the sound emitted by the gofast itself...
+         s->getControllingClient()->s2cDisplayMessage(0, SFXGoFastInside, "");
    }
 
 }
@@ -317,10 +348,6 @@ void SpeedZone::collided(MoveObject *s, U32 stateIndex)
 
 void SpeedZone::idle(GameObject::IdleCallPath path)
 {
-   // Check for old exclusions that no longer apply
-   //for(S32 i = mExclusions.size()-1; i >= 0; i--)
-      //if(mExclusions[i].time < getGame()->getCurrentTime())     // Exclusion has expired
-         //mExclusions.erase_fast(i);
    if(mRotateSpeed != 0)
    {
       dir -= pos;
@@ -329,7 +356,8 @@ void SpeedZone::idle(GameObject::IdleCallPath path)
       dir.setPolar(1, angle);
       dir += pos;
       setMaskBits(InitMask);
-      preparePoints();     // avoids off center problem..
+
+      preparePoints();     // Avoids "off center" problem
    }
 }
 
@@ -354,7 +382,7 @@ U32 SpeedZone::packUpdate(GhostConnection *connection, U32 updateMask, BitStream
 
 void SpeedZone::unpackUpdate(GhostConnection *connection, BitStream *stream)
 {
-   if(stream->readFlag())
+   if(stream->readFlag())     // InitMask
    {
       mUnpackInit++;
       stream->read(&pos.x);
@@ -365,9 +393,8 @@ void SpeedZone::unpackUpdate(GhostConnection *connection, BitStream *stream)
 
       mSpeed = stream->readInt(16);
       mSnapLocation = stream->readFlag();
-
-      preparePoints();
    }
+
    else 
       SFXObject::play(SFXGoFastOutside, pos, pos);
 }

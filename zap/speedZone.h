@@ -26,6 +26,7 @@
 #ifndef _GO_FAST_H_
 #define _GO_FAST_H_
 
+#include "SimpleLine.h"    // For SimpleLine def
 #include "gameObject.h"
 #include "gameType.h"
 #include "gameNetInterface.h"
@@ -37,25 +38,24 @@
 namespace Zap
 {
 
-class SpeedZone : public GameObject
+class SpeedZone : public SimpleLine
 {
-private:
-
    typedef GameObject Parent;
+
+private:
    Vector<Point> mPolyBounds;
-
-   //struct Exclusion {
-   //   Ship *ship;
-   //   U32 time;
-   //};
-
-   // To keep a ship from triggering the SpeedZone multiple times in one go, we'll exclude any ships
-   // that hit the zone from hitting it again within a brief time.
-   //Vector<Exclusion> mExclusions;
-
+   U16 mSpeed;             // Speed at which ship is propelled, defaults to defaultSpeed
+   bool mSnapLocation;     // If true, ship will be snapped to center of speedzone before being ejected
+   
    // Take our basic inputs, pos and dir, and expand them into a three element
    // vector (the three points of our triangle graphic), and compute its extent
    void preparePoints();
+
+   // How are things labeled in the editor? 
+   const char *getVertLabel(S32 index) { return index == 0 ? "Location" : "Direction"; }
+   const char *getEditMessage(S32 line);
+
+   static EditorAttributeMenuUI *mAttributeMenuUI;      // Menu for attribute editing; since it's static, don't bother with smart pointer
 
 public:
    enum {
@@ -67,24 +67,32 @@ public:
       HitMask      = BIT(1),
    };
 
+   SpeedZone();   // Constructor
+   ~SpeedZone();  // Destructor
+
    static const U16 minSpeed = 500;       // How slow can you go?
    static const U16 maxSpeed = 5000;      // Max speed for the goFast
    static const U16 defaultSpeed = 2000;  // Default speed if none specified
+
+   U16 getSpeed() { return mSpeed; }
+   void setSpeed(U16 speed) { mSpeed = speed; }
+
+   bool getSnapping() { return mSnapLocation; }
+   void setSnapping(bool snapping) { mSnapLocation = snapping; }
 
    F32 mRotateSpeed;
    U32 mUnpackInit;  // Some form of counter, to know that it is a rotating speed zone.
 
    Point pos;
    Point dir;
-   U16 mSpeed;             // Speed at which ship is propelled, defaults to defaultSpeed
-   bool mSnapLocation;     // If true, ship will be snapped to center of speedzone before being ejected
-   
-   SpeedZone();   // Constructor
-   static Vector<Point> generatePoints(Point pos, Point dir);
+
+   static void generatePoints(const Point &pos, const Point &dir, F32 gridSize, Vector<Point> &points);
    void render();
    S32 getRenderSortValue();
 
    bool processArguments(S32 argc, const char **argv);           // Create objects from parameters stored in level file
+   string toString();
+
    void onAddedToGame(Game *theGame);
    void computeExtent();                                         // Bounding box for quick collision-possibility elimination
 
@@ -94,6 +102,35 @@ public:
    void idle(GameObject::IdleCallPath path);
    U32 packUpdate(GhostConnection *connection, U32 updateMask, BitStream *stream);
    void unpackUpdate(GhostConnection *connection, BitStream *stream);
+
+   ///// Editor methods 
+   // Offset lets us drag an item out from the dock by an amount offset from the 0th vertex.  This makes placement seem more natural.
+   Point getInitialPlacementOffset() { return Point(.15,0); }
+
+   Color getEditorRenderColor() { return Color(1,0,0); }
+
+   void renderEditorItem(F32 currentScale);
+
+   Point getVert(S32 index) { return index == 0 ? pos : dir; }
+   void setVert(const Point &point, S32 index) { if(index == 0) pos = point; else dir = point; }
+
+   void onAttrsChanging() { /* Do nothing */ }
+   void onGeomChanging() { onGeomChanged(); }
+   void onItemDragging() { onGeomChanged(); }
+   void onGeomChanged();
+
+   EditorAttributeMenuUI *getAttributeMenu();
+
+   void saveItem(FILE *f);
+
+   // Some properties about the item that will be needed in the editor
+   const char *getEditorHelpString() { return "Makes ships go fast in direction of arrow. [P]"; }  
+   const char *getPrettyNamePlural() { return "GoFasts"; }
+   const char *getOnDockName() { return "GoFast"; }
+   const char *getOnScreenName() { return "GoFast"; }
+   bool hasTeam() { return false; }
+   bool canBeHostile() { return false; }
+   bool canBeNeutral() { return false; }
 
    TNL_DECLARE_CLASS(SpeedZone);
 };
