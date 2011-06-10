@@ -104,6 +104,7 @@ enum UIID {
 };
 
 extern void glColor(const Color &c, float alpha = 1.0);
+extern void glColor(const Color *c, float alpha = 1.0);
 
 ////////////////////////////////////////
 ////////////////////////////////////////

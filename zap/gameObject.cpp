@@ -45,7 +45,7 @@ namespace Zap
 // Constructor
 BfObject::BfObject()
 {
-   // Do nothing
+   mGame = NULL;
 }
 
 

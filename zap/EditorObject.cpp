@@ -55,12 +55,6 @@ inline F32 getGridSize()
 }
 
 
-void EditorObject::addToEditor(Game *game)
-{
-   BfObject::addToGame(game);
-   gEditorUserInterface.addToEditor(this);    // TODO: get rid of this, make all items come from the database
-}
-
 
 void EditorObject::addToDock(Game *game, const Point &point)
 {
@@ -70,27 +64,6 @@ void EditorObject::addToDock(Game *game, const Point &point)
    unselectVerts();
 
    gEditorUserInterface.addToDock(this);
-}
-
-
-void EditorObject::processEndPoints()
-{
-   if(getObjectTypeMask() & BarrierType)
-      Barrier::constructBarrierEndPoints(getOutline(), getWidth() / getGridSize(), extendedEndPoints);
-
-   else if(getObjectTypeMask() & PolyWallType)
-   {
-      extendedEndPoints.clear();
-      for(S32 i = 1; i < getVertCount(); i++)
-      {
-         extendedEndPoints.push_back(getVert(i-1));
-         extendedEndPoints.push_back(getVert(i));
-      }
-
-      // Close the loop
-      extendedEndPoints.push_back(getVert(getVertCount()));
-      extendedEndPoints.push_back(getVert(0));
-   }
 }
 
 
@@ -136,9 +109,9 @@ static void renderVertex(VertexRenderStyles style, const Point &v, S32 number, F
    }
 
    if(style == HighlightedVertex)
-      glColor(HIGHLIGHT_COLOR, alpha);
+      glColor(*HIGHLIGHT_COLOR, alpha);
    else if(style == SelectedVertex)
-      glColor(SELECT_COLOR, alpha);
+      glColor(*SELECT_COLOR, alpha);
    else if(style == SnappingVertex)
       glColor(Colors::magenta, alpha);
    else
@@ -168,7 +141,6 @@ static void renderVertex(VertexRenderStyles style, const Point &v, S32 number, F
 
 
 static const S32 DOCK_LABEL_SIZE = 9;      // Size to label items on the dock
-static const Color DOCK_LABEL_COLOR = Colors::white;
 
 
 static void labelVertex(Point pos, S32 radius, const char *itemLabelTop, const char *itemLabelBottom)
@@ -220,7 +192,7 @@ void EditorObject::renderAndLabelHighlightedVertices(F32 currentScale)
    for(S32 i = 0; i < getVertCount(); i++)
       if(vertSelected(i) || isVertexLitUp(i) || ((mSelected || mLitUp)  && getVertCount() == 1))
       {
-         glColor((vertSelected(i) || mSelected) ? SELECT_COLOR: HIGHLIGHT_COLOR);
+         glColor((vertSelected(i) || mSelected) ? SELECT_COLOR : HIGHLIGHT_COLOR);
 
          Point pos = gEditorUserInterface.convertLevelToCanvasCoord(getVert(i));
 
@@ -234,7 +206,7 @@ void EditorObject::renderDockItemLabel(const Point &pos, const char *label, F32 
 {
    F32 xpos = pos.x;
    F32 ypos = pos.y - DOCK_LABEL_SIZE / 2 + yOffset;
-   glColor(DOCK_LABEL_COLOR);
+   glColor(Colors::white);
    UserInterface::drawStringc(xpos, ypos, DOCK_LABEL_SIZE, label);
 }
 
@@ -280,7 +252,7 @@ void EditorObject::render(bool isScriptItem, bool showingReferenceShip, ShowMode
 
    // Override drawColor for this special case
    if(anyVertsSelected())
-      drawColor = SELECT_COLOR;
+      drawColor = *SELECT_COLOR;
      
    if(mDockItem)
    {
@@ -712,7 +684,7 @@ void EditorObject::renderPolylineCenterline(F32 alpha)
    if(mSelected)
       glColor(SELECT_COLOR, alpha);
    else if(mLitUp && !anyVertsSelected())
-      glColor(HIGHLIGHT_COLOR, alpha);
+      glColor(*HIGHLIGHT_COLOR, alpha);
    else
       glColor(getTeamColor(mTeam), alpha);
 
@@ -722,7 +694,7 @@ void EditorObject::renderPolylineCenterline(F32 alpha)
 }
 
 
-void EditorObject::initializeEditor(F32 gridSize)
+void EditorObject::initializeEditor()
 {
    unselectVerts();
 }
@@ -739,9 +711,9 @@ void EditorObject::onGeomChanging()
 Color EditorObject::getDrawColor()
 {
    if(mSelected)
-      return SELECT_COLOR;       // yellow
+      return *SELECT_COLOR;       // yellow
    else if(mLitUp)
-      return HIGHLIGHT_COLOR;    // white
+      return *HIGHLIGHT_COLOR;    // white
    else  // Normal
       return Color(.75, .75, .75);
 }
@@ -855,7 +827,7 @@ EditorObject *EditorObject::newCopy()
 
       newObject->setObjectTypeMask(getObjectTypeMask());    // For some reason, typemask is not copied... why?!?
       newObject->mGeometry = mGeometry->copyGeometry();
-      newObject->initializeEditor(getGridSize());
+      newObject->initializeEditor();
    }
 
    return newObject;
@@ -930,14 +902,9 @@ void EditorObject::offset(const Point &offset)
 void EditorObject::increaseWidth(S32 amt)
 {
    S32 width = getWidth();
-
    width += amt - (S32) width % amt;    // Handles rounding
 
-   if(width > Barrier::MAX_BARRIER_WIDTH)
-      width = Barrier::MAX_BARRIER_WIDTH;
-
    setWidth(width);
-
    onGeomChanged();
 }
 
@@ -945,15 +912,22 @@ void EditorObject::increaseWidth(S32 amt)
 void EditorObject::decreaseWidth(S32 amt)
 {
    S32 width = getWidth();
-   
    width -= ((S32) width % amt) ? (S32) width % amt : amt;      // Dirty, ugly thing
 
+   setWidth(width);
+   onGeomChanged();
+}
+
+
+void EditorObject::setWidth(S32 width) 
+{         
+   // Bounds check
    if(width < Barrier::MIN_BARRIER_WIDTH)
       width = Barrier::MIN_BARRIER_WIDTH;
+   else if(width > Barrier::MAX_BARRIER_WIDTH)
+      width = Barrier::MAX_BARRIER_WIDTH; 
 
-   setWidth(width);
-
-   onGeomChanged();
+   mWidth = width; 
 }
 
 

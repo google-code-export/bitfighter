@@ -276,7 +276,7 @@ EngineeredObject::EngineeredObject(S32 team, Point anchorPoint, Point anchorNorm
 }
 
 
-bool EngineeredObject::processArguments(S32 argc, const char **argv)
+bool EngineeredObject::processArguments(S32 argc, const char **argv, Game *game)
 {
    if(argc < 3)
       return false;
@@ -288,7 +288,7 @@ bool EngineeredObject::processArguments(S32 argc, const char **argv)
    
    Point pos;
    pos.read(argv + 1);
-   pos *= getGame()->getGridSize();
+   pos *= game->getGridSize();
 
    if(argc >= 4)
    {
@@ -1042,7 +1042,7 @@ Vector<Point> Turret::getBufferForBotZone()
 }
 
 
-bool Turret::processArguments(S32 argc2, const char **argv2)
+bool Turret::processArguments(S32 argc2, const char **argv2, Game *game)
 {
    S32 argc1 = 0;
    const char *argv1[128];
@@ -1071,7 +1071,7 @@ bool Turret::processArguments(S32 argc2, const char **argv2)
       }
    }
 
-   bool returnBool = EngineeredObject::processArguments(argc1, argv1);
+   bool returnBool = EngineeredObject::processArguments(argc1, argv1, game);
    mCurrentAngle = mAnchorNormal.ATAN2();
    return returnBool;
 }

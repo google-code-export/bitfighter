@@ -40,7 +40,7 @@
 #include "gameType.h"
 #include "soccerGame.h"          // For Soccer ball radius
 #include "engineeredObjects.h"   // For Turret properties
-#include "barrier.h"             // For BarrierWidth
+#include "barrier.h"             // For DEFAULT_BARRIER_WIDTH
 #include "gameItems.h"           // For Asteroid defs
 #include "teleporter.h"          // For Teleporter def
 #include "speedZone.h"           // For Speedzone def
@@ -50,6 +50,7 @@
 
 #include "gameLoader.h"          // For LevelLoadException def
 
+#include "Colors.h"
 #include "GeomUtils.h"
 #include "textItem.h"            // For MAX_TEXTITEM_LEN and MAX_TEXT_SIZE
 #include "luaLevelGenerator.h"
@@ -248,10 +249,13 @@ void EditorUserInterface::populateDock()
 }
 
 
+static Vector<DatabaseObject *> fillVector;     // Reusable container
+
 // Destructor -- unwind things in an orderly fashion
 EditorUserInterface::~EditorUserInterface()
 {
-   gEditorGame->getGridDatabase()->clear();
+   clearDatabase(gEditorGame->getGridDatabase());
+
    mDockItems.clear();
    mLevelGenItems.clear();
    mClipboard.deleteAndClear();
@@ -259,6 +263,19 @@ EditorUserInterface::~EditorUserInterface()
 
    //for(S32 i = 0; i < UNDO_STATES; i++)
    //   mUndoItems[i].deleteAndClear();
+}
+
+
+void EditorUserInterface::clearDatabase(GridDatabase *database)
+{
+   fillVector.clear();
+   database->findObjects(fillVector);
+
+   for(S32 i = 0; i < fillVector.size(); i++)
+   {
+      database->removeFromDatabase(fillVector[i], fillVector[i]->getExtent());
+      //delete fillVector[i];
+   }
 }
 
 
@@ -277,9 +294,9 @@ void renderVertex(VertexRenderStyles style, const Point &v, S32 number, F32 alph
    }
       
    if(style == HighlightedVertex)
-      glColor(HIGHLIGHT_COLOR, alpha);
+      glColor(*HIGHLIGHT_COLOR, alpha);
    else if(style == SelectedVertex)
-      glColor(SELECT_COLOR, alpha);
+      glColor(*SELECT_COLOR, alpha);
    else if(style == SnappingVertex)
       glColor(Colors::magenta, alpha);
    else
@@ -382,34 +399,36 @@ static void copyItems(const Vector<EditorObject *> *from, Vector<string> &to)
 }
 
 
-// TODO: Make this an UIEditor method, and get rid of the global
-static void restoreItems(const Vector<string> &from)
+void EditorUserInterface::restoreItems(const Vector<string> &from)
 {
    GridDatabase *db = gEditorGame->getGridDatabase();
-   db->clear();
+   clearDatabase(db);
 
    Vector<string> args;
 
    for(S32 i = 0; i < from.size(); i++)
    {
       args = parseString(from[i]);
-      EditorObject *newObject = newEditorObject(args[0].c_str());
+
+      //EditorObject *newObject = newEditorObject(args[0].c_str());
 
       S32 args_count = 0;
       const char *args_char[LevelLoader::MAX_LEVEL_LINE_ARGS];  // Convert to a format processArgs will allow
          
       // Skip the first arg because we've already handled that one above
-      for(S32 j = 1; j < args.size() && j < LevelLoader::MAX_LEVEL_LINE_ARGS; j++)
+      for(S32 j = 0; j < args.size() && j < LevelLoader::MAX_LEVEL_LINE_ARGS; j++)
       {
-         args_char[j-1] = args[j].c_str();
+         args_char[j] = args[j].c_str();
          args_count++;
       }
 
-      newObject->addToEditor(gEditorGame);
-      newObject->processArguments(args_count, args_char);
+      gEditorGame->processLevelLoadLine(args_count, 0, args_char);      // TODO: Id is wrong; shouldn't be 0
+
+      //newObject->addToEditor(gEditorGame);
+      //newObject->processArguments(args_count, args_char);
    }
 }
-
+   
 
 static void copyItems(const Vector<EditorObject *> &from, Vector<EditorObject *> &to)
 {
@@ -434,7 +453,6 @@ void EditorUserInterface::saveUndoState()
 
    mLastUndoIndex++;
    mLastRedoIndex++; 
-
 
    if(mLastUndoIndex % UNDO_STATES == mFirstUndoIndex % UNDO_STATES)           // Undo buffer now full...
    {
@@ -507,8 +525,6 @@ void EditorUserInterface::rebuildEverything()
 }
 
 
-static Vector<DatabaseObject *> fillVector;     // Reusable container
-
 void EditorUserInterface::resnapAllEngineeredItems()
 {
    fillVector.clear();
@@ -572,28 +588,6 @@ void EditorUserInterface::makeSureThereIsAtLeastOneTeam()
 }
 
 
-// This sort will put points on top of lines on top of polygons...  as they should be
-// NavMeshZones are now drawn on top, to make them easier to see.  Disable with Ctrl-A!
-// We'll also put walls on the bottom, as this seems to work best in practice
-//S32 QSORT_CALLBACK geometricSort(boost::shared_ptr<EditorObject> a, boost::shared_ptr<EditorObject> b)
-//{
-//   if((a)->getObjectTypeMask() & BarrierType)
-//      return -1;
-//   if((b)->getObjectTypeMask() & BarrierType)
-//      return 1;
-//
-//   return( (a)->getGeomType() - (b)->getGeomType() );
-//}
-
-//
-//static void geomSort(Vector<shared_ptr<EditorObject> > &objects)
-//{
-//   if(objects.size() >= 2)  // nothing to sort when there is one or zero objects
-//      // Cannot use Vector.sort() here because I couldn't figure out how to cast shared_ptr as pointer (*)
-//      sort(objects.getStlVector().begin(), objects.getStlVector().end(), geometricSort);
-//}
-
-
 extern const char *gGameTypeNames[];
 extern S32 gDefaultGameTypeIndex;
 extern S32 gMaxPolygonPoints;
@@ -603,7 +597,7 @@ extern ConfigDirectories gConfigDirs;
 void EditorUserInterface::loadLevel()
 {
    // Initialize
-   gEditorGame->getGridDatabase()->clear();
+   clearDatabase(gEditorGame->getGridDatabase());
    mTeams.clear();
    mSnapVertex_i = NULL;
    mSnapVertex_j = NONE;
@@ -617,6 +611,7 @@ void EditorUserInterface::loadLevel()
    gEditorGame->setGridSize(Game::DefaultGridSize);         // Used in editor for scaling walls and text items appropriately
 
    gEditorGame->setGameType(new GameType());
+   //gEditorGame->setGameType(NULL);
 
    char fileBuffer[1024];
    dSprintf(fileBuffer, sizeof(fileBuffer), "%s/%s", gConfigDirs.levelDir.c_str(), mEditFileName.c_str());
@@ -627,7 +622,6 @@ void EditorUserInterface::loadLevel()
       makeSureThereIsAtLeastOneTeam(); // Make sure we at least have one team
       validateTeams();                 // Make sure every item has a valid team
       validateLevel();                 // Check level for errors (like too few spawns)
-      //geomSort(mItems);
       gGameParamUserInterface.ignoreGameParams = false;
    }
    else     
@@ -651,8 +645,8 @@ void EditorUserInterface::loadLevel()
    // Bulk-process new items, walls first
    const Vector<EditorObject *> *objList = getObjectList();
 
-   for(S32 i = 0; i < objList->size(); i++)
-      objList->get(i)->processEndPoints();
+   //for(S32 i = 0; i < objList->size(); i++)
+   //   objList->get(i)->processEndPoints();
 
    mWallSegmentManager.recomputeAllWallGeometry();
    
@@ -660,13 +654,13 @@ void EditorUserInterface::loadLevel()
    resnapAllEngineeredItems();
 
    // Run onGeomChanged for all non-wall items (engineered items already had onGeomChanged run during resnap operation)
-   fillVector.clear();
+   /*fillVector.clear();
    gEditorGame->getGridDatabase()->findObjects(~(BarrierType | EngineeredType), fillVector);
    for(S32 i = 0; i < fillVector.size(); i++)
    {
       EditorObject *obj = dynamic_cast<EditorObject *>(fillVector[i]);
       obj->onGeomChanged();
-   }
+   }*/
 }
 
 
@@ -678,8 +672,6 @@ void EditorUserInterface::clearLevelGenItems()
 }
 
 
-extern void removeCollinearPoints(Vector<Point> &points, bool isPolygon);
-
 void EditorUserInterface::copyScriptItemsToEditor()
 {
    if(mLevelGenItems.size() == 0)
@@ -688,7 +680,7 @@ void EditorUserInterface::copyScriptItemsToEditor()
    saveUndoState();
 
    for(S32 i = 0; i < mLevelGenItems.size(); i++)
-      mLevelGenItems[i]->addToEditor(gEditorGame);
+      mLevelGenItems[i]->addToGame(gEditorGame);
       
    mLevelGenItems.clear();    // Don't want to delete these objects... we just handed them off to the database!
 
@@ -744,15 +736,19 @@ void EditorUserInterface::runScript(const string &scriptName, const Vector<strin
    // Bulk-process new items, walls first
 
    fillVector.clear();
-   mLoadTarget->findObjects(WallType, fillVector);
+   mLoadTarget->findObjects(BarrierType | PolyWallType, fillVector);
 
    for(S32 i = 0; i < fillVector.size(); i++)
    {
       EditorObject *obj = dynamic_cast<EditorObject *>(fillVector[i]);
+
       if(obj->getVertCount() < 2)      // Invalid item; delete
          mLoadTarget->removeFromDatabase(obj, obj->getExtent());
 
-      obj->processEndPoints();
+      if(obj->getObjectTypeMask() & BarrierType)
+         dynamic_cast<WallItem *>(obj)->processEndPoints();
+      else
+         dynamic_cast<PolyWall *>(obj)->processEndPoints();
    }
 
    // When I came through here in early june, there was nothing else here... shouldn't there be some handling of non-wall objects?  -CE
@@ -1621,7 +1617,7 @@ void EditorUserInterface::render()
       glLineWidth(gLineWidth3);
 
       if(mCreatingPoly) // Wall
-         glColor(SELECT_COLOR);
+         glColor(*SELECT_COLOR);
       else              // LineItem
          glColor(getTeamColor(mNewItem->getTeam()));
 
@@ -1886,15 +1882,14 @@ void EditorUserInterface::pasteSelection()
 
       EditorObject *newObj = mClipboard[i]->newCopy();
 
-      newObj->addToEditor(gEditorGame);
+      newObj->addToGame(gEditorGame);
 
       newObj->setSerialNumber(getNextItemId());
       newObj->setSelected(true);
       newObj->moveTo(pos + offset);
       newObj->onGeomChanged();
    }
-   //mItems.sort(geometricSort);
-   //geomSort(mItems);
+
    validateLevel();
    mNeedToSave = true;
    autoSave();
@@ -2383,7 +2378,7 @@ void EditorUserInterface::startDraggingDockItem()
       
    item->setWidth((mDockItems[mDraggingDockItem]->getGeomType() == geomPoly) ? .7 : 1);      // TODO: Still need this?
 
-   item->addToEditor(gEditorGame);
+   item->addToGame(gEditorGame);
 
    // A little hack here to keep the polywall fill from appearing to be left behind behind the dock
    //if(item->getObjectTypeMask() & PolyWallType)
@@ -2391,7 +2386,6 @@ void EditorUserInterface::startDraggingDockItem()
 
    clearSelection();            // No items are selected...
    item->setSelected(true);     // ...except for the new one
-   //geomSort(mItems);            // So things will render in the proper order
    mDraggingDockItem = NONE;    // Because now we're dragging a real item
    validateLevel();             // Check level for errors
 
@@ -2629,11 +2623,8 @@ void EditorUserInterface::splitBarrier()
                obj->onGeomChanged();
                newItem->onGeomChanged();
                //mItems.push_back(boost::shared_ptr<EditorObject>(newItem));
-               newItem->addToEditor(gEditorGame);
+               newItem->addToGame(gEditorGame);
 
-               // And get them in the right order
-               //mItems.sort(geometricSort);  
-               //geomSort(mItems);
                goto done2;                         // Yes, gotos are naughty, but they just work so well sometimes...
             }
    }
@@ -2766,130 +2757,121 @@ void EditorUserInterface::deleteItem(S32 itemIndex)
    onMouseMoved();   // Reset cursor  
 }
 
-// Process a level line as the level is being loaded
-//void EditorUserInterface::processLevelLoadLine(U32 argc, U32 id, const char **argv) 
-//{
-//   EditorObject *newObject = newEditorObject(argv[0]);
-//
-//   newObject->addToEditor(gEditorGame);
-//   newObject->processArguments(argc, argv);
-//}
-
 
 // Process a line read from level file
-void EditorUserInterface::processLevelLoadLine(U32 argc, U32 id, const char **argv)
-{
-   Game *game = gEditorGame;
-   S32 strlenCmd = (S32) strlen(argv[0]);
-
-   // This is a legacy from the old Zap! days... we do bots differently in Bitfighter, so we'll just ignore this line if we find it.
-   if(!stricmp(argv[0], "BotsPerTeam"))
-      return;
-
-   else if(!stricmp(argv[0], "GridSize"))      // GridSize requires a single parameter (an int specifiying how many pixels in a grid cell)
-   {                                           
-      if(argc < 2)
-         throw LevelLoadException("Improperly formed GridSize parameter");
-
-      game->setGridSize(atof(argv[1]));
-   }
-
-   // Parse GameType line... All game types are of form XXXXGameType
-   else if(strlenCmd >= 8 && !strcmp(argv[0] + strlenCmd - 8, "GameType"))
-   {
-      if(gEditorGame->getGameType())
-         throw LevelLoadException("Duplicate GameType parameter");
-
-      // validateGameType() will return a valid GameType string -- either what's passed in, or the default if something bogus was specified
-      TNL::Object *theObject = TNL::Object::create(GameType::validateGameType(argv[0]));      
-      GameType *gt = dynamic_cast<GameType *>(theObject);  // Force our new object to be a GameObject
-
-      bool validArgs = gt->processArguments(argc - 1, argv + 1);
-
-      gEditorGame->setGameType(gt);
-
-      if(!validArgs || strcmp(gt->getClassName(), argv[0]))
-         throw LevelLoadException("Improperly formed GameType parameter");
-      
-      // Save the args (which we already have split out) for easier handling in the Game Parameter Editor
-      //for(U32 i = 1; i < argc; i++)
-      //   gEditorUserInterface.mGameTypeArgs.push_back(argv[i]);
-   }
-   else if(gEditorGame->getGameType() && gEditorGame->getGameType()->processLevelParam(argc, argv)) 
-   {
-      // Do nothing here
-   }
-
-   // here on up is same as in server game... TODO: unify!
-
-   else if(!strcmp(argv[0], "Script"))
-   {
-      gEditorUserInterface.mScriptLine = "";
-      // Munge everything into a string.  We'll have to parse after editing in GameParamsMenu anyway.
-      for(U32 i = 1; i < argc; i++)
-      {
-         if(i > 1)
-            gEditorUserInterface.mScriptLine += " ";
-
-         gEditorUserInterface.mScriptLine += argv[i];
-      }
-   }
-
-   // Parse Team definition line
-   else if(!strcmp(argv[0], "Team"))
-   {
-      if(mTeams.size() >= GameType::gMaxTeams)     // Ignore teams with numbers higher than 9
-         return;
-
-      TeamEditor team;
-      team.readTeamFromLevelLine(argc, argv);
-
-      // If team was read and processed properly, numPlayers will be 0
-      if(team.numPlayers != -1)
-         mTeams.push_back(team);
-   }
-
-   else
-   {
-      string objectType = argv[0];
-
-      if(objectType == "BarrierMakerS")
-      {
-         objectType = "PolyWall";
-      }
-
-      TNL::Object *theObject = TNL::Object::create(objectType.c_str());   // Create an object of the type specified on the line
-      EditorObject *object = dynamic_cast<EditorObject *>(theObject);     // Coerce our new object to be a GameObject
-
-      if(!object)    // Well... that was a bad idea!
-      {
-         delete theObject;
-      }
-      else  // object was valid
-      {
-         object->addToEditor(gEditorGame);
-         object->processArguments(argc, argv);
-
-         //mLoadTarget->push_back(newItem);           // Don't add to editor if not valid...
-
-         return;
-      }
-   }
-
-   // What remains are various game parameters...  Note that we will hit this block even if we already looked at gridSize and such...
-   // Before copying, we'll make a dumb copy, which will be overwritten if the user goes into the GameParameters menu
-   // This will cover us if the user comes in, edits the level, saves, and exits without visiting the GameParameters menu
-   // by simply echoing all the parameters back out to the level file without further processing or review.
-   string temp;
-   for(U32 i = 0; i < argc; i++)
-   {
-      temp += argv[i];
-      if(i < argc - 1)
-         temp += " ";
-   }
-
-   gGameParamUserInterface.gameParams.push_back(temp);
-} 
+//void EditorUserInterface::processLevelLoadLine(U32 argc, U32 id, const char **argv)
+//{
+//   Game *game = gEditorGame;
+//   S32 strlenCmd = (S32) strlen(argv[0]);
+//
+//   // This is a legacy from the old Zap! days... we do bots differently in Bitfighter, so we'll just ignore this line if we find it.
+//   if(!stricmp(argv[0], "BotsPerTeam"))
+//      return;
+//
+//   else if(!stricmp(argv[0], "GridSize"))      // GridSize requires a single parameter (an int specifiying how many pixels in a grid cell)
+//   {                                           
+//      if(argc < 2)
+//         throw LevelLoadException("Improperly formed GridSize parameter");
+//
+//      game->setGridSize(atof(argv[1]));
+//   }
+//
+//   // Parse GameType line... All game types are of form XXXXGameType
+//   else if(strlenCmd >= 8 && !strcmp(argv[0] + strlenCmd - 8, "GameType"))
+//   {
+//      if(gEditorGame->getGameType())
+//         throw LevelLoadException("Duplicate GameType parameter");
+//
+//      // validateGameType() will return a valid GameType string -- either what's passed in, or the default if something bogus was specified
+//      TNL::Object *theObject = TNL::Object::create(GameType::validateGameType(argv[0]));      
+//      GameType *gt = dynamic_cast<GameType *>(theObject);  // Force our new object to be a GameObject
+//
+//      bool validArgs = gt->processArguments(argc - 1, argv + 1);
+//
+//      gEditorGame->setGameType(gt);
+//
+//      if(!validArgs || strcmp(gt->getClassName(), argv[0]))
+//         throw LevelLoadException("Improperly formed GameType parameter");
+//      
+//      // Save the args (which we already have split out) for easier handling in the Game Parameter Editor
+//      //for(U32 i = 1; i < argc; i++)
+//      //   gEditorUserInterface.mGameTypeArgs.push_back(argv[i]);
+//   }
+//   else if(gEditorGame->getGameType() && gEditorGame->getGameType()->processLevelParam(argc, argv)) 
+//   {
+//      // Do nothing here
+//   }
+//
+//   // here on up is same as in server game... TODO: unify!
+//
+//   else if(!strcmp(argv[0], "Script"))
+//   {
+//      gEditorUserInterface.mScriptLine = "";
+//      // Munge everything into a string.  We'll have to parse after editing in GameParamsMenu anyway.
+//      for(U32 i = 1; i < argc; i++)
+//      {
+//         if(i > 1)
+//            gEditorUserInterface.mScriptLine += " ";
+//
+//         gEditorUserInterface.mScriptLine += argv[i];
+//      }
+//   }
+//
+//   // Parse Team definition line
+//   else if(!strcmp(argv[0], "Team"))
+//   {
+//      if(mTeams.size() >= GameType::gMaxTeams)     // Ignore teams with numbers higher than 9
+//         return;
+//
+//      TeamEditor team;
+//      team.readTeamFromLevelLine(argc, argv);
+//
+//      // If team was read and processed properly, numPlayers will be 0
+//      if(team.numPlayers != -1)
+//         mTeams.push_back(team);
+//   }
+//
+//   else
+//   {
+//      string objectType = argv[0];
+//
+//      if(objectType == "BarrierMakerS")
+//      {
+//         objectType = "PolyWall";
+//      }
+//
+//      TNL::Object *theObject = TNL::Object::create(objectType.c_str());   // Create an object of the type specified on the line
+//      EditorObject *object = dynamic_cast<EditorObject *>(theObject);     // Coerce our new object to be a GameObject
+//
+//      if(!object)    // Well... that was a bad idea!
+//      {
+//         delete theObject;
+//      }
+//      else  // object was valid
+//      {
+//         object->addToEditor(gEditorGame);
+//         object->processArguments(argc, argv);
+//
+//         //mLoadTarget->push_back(newItem);           // Don't add to editor if not valid...
+//
+//         return;
+//      }
+//   }
+//
+//   // What remains are various game parameters...  Note that we will hit this block even if we already looked at gridSize and such...
+//   // Before copying, we'll make a dumb copy, which will be overwritten if the user goes into the GameParameters menu
+//   // This will cover us if the user comes in, edits the level, saves, and exits without visiting the GameParameters menu
+//   // by simply echoing all the parameters back out to the level file without further processing or review.
+//   string temp;
+//   for(U32 i = 0; i < argc; i++)
+//   {
+//      temp += argv[i];
+//      if(i < argc - 1)
+//         temp += " ";
+//   }
+//
+//   gGameParamUserInterface.gameParams.push_back(temp);
+//} 
 
 
 void EditorUserInterface::insertNewItem(GameObjectType itemType)
@@ -2909,7 +2891,7 @@ void EditorUserInterface::insertNewItem(GameObjectType itemType)
       if(mDockItems[i]->getObjectTypeMask() & itemType)
       {
          newObject = mDockItems[i]->newCopy();
-         newObject->initializeEditor(getGridSize());
+         newObject->initializeEditor();
          newObject->onGeomChanged();
 
          break;
@@ -2917,10 +2899,8 @@ void EditorUserInterface::insertNewItem(GameObjectType itemType)
    TNLAssert(newObject, "Couldn't create object in insertNewItem()");
 
    newObject->moveTo(snapPoint(convertCanvasToLevelCoord(mMousePos)));
-   newObject->addToEditor(gEditorGame);    
+   newObject->addToGame(gEditorGame);    
 
-   //mItems.sort(geometricSort);
-   //geomSort(mItems);
    validateLevel();
    mNeedToSave = true;
    autoSave();
@@ -3144,12 +3124,11 @@ void EditorUserInterface::onKeyDown(KeyCode keyCode, char ascii)
          else
          {
             mCreatingPoly = true;
-            width = Barrier::BarrierWidth;
+            width = Barrier::DEFAULT_BARRIER_WIDTH;
             mNewItem = new WallItem();
          }
 
-        
-         mNewItem->initializeEditor(getGridSize());
+         mNewItem->initializeEditor();
          mNewItem->setTeam(mCurrentTeam);
          mNewItem->addVert(snapPoint(convertCanvasToLevelCoord(mMousePos)));
          mNewItem->setDockItem(false);
@@ -3167,13 +3146,12 @@ void EditorUserInterface::onKeyDown(KeyCode keyCode, char ascii)
       {
          saveUndoState();                       // Save state prior to addition of new polygon
 
-         if(mNewItem->getVertCount() <= 1)
+         if(mNewItem->getVertCount() < 2)
             delete mNewItem;
          else
          {
-            mNewItem->addToEditor(gEditorGame);
+            mNewItem->addToGame(gEditorGame);
             mNewItem->onGeomChanged();          // Walls need to be added to editor BEFORE onGeomChanged() is run!
-            //geomSort(mItems);
          }
 
          mNewItem = NULL;
@@ -3653,7 +3631,6 @@ void EditorUserInterface::onFinishedDragging()
 
             mNeedToSave = true;
             autoSave();
-            //geomSort(mItems);  
 
             return;
          }
@@ -3731,45 +3708,6 @@ void EditorUserInterface::idle(U32 timeDelta)
    LineEditor::updateCursorBlink(timeDelta);
 }
 
-// Unused??
-//static void escapeString(const char *src, char dest[1024])
-//{
-//   S32 i;
-//   for(i = 0; src[i]; i++)
-//      if(src[i] == '\"' || src[i] == ' ' || src[i] == '\n' || src[i] == '\t')
-//         break;
-//
-//   if(!src[i])
-//   {
-//      strcpy(dest, src);
-//      return;
-//   }
-//   char *dptr = dest;
-//   *dptr++ = '\"';
-//   char c;
-//   while((c = *src++) != 0)
-//   {
-//      switch(c)
-//      {
-//         case '\"':
-//            *dptr++ = '\\';
-//            *dptr++ = '\"';
-//            break;
-//         case '\n':
-//            *dptr++ = '\\';
-//            *dptr++ = 'n';
-//            break;
-//         case '\t':
-//            *dptr++ = '\\';
-//            *dptr++ = 't';
-//            break;
-//         default:
-//            *dptr++ = c;
-//      }
-//   }
-//   *dptr++ = '\"';
-//   *dptr++ = 0;
-//}
 
 void EditorUserInterface::setSaveMessage(string msg, bool savedOK)
 {
@@ -4032,47 +3970,6 @@ void EditorMenuUserInterface::onEscape()
    reactivatePrevUI();
 }
 
-
-////////////////////////////////////////
-////////////////////////////////////////
-// Stores the selection state of a particular EditorObject.  Does not store the item itself
-// Primary constructor
-//SelectionItem::SelectionItem(EditorObject *item)
-//{
-//   mSelected = item->isSelected();
-//
-//   for(S32 i = 0; i < item->getVertCount(); i++)
-//      mVertSelected.push_back(item->vertSelected(i));
-//}
-//
-//
-//void SelectionItem::restore(EditorObject *item)
-//{
-//   item->setSelected(mSelected);
-//   item->unselectVerts();
-//
-//   for(S32 i = 0; i < item->getVertCount(); i++)
-//      item->aselectVert(mVertSelected[i]);
-//}
-//
-//
-//////////////////////////////////////////
-//////////////////////////////////////////
-//// Selection stores the selection state of group of EditorObjects
-//// Constructor
-//Selection::Selection(Vector<EditorObject *> &items)
-//{
-//   for(S32 i = 0; i < items.size(); i++)
-//      mSelection.push_back(SelectionItem(items[i]));
-//}
-//
-//
-//void Selection::restore(Vector<EditorObject *> &items)
-//{
-//   for(S32 i = 0; i < items.size(); i++)
-//      mSelection[i].restore(items[i]);
-//}
-//
 
 };
 
