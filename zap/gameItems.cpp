@@ -201,14 +201,14 @@ F32 AbstractSpawn::getEditorRadius(F32 currentScale)
 }
 
 
-bool AbstractSpawn::processArguments(S32 argc, const char **argv)
+bool AbstractSpawn::processArguments(S32 argc, const char **argv, Game *game)
 {
    if(argc >= 3)
       return false;
 
    Point pos;
    pos.read(argv + 1);
-   pos *= getGame()->getGridSize();
+   pos *= game->getGridSize();
 
    setVert(pos, 0);
 
@@ -239,17 +239,17 @@ Spawn::Spawn(const Point &pos, S32 time) : AbstractSpawn(pos, time, ShipSpawnTyp
 };
 
 
-bool Spawn::processArguments(S32 argc, const char **argv)
+bool Spawn::processArguments(S32 argc, const char **argv, Game *game)
 {
    if(argc >= 4)
       return false;
 
-   S32 teamIndex = atoi(argv[1]);
+   S32 teamIndex = atoi(argv[0]);
    setTeam(teamIndex);
 
    Point pos;
-   pos.read(argv + 2);
-   pos *= getGame()->getGridSize();
+   pos.read(argv + 1);
+   pos *= game->getGridSize();
 
    setVert(pos, 0);
 

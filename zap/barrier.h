@@ -55,13 +55,13 @@ public:
    static const S32 MIN_BARRIER_WIDTH = 1;         // Clipper doesn't much like 0 width walls
    static const S32 MAX_BARRIER_WIDTH = 2500;      // Geowar has walls at least 350 units wide, so going lower will break at least one level
 
-   static const S32 BarrierWidth = 50; ///< The default width of the barrier in game units
+   static const S32 DEFAULT_BARRIER_WIDTH = 50; ///< The default width of the barrier in game units
 
-   static Vector<Point> mRenderLineSegments; ///< The clipped line segments representing this barrier.
-   Vector<Point> mBotZoneBufferLineSegments; ///< The line segments representing a buffered barrier.
+   static Vector<Point> mRenderLineSegments;    ///< The clipped line segments representing this barrier.
+   Vector<Point> mBotZoneBufferLineSegments;    ///< The line segments representing a buffered barrier.
 
    /// Barrier constructor
-   Barrier(const Vector<Point> &points = Vector<Point>(), F32 width = BarrierWidth, bool solid = false);
+   Barrier(const Vector<Point> &points = Vector<Point>(), F32 width = DEFAULT_BARRIER_WIDTH, bool solid = false);
 
    /// Adds the server object to the net interface's scope always list
    void onAddedToGame(Game *theGame);
@@ -114,6 +114,7 @@ class WallItem : public LineItem
 public:
    WallItem();    // Constructor
    virtual void onGeomChanged();
+   void processEndPoints();      
 
    // Some properties about the item that will be needed in the editor
    const char *getEditorHelpString() { return "Walls define the general form of your level."; }  
@@ -123,6 +124,7 @@ public:
    bool hasTeam() { return false; }
    bool canBeHostile() { return false; }
    bool canBeNeutral() { return false; }
+
 
    string toString();
 };
@@ -139,7 +141,9 @@ private:
 
 public:
    PolyWall();      // Constructor
-   bool processArguments(S32 argc, const char **argv);
+   bool processArguments(S32 argc, const char **argv, Game *game);
+
+   void processEndPoints();
 
    void render();
    void renderFill();

@@ -99,8 +99,8 @@ enum VertexRenderStyles
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-const Color HIGHLIGHT_COLOR = Colors::white;
-const Color SELECT_COLOR = Colors::yellow;
+static const Color *HIGHLIGHT_COLOR = &Colors::white;
+static const Color *SELECT_COLOR = &Colors::yellow;
 
 ////////////////////////////////////////
 ////////////////////////////////////////
@@ -225,7 +225,7 @@ private:
    void computeSelectionMinMax(Point &min, Point &max);
    bool mouseOnDock();                // Return whether mouse is currently over the dock
 
-   void processLevelLoadLine(U32 argc, U32 id, const char **argv);
+   //void processLevelLoadLine(U32 argc, U32 id, const char **argv);
 
    void insertNewItem(GameObjectType itemType);                      // Insert a new object into the game
 
@@ -241,6 +241,8 @@ protected:
 public:
    ~EditorUserInterface();       // Destructor
 
+   void clearDatabase(GridDatabase *database);
+
    void setLevelFileName(string name);
    void setLevelGenScriptName(string name);
 
@@ -250,6 +252,7 @@ public:
    U32 mAllUndoneUndoLevel;   // What undo level reflects everything back just the
 
    void saveUndoState();
+   void restoreItems(const Vector<string> &from);
 
    Vector<string> mGameTypeArgs;
    WallSegmentManager *getWallSegmentManager() { return &mWallSegmentManager; }

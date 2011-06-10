@@ -302,8 +302,8 @@ void SoundSystem::shutdown()
 
    // Stop and clean up music
    if(gMusicValid) {
-      stopMusic();
-      alureDestroyStream(musicStream, 0, NULL);
+   stopMusic();
+   alureDestroyStream(musicStream, 0, NULL);
       alDeleteSources(1, &musicSource);
    }
 

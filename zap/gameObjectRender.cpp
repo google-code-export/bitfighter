@@ -1730,6 +1730,12 @@ void glColor(const Color &c, float alpha)
     glColor4f(c.r, c.g, c.b, alpha);
 }
 
+
+void glColor(const Color *c, float alpha)
+{
+    glColor4f(c->r, c->g, c->b, alpha);
+}
+
 void drawSquare(const Point &pos, F32 size, bool filled)
 {
     glBegin(filled ? GL_POLYGON : GL_LINE_LOOP);

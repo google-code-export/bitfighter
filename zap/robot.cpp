@@ -1690,7 +1690,7 @@ void Robot::kill()
 }
 
 
-bool Robot::processArguments(S32 argc, const char **argv)
+bool Robot::processArguments(S32 argc, const char **argv, Game *game)
 {
    //if(argc < 2)               // Two required: team and bot file
    //   return false;

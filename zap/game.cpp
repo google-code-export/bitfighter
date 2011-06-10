@@ -146,9 +146,9 @@ S32 Game::getTeamCount()
 }
 
 
-void Game::setGameType(GameType *theGameType)
+void Game::setGameType(GameType *theGameType)      // TODO==> Need to store gameType as a shared_ptr or auto_ptr
 {
-   delete mGameType.getPointer();          // Cleanup, if need be
+   //delete mGameType;          // Cleanup, if need be
    mGameType = theGameType;
 }
 
@@ -178,17 +178,13 @@ void Game::processLevelLoadLine(U32 argc, U32 id, const char **argv)
    // Parse GameType line... All game types are of form XXXXGameType
    else if(strlenCmd >= 8 && !strcmp(argv[0] + strlenCmd - 8, "GameType"))
    {
-      if(mGameType)
-         throw LevelLoadException("Duplicate GameType parameter");
-
       // validateGameType() will return a valid GameType string -- either what's passed in, or the default if something bogus was specified
       TNL::Object *theObject = TNL::Object::create(GameType::validateGameType(argv[0]));      
       GameType *gt = dynamic_cast<GameType *>(theObject);  // Force our new object to be a GameObject
 
-      bool validArgs = gt->processArguments(argc - 1, argv + 1);
+      bool validArgs = gt->processArguments(argc - 1, argv + 1, NULL);
 
-      //setGameType(gt);      ==> gets run in addToGame()
-      gt->addToGame(this);    // --> think this needs to be addToEditor in gEditorGame
+      gt->addToGame(this);    
 
       if(!validArgs || strcmp(gt->getClassName(), argv[0]))
          throw LevelLoadException("Improperly formed GameType parameter");
@@ -200,14 +196,17 @@ void Game::processLevelLoadLine(U32 argc, U32 id, const char **argv)
       return;
    }
 
-   // If we're here, and we don't yet have a gameType, create a default one.  This is an emergency fallback, and shouldn't be relied on.
-   if(!mGameType)
-   {
-      TNL::Object *theObject = TNL::Object::create(GameType::validateGameType("GameType"));   // GameType ==> Bitmatch ==> default type     
-      GameType *gt = dynamic_cast<GameType *>(theObject);  // Force our new object to be a GameObject
+   //// If we're here, and we don't yet have a gameType, create a default one.  This is an emergency fallback, and shouldn't be relied on.
+   //if(!mGameType)
+   //{
+   //   TNL::Object *theObject = TNL::Object::create(GameType::validateGameType("GameType"));   // GameType ==> Bitmatch ==> default type     
+   //   GameType *gt = dynamic_cast<GameType *>(theObject);  // Force our new object to be a GameObject
 
-      gt->addToGame(this);
-   }
+   //   if(gt)
+   //   {
+   //      gt->addToGame(this);
+   //   }
+   //}
 
    if(getGameType() && mGameType->processLevelParam(argc, argv)) 
    {
@@ -249,18 +248,14 @@ void Game::processLevelLoadLine(U32 argc, U32 id, const char **argv)
       {
          computeWorldObjectExtents();    // Make sure this is current if we process a robot that needs this for intro code
 
-         // TODO: Find a way to get rid of this hack!!
-         if(this == gEditorGame)
-            eObject->addToEditor(this);
-         else
+
+         bool validArgs = object->processArguments(argc - 1, argv + 1, this);
+
+         if(validArgs)
             object->addToGame(this);
-
-         bool validArgs = object->processArguments(argc - 1, argv + 1);
-
-         if(!validArgs)
+         else
          {
-            logprintf(LogConsumer::LogWarning, "Object \"%s\" in level \"%s\"", obj, origFilename.c_str());
-            object->removeFromGame();
+            logprintf(LogConsumer::LogWarning, "Invalid arguments in object \"%s\" in level \"%s\"", obj, origFilename.c_str());
             object->destroySelf();
          }
       }
@@ -502,8 +497,12 @@ void Game::cleanUp()
    mDatabase.findObjects(fillVector);
 
    for(S32 i = 0; i < fillVector.size(); i++)
+   {
+      mDatabase.removeFromDatabase(fillVector[i], fillVector[i]->getExtent());
       delete dynamic_cast<Object *>(fillVector[i]); // dynamic_cast might be needed to avoid errors.
+   }
 }
+
 
 void ServerGame::cleanUp()
 {
@@ -819,7 +818,7 @@ bool ServerGame::processPseudoItem(S32 argc, const char **argv)
    {
       AsteroidSpawn spawn = AsteroidSpawn();
 
-      if(spawn.processArguments(argc, argv))
+      if(spawn.processArguments(argc, argv, this))
          getGameType()->mAsteroidSpawnPoints.push_back(spawn);
    }
    else if(!stricmp(argv[0], "BarrierMaker"))
@@ -833,6 +832,7 @@ bool ServerGame::processPseudoItem(S32 argc, const char **argv)
             barrier.width = Barrier::MIN_BARRIER_WIDTH;
          else if(barrier.width > Barrier::MAX_BARRIER_WIDTH)
             barrier.width = Barrier::MAX_BARRIER_WIDTH;
+
    
          for(S32 i = 2; i < argc; i++)
             barrier.verts.push_back(F32(atof(argv[i])) * getGridSize());
@@ -2243,79 +2243,88 @@ bool EditorGame::processPseudoItem(S32 argc, const char **argv)
 {
    if(!stricmp(argv[0], "Spawn") || !stricmp(argv[0], "FlagSpawn") || !stricmp(argv[0], "AsteroidSpawn"))
    {
-      TNL::Object *theObject = TNL::Object::create(argv[0]);           // Create an object of the type specified on the line
-      EditorObject *eObject = dynamic_cast<EditorObject *>(theObject);
+      EditorObject *newObject;
 
-      if(!eObject)    // Well... that was a bad idea!
+      if(!stricmp(argv[0], "Spawn"))
+         newObject = new Spawn();
+      else if(!stricmp(argv[0], "FlagSpawn"))
+         newObject = new FlagSpawn();
+      else /* if(!stricmp(argv[0], "AsteroidSpawn")) */
+         newObject = new AsteroidSpawn();
+
+
+      bool validArgs = newObject->processArguments(argc - 1, argv + 1, this);
+
+      if(validArgs)
+         newObject->addToGame(this);
+      else
       {
-         logprintf(LogConsumer::LogWarning, "Unknown object type \"%s\" in level \"%s\"", argv[0], origFilename.c_str());
-         delete theObject;
+         logprintf(LogConsumer::LogWarning, "Invalid arguments in object \"%s\" in level \"%s\"", argv[0], origFilename.c_str());
+         delete newObject;
       }
-
-      eObject->addToEditor(this);
-
-      bool validArgs = eObject->processArguments(argc - 1, argv + 1);
-
-      if(!validArgs)
-      {
-         logprintf(LogConsumer::LogWarning, "Object \"%s\" in level \"%s\"", argv[0], origFilename.c_str());
-
-         // move these to bfObject
-         eObject->removeFromGame();
-         delete eObject;
-      }
-
    }
    else if(!stricmp(argv[0], "BarrierMaker"))
    {
       if(argc >= 2)
       {
-         BarrierRec barrier;
-         barrier.width = F32(atof(argv[1]));
+         WallItem *wallObject = new WallItem();  
+         
+         wallObject->setWidth(F32(atof(argv[1])));      // setWidth handles bounds checking
 
-         if(barrier.width < Barrier::MIN_BARRIER_WIDTH)
-            barrier.width = Barrier::MIN_BARRIER_WIDTH;
-         else if(barrier.width > Barrier::MAX_BARRIER_WIDTH)
-            barrier.width = Barrier::MAX_BARRIER_WIDTH;
-   
-         for(S32 i = 2; i < argc; i++)
-            barrier.verts.push_back(F32(atof(argv[i])) * getGridSize());
-   
-         if(barrier.verts.size() > 3)
+         wallObject->setDockItem(false);     // TODO: Needed?
+         wallObject->initializeEditor();     // Only runs unselectVerts
+
+         Point p;
+         for(S32 i = 2; i < argc; i+=2)
          {
-            barrier.solid = false;
-            getGameType()->addBarrier(barrier, this);
+            p.set(atof(argv[i]), atof(argv[i+1]));
+            p *= getGridSize();
+            wallObject->addVert(p);
          }
+         
+         if(wallObject->getVertCount() >= 2)
+         {
+            wallObject->addToGame(this);
+            wallObject->processEndPoints();
+            //wallObject->onGeomChanged(); 
+         }
+         else
+            delete wallObject;
       }
    }
    // TODO: Integrate code above with code above!!  EASY!!
    else if(!stricmp(argv[0], "BarrierMakerS") || !stricmp(argv[0], "PolyWall"))
    {
-      bool width = false;
-
-      if(!stricmp(argv[0], "BarrierMakerS"))
-      {
-         logprintf(LogConsumer::LogWarning, "BarrierMakerS has been deprecated.  Please use PolyWall instead.");
-         width = true;
-      }
+      //if(width)      // BarrierMakerS still width, though we ignore it
+      //   barrier.width = F32(atof(argv[1]));
+      //else           // PolyWall does not have width specified
+      //   barrier.width = 1;
 
       if(argc >= 2)
-      { 
-         BarrierRec barrier;
+      {
+         EditorObject *newObject = new PolyWall();  
          
-         if(width)      // BarrierMakerS still width, though we ignore it
-            barrier.width = F32(atof(argv[1]));
-         else           // PolyWall does not have width specified
-            barrier.width = 1;
-
-         for(S32 i = 2 - (width ? 0 : 1); i < argc; i++)
-            barrier.verts.push_back(F32(atof(argv[i])) * getGridSize());
-
-         if(barrier.verts.size() > 3)
+         S32 skipArgs = 0;
+         if(!stricmp(argv[0], "BarrierMakerS"))
          {
-            barrier.solid = true;
-            getGameType()->addBarrier(barrier, this);
+            logprintf(LogConsumer::LogWarning, "BarrierMakerS has been deprecated.  Please use PolyWall instead.");
+            newObject->setWidth(F32(atof(argv[1])));
+
+            skipArgs = 1;
          }
+
+         newObject->setDockItem(false);     // TODO: Needed?
+         newObject->initializeEditor();     // Only runs unselectVerts
+
+         newObject->processArguments(argc - 1 - skipArgs, argv + 1 + skipArgs, this);
+         
+         if(newObject->getVertCount() >= 2)
+         {
+            newObject->addToGame(this);
+            newObject->onGeomChanged(); 
+         }
+         else
+            delete newObject;
       }
    }
    else 
