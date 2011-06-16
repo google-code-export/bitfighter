@@ -48,6 +48,12 @@ SlipZone::SlipZone()     // Constructor
 }
 
 
+SlipZone *SlipZone::clone() const
+{
+   return new SlipZone(*this);
+}
+
+
 void SlipZone::render()
 {
    renderSlipZone(getOutline(), getFill(), getCentroid());

@@ -49,6 +49,11 @@ SimpleLine::SimpleLine(const SimpleLine &simpleLine)
 }
 
 
+//void SimpleLine::copyAttrs(SimpleLine *target)
+//{
+//   EditorObject::copyAttrs(target);
+//}
+
 
 void SimpleLine::renderDock()
 {

@@ -42,7 +42,8 @@ private:
 
 public:
    LoadoutZone();    // C++ constructor
-   
+   LoadoutZone *clone() const;
+
    void render();
    S32 getRenderSortValue();
    bool processArguments(S32 argc, const char **argv, Game *game);

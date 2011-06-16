@@ -34,6 +34,7 @@
 
 namespace Zap
 {
+
 class Ship;
 
 class RepairItem : public PickupItem
@@ -42,9 +43,12 @@ protected:
    typedef PickupItem Parent;
 
 public:
-   static const S32 defaultRespawnTime = 20;    // In seconds
+   static const S32 DEFAULT_RESPAWN_TIME = 20;    // In seconds
+   static const S32 REPAIR_ITEM_RADIUS = 20;
 
-   RepairItem(Point p = Point()) : PickupItem(p, 20, defaultRespawnTime * 1000) { /* do nothing */ };   // Constructor
+   RepairItem(Point pos = Point());   // Constructor
+   RepairItem *clone() const;
+
    bool pickup(Ship *theShip);
    void onClientPickup();
    void renderItem(Point pos);
@@ -85,9 +89,11 @@ private:
    typedef PickupItem Parent;
 
 public:
-   static const S32 defaultRespawnTime = 20;    // In seconds
+   static const S32 DEFAULT_RESPAWN_TIME = 20;    // In seconds
 
-   EnergyItem(Point p = Point()) : PickupItem(p, 20, defaultRespawnTime * 1000) { /* do nothing */ };   // Constructor
+   EnergyItem(Point p = Point());   // Constructor
+   EnergyItem *clone() const;
+
    bool pickup(Ship *theShip);
    void onClientPickup();
    void renderItem(Point pos);
@@ -148,6 +154,7 @@ private:
 
 public:
    Asteroid();     // Constructor  
+   Asteroid *clone() const;
 
    static const S32 ASTEROID_RADIUS = 89;
 
@@ -243,6 +250,7 @@ public:
    static const S32 DEFAULT_RESPAWN_TIME = 30;    // in seconds
 
    Spawn(const Point &pos = Point(), S32 time = DEFAULT_RESPAWN_TIME);  // C++ constructor (no lua constructor)
+   Spawn *Spawn::clone() const;
 
    const char *getEditorHelpString() { return "Location where ships start.  At least one per team is required. [G]"; }
    const char *getPrettyNamePlural() { return "Spawn points"; }
@@ -273,6 +281,7 @@ public:
    static const S32 DEFAULT_RESPAWN_TIME = 30;    // in seconds
 
    AsteroidSpawn(const Point &pos = Point(), S32 time = DEFAULT_RESPAWN_TIME);  // C++ constructor (no lua constructor)
+   AsteroidSpawn *clone() const;
 
    const char *getEditorHelpString() { return "Periodically spawns a new asteroid."; }
    const char *getPrettyNamePlural() { return "Asteroid spawn points"; }
@@ -297,6 +306,7 @@ public:
    static const S32 DEFAULT_RESPAWN_TIME = 30;    // in seconds
 
    FlagSpawn(const Point &pos = Point(), S32 time = DEFAULT_RESPAWN_TIME);  // C++ constructor (no lua constructor)
+   FlagSpawn *clone() const;
 
    const char *getEditorHelpString() { return "Location where flags (or balls in Soccer) spawn after capture."; }
    const char *getPrettyNamePlural() { return "Flag spawn points"; }
@@ -356,6 +366,7 @@ class TestItem : public EditorItem
 
 public:
    TestItem();     // Constructor
+   TestItem *clone() const;
 
    static const S32 TEST_ITEM_RADIUS = 60;
 
@@ -396,6 +407,7 @@ class ResourceItem : public EditorItem
 
 public:
    ResourceItem();      // Constructor
+   ResourceItem *clone() const;
 
    static const S32 RESOURCE_ITEM_RADIUS = 20;
 
