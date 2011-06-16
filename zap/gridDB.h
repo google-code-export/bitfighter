@@ -88,11 +88,11 @@ public:
 class GridDatabase
 {
 private:
-   bool mUsingGameCoords;
 
    void findObjects(U32 typeMask, Vector<DatabaseObject *> &fillVector, const Rect *extents, S32 minx, S32 miny, S32 maxx, S32 maxy, U8 typeNumber = U8_MAX);
-   U32 mQueryId;
+   static U32 mQueryId;
 
+protected:
    Vector<DatabaseObject *> mAllObjects;
 
 public:
@@ -109,11 +109,12 @@ public:
 
    
    BucketEntry *mBuckets[BucketRowCount][BucketRowCount];
-   ClassChunker<BucketEntry> mChunker;
+   static ClassChunker<BucketEntry> mChunker;
 
-   GridDatabase(bool usingGameCoords = true);      // Constructor
+   GridDatabase();                              // Constructor
+   virtual ~GridDatabase();                     // Destructor
 
-   S32 BucketWidth;     // Width/height of each bucket in pixels
+   static const S32 BucketWidth = 255;          // Width/height of each bucket in pixels
 
    DatabaseObject *findObjectLOS(U32 typeMask, U32 stateIndex, bool format, const Point &rayStart, const Point &rayEnd, 
                                  float &collisionTime, Point &surfaceNormal, U8 typeNumber = U8_MAX);
@@ -127,8 +128,6 @@ public:
    
    virtual void addToDatabase(DatabaseObject *theObject, const Rect &extents);
    virtual void removeFromDatabase(DatabaseObject *theObject, const Rect &extents);
-
-   bool isUsingGameCoords() { return mUsingGameCoords; }
 
    S32 getObjectCount() { return mAllObjects.size(); }      // Return the number of objects currently in the database
    DatabaseObject *getObjectByIndex(S32 index);             // Kind of hacky, kind of useful
@@ -148,7 +147,11 @@ private:
    Vector<EditorObject *> mAllEditorObjects;
 
 public:
-   EditorObjectDatabase(bool usingGameCoords = true);      // Constructor
+   EditorObjectDatabase();      // Constructor
+   EditorObjectDatabase(const EditorObjectDatabase &database);    // Copy constructor
+   EditorObjectDatabase &operator= (const EditorObjectDatabase &database);
+
+   void copy(const EditorObjectDatabase &database);       // Copy contents of source into this
 
    const Vector<EditorObject *> *getObjectList();     
 

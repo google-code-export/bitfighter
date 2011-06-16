@@ -640,6 +640,12 @@ Mine::Mine(Point pos, Ship *planter) : GrenadeProjectile(pos, Point())
 }
 
 
+Mine *Mine::clone() const
+{
+   return new Mine(*this);
+}
+
+
 // ProcessArguments() used is the one in item
 string Mine::toString()
 {
@@ -842,6 +848,12 @@ SpyBug::~SpyBug()
 {
    if(gServerGame && gServerGame->getGameType())
       gServerGame->getGameType()->catalogSpybugs();
+}
+
+
+SpyBug *SpyBug::clone() const
+{
+   return new SpyBug(*this);
 }
 
 
