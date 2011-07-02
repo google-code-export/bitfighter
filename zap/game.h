@@ -92,7 +92,6 @@ using namespace std;
 namespace Zap
 {
 
-
 // Some forward declarations
 class MasterServerConnection;
 class GameNetInterface;
@@ -103,6 +102,10 @@ class GameConnection;
 class Ship;
 class GameUserInterface;
 struct UserInterfaceData;
+
+class AbstractTeam;
+class Team;
+class TeamEditor;
 
 /// Base class for server and client Game subclasses.  The Game
 /// base class manages all the objects in the game simulation on
@@ -120,6 +123,8 @@ private:
    // Info about modules -- access via getModuleInfo()
    Vector<ModuleInfo> mModuleInfos;
    void buildModuleInfos();
+
+   Vector<boost::shared_ptr<AbstractTeam> > mTeams;       // List of teams
 
 protected:
    virtual void cleanUp();
@@ -149,7 +154,8 @@ protected:
    SafePtr<MasterServerConnection> mConnectionToMaster;
    SafePtr<GameType> mGameType;
 
-   bool mGameSuspended;                   // True if we're in "suspended animation" mode
+   bool mGameSuspended;       // True if we're in "suspended animation" mode
+
 
 public:
    static const S32 DefaultGridSize = 255;   // Size of "pages", represented by floats for intrapage locations (i.e. pixels per integer)
@@ -169,21 +175,24 @@ public:
    Game(const Address &theBindAddress);      // Constructor
    virtual ~Game() { /* Do nothing */ };     // Destructor
 
+   virtual GameUserInterface *getUserInterface() = 0;
+
+
    Rect getWorldExtents() { return mWorldExtents; }
 
    virtual U32 getPlayerCount() = 0;         // Implemented differently on client and server
 
    virtual bool isTestServer() { return false; }     // Overridden in ServerGame
 
-   virtual Color getTeamColor(S32 teamId) { return Colors::white; }      // ClientGame and EditorGame will override
-
+   virtual const Color *getTeamColor(S32 teamId) const { return &Colors::white; }  // ClientGame and EditorGame will override
+   static const Color *getBasicTeamColor(const Game *game, S32 teamId);            // Color function used in most cases, overridden by some games
 
    ModuleInfo *getModuleInfo(ShipModule module) { return &mModuleInfos[(U32)module]; }
    
    void computeWorldObjectExtents();
    Rect computeBarrierExtents();
 
-   Point computePlayerVisArea(Ship *ship);
+   Point computePlayerVisArea(Ship *ship) const;
 
    U32 getTimeUnconnectedToMaster() { return mTimeUnconnectedToMaster; }
 
@@ -217,8 +226,18 @@ public:
    const Vector<SafePtr<GameObject> > &getScopeAlwaysList() { return mScopeAlwaysList; }
 
    void setScopeAlwaysObject(GameObject *theObject);
-   GameType *getGameType();
-   S32 getTeamCount();
+   GameType *getGameType() const;
+
+   // Team functions
+   S32 getTeamCount() const;
+   AbstractTeam *getTeam(S32 teamIndex) const;
+   void addTeam(boost::shared_ptr<AbstractTeam> team);
+   void addTeam(boost::shared_ptr<AbstractTeam> team, S32 index);
+   virtual boost::shared_ptr<AbstractTeam> getNewTeam() = 0;
+   void removeTeam(S32 teamIndex);
+   void clearTeams();
+   StringTableEntry getTeamName(S32 teamIndex) const;   // Return the name of the team
+
 
    void setGameType(GameType *theGameType);
    void processDeleteList(U32 timeDelta);
@@ -276,7 +295,7 @@ public:
 class GameGame : public Game
 {
 public:
-   GameGame(const Address &theBindAddress) : Game(theBindAddress) { /* Do nothing */};      // Constructor
+   GameGame(const Address &theBindAddress) : Game(theBindAddress) { /* Do nothing */ };      // Constructor
    virtual ~GameGame() { /* Do nothing */ };     // Destructor
 };
  
@@ -381,6 +400,8 @@ public:
    StringTableEntry getCurrentLevelName();      // Return name of level currently in play
    StringTableEntry getCurrentLevelType();      // Return type of level currently in play
 
+   virtual GameUserInterface *getUserInterface() { return NULL; }    // ServerGame has no UI
+
    bool isServer() { return true; }
    void idle(U32 timeDelta);
    void gameEnded();
@@ -403,6 +424,8 @@ public:
    S32 addLevelInfo(const char *filename, LevelInfo &info);
 
    HostingModePhases hostingModePhase;
+
+   boost::shared_ptr<AbstractTeam> getNewTeam();
 };
 
 
@@ -429,11 +452,13 @@ private:
    Timer mScreenSaverTimer;
    void supressScreensaver();
 
+   GameUserInterface *mGameUserInterface;
+
+
 public:
    ClientGame(const Address &bindAddress);
    ~ClientGame();
 
-   GameUserInterface *mGameUserInterface;
    UserInterfaceData *mUserInterfaceData;
 
    bool hasValidControlObject();
@@ -445,8 +470,8 @@ public:
    bool getInCommanderMap() { return mInCommanderMap; }
    void setInCommanderMap(bool inCommanderMap) { mInCommanderMap = inCommanderMap; }
 
-   F32 getCommanderZoomFraction() { return mCommanderZoomDelta / F32(CommanderMapZoomTime); }
-   Point worldToScreenPoint(Point p);
+   F32 getCommanderZoomFraction() const { return mCommanderZoomDelta / F32(CommanderMapZoomTime); }
+   Point worldToScreenPoint(const Point *p) const;
    void drawStars(F32 alphaFrac, Point cameraPos, Point visibleExtent);
 
    void render();             // Delegates to renderNormal, renderCommander, or renderSuspended, as appropriate
@@ -461,13 +486,17 @@ public:
    void idle(U32 timeDelta);
    void zoomCommanderMap();
 
+   const Color *getTeamColor(S32 teamIndex) const;
+
+   GameUserInterface *getUserInterface() { return mGameUserInterface; }
+
    U32 getPlayerAndRobotCount();    // Returns number of human and robot players
    U32 getPlayerCount();            // Returns number of human players
 
-   Color getTeamColor(S32 teamId);
-
    void suspendGame()   { mGameSuspended = true; }
    void unsuspendGame() { mGameSuspended = false; }
+
+   boost::shared_ptr<AbstractTeam> getNewTeam();
 };
 
 
@@ -484,11 +513,14 @@ private:
 public:
    EditorGame();
 
+   GameUserInterface *getUserInterface() { return NULL; }      // Not sure about this...
+
+
    U32 getPlayerCount() { return 0; }
    bool isServer() { return false; }
    void idle(U32 timeDelta) { /* Do nothing */ }
 
-   Color getTeamColor(S32 teamId);
+   const Color *getTeamColor(S32 teamIndex) const;
 
    bool processPseudoItem(S32 argc, const char **argv);
 
@@ -498,10 +530,9 @@ public:
 
    boost::shared_ptr<GridDatabase> getGridDatabase() { return mEditorDatabase; }
 
-   void setGridDatabase(boost::shared_ptr<GridDatabase> database) { 
-      //TNLAssert(dynamic_cast<EditorObjectDatabase *>(database), "Uh oh...");
-      mEditorDatabase = boost::dynamic_pointer_cast<EditorObjectDatabase>(database); 
-   }
+   void setGridDatabase(boost::shared_ptr<GridDatabase> database) { mEditorDatabase = boost::dynamic_pointer_cast<EditorObjectDatabase>(database); }
+
+   boost::shared_ptr<AbstractTeam> getNewTeam();
 };
 
 

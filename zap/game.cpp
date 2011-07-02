@@ -58,6 +58,7 @@
 
 #include "SDL/SDL_opengl.h"
 
+#include <boost/shared_ptr.hpp>
 #include <sys/stat.h>
 #include <math.h>
 
@@ -134,15 +135,61 @@ MasterServerConnection *Game::getConnectionToMaster()
 }
 
 
-GameType *Game::getGameType()
+GameType *Game::getGameType() const
 {
    return mGameType;    // This is a safePtr, so it can be NULL, but will never point off into space
 }
 
 
-S32 Game::getTeamCount()
+S32 Game::getTeamCount() const
 {
-   return(mGameType.isValid() ? mGameType->mTeams.size() : 0);
+   return mTeams.size();
+}
+
+
+AbstractTeam *Game::getTeam(S32 team) const
+{
+   return mTeams[team].get();
+}
+
+
+// There is a bigger need to use StringTableEntry and not const char *
+//    mainly to prevent errors on CTF neutral flag and out of range team number.
+StringTableEntry Game::getTeamName(S32 teamIndex) const
+{
+   if(teamIndex >= 0 && teamIndex < getTeamCount())
+      return getTeam(teamIndex)->getName();
+   else if(teamIndex == -2)
+      return StringTableEntry("Hostile");
+   else if(teamIndex == -1)
+      return StringTableEntry("Neutral");
+   else
+      return StringTableEntry("UNKNOWN");
+}
+
+
+void Game::removeTeam(S32 teamIndex)
+{
+   mTeams.erase(teamIndex);
+}
+
+
+void Game::addTeam(boost::shared_ptr<AbstractTeam> team)
+{
+   mTeams.push_back(team);
+}
+
+
+void Game::addTeam(boost::shared_ptr<AbstractTeam> team, S32 index)
+{
+   mTeams.insert(index);
+   mTeams[index] = team;
+}
+
+
+void Game::clearTeams()
+{
+   mTeams.clear();
 }
 
 
@@ -274,7 +321,7 @@ void Game::setGameTime(F32 time)
    TNLAssert(gt, "Null gametype!");
 
    if(gt)
-      gt->mGameTimer.reset((U32)time * 1000 * 60);
+      gt->setGameTime(U32(time * 60));
 }
 
 
@@ -429,7 +476,7 @@ Rect Game::computeBarrierExtents()
 }
 
 
-Point Game::computePlayerVisArea(Ship *ship)
+Point Game::computePlayerVisArea(Ship *ship) const
 {
    F32 fraction = ship->getSensorZoomFraction();
 
@@ -776,6 +823,12 @@ StringTableEntry ServerGame::getCurrentLevelType()
 }
 
 
+boost::shared_ptr<AbstractTeam> ServerGame::getNewTeam()
+{
+   return boost::shared_ptr<AbstractTeam>(new Team());
+}
+
+
 bool ServerGame::processPseudoItem(S32 argc, const char **argv)
 {
    if(!stricmp(argv[0], "Spawn"))
@@ -787,11 +840,11 @@ bool ServerGame::processPseudoItem(S32 argc, const char **argv)
          p.read(argv + 2);
          p *= getGridSize();
 
-         if(teamIndex >= 0 && teamIndex < getGameType()->mTeams.size())    // Normal teams; ignore if invalid
-            getGameType()->mTeams[teamIndex].spawnPoints.push_back(p);
+         if(teamIndex >= 0 && teamIndex < getTeamCount())   // Normal teams; ignore if invalid
+            ((Team *)getTeam(teamIndex))->addSpawnPoint(p);
          else if(teamIndex == -1)                           // Neutral spawn point, add to all teams
-            for(S32 i = 0; i < getGameType()->mTeams.size(); i++)
-               getGameType()->mTeams[i].spawnPoints.push_back(p);
+            for(S32 i = 0; i < getTeamCount(); i++)
+               ((Team *)getTeam(i))->addSpawnPoint(p);
       }
    }
    else if(!stricmp(argv[0], "FlagSpawn"))      // FlagSpawn <team> <x> <y> [timer]
@@ -810,10 +863,10 @@ bool ServerGame::processPseudoItem(S32 argc, const char **argv)
          // Following works for Nexus & Soccer games because they are not TeamFlagGame.  Currently, the only
          // TeamFlagGame is CTF.
    
-         if(getGameType()->isTeamFlagGame() && (teamIndex >= 0 && teamIndex < getGameType()->mTeams.size()) )    // If we can't find a valid team...
-            getGameType()->mTeams[teamIndex].flagSpawnPoints.push_back(spawn);
+         if(getGameType()->isTeamFlagGame() && (teamIndex >= 0 && teamIndex < getTeamCount()) )   // If we can't find a valid team...
+            ((Team *)getTeam(teamIndex))->addFlagSpawn(spawn);
          else
-            getGameType()->mFlagSpawnPoints.push_back(spawn);                                     // ...then put it in the non-team list
+            getGameType()->addFlagSpawn(spawn);                                                   // ...then put it in the non-team list
       }
    }
    else if(!stricmp(argv[0], "AsteroidSpawn"))      // AsteroidSpawn <x> <y> [timer]      // TODO: Move this to AsteroidSpawn class?
@@ -821,7 +874,7 @@ bool ServerGame::processPseudoItem(S32 argc, const char **argv)
       AsteroidSpawn spawn = AsteroidSpawn();
 
       if(spawn.processArguments(argc, argv, this))
-         getGameType()->mAsteroidSpawnPoints.push_back(spawn);
+         getGameType()->addAsteroidSpawn(spawn);
    }
    else if(!stricmp(argv[0], "BarrierMaker"))
    {
@@ -984,11 +1037,8 @@ void ServerGame::cycleLevel(S32 nextLevel)
       g->addToGame(this);
    }
 
-   //getGameType()->addToGame(this);   //   >>>> already added during load process??
-
-
    if(getGameType()->makeSureTeamCountIsNotZero())
-      logprintf(LogConsumer::LogWarning, "Warning: Missing Team in level \"%s\"", gServerGame->getLevelFileNameFromIndex(mCurrentLevelIndex).c_str());
+      logprintf(LogConsumer::LogWarning, "Warning: Missing Team in level \"%s\"", getLevelFileNameFromIndex(mCurrentLevelIndex).c_str());
 
    logprintf(LogConsumer::ServerFilter, "Done. [%s]", getTimeStamp().c_str());
 
@@ -1233,13 +1283,7 @@ void ServerGame::idle(U32 timeDelta)
             case 4:
                msg = "/YES or /NO : %i0 : Change team %e0 to %e1";
                e.push_back(mVoteClientName);
-               {
-                  GameType *gt = getGameType();
-                  if(gt)
-                     e.push_back(gt->getTeamName(mVoteNumber));
-                  else
-                     e.push_back("?");
-               }
+               e.push_back(getTeamName(mVoteNumber));
                break;
             case 5:
                msg = "/YES or /NO : %i0 : %s0";
@@ -1283,7 +1327,6 @@ void ServerGame::idle(U32 timeDelta)
             switch(mVoteType)
             {
             case 0:
-               //cycleLevel(mVoteNumber);
                mNextLevel = mVoteNumber;
                if(gt)
                   gt->gameOverManGameOver();
@@ -1291,21 +1334,21 @@ void ServerGame::idle(U32 timeDelta)
             case 1:
                if(gt)
                {
-                  gt->mGameTimer.extend(mVoteNumber);                  // Increase "official time"
-                  gt->s2cSetTimeRemaining(gt->mGameTimer.getCurrent());    // Broadcast time to clients
+                  gt->extendGameTime(mVoteNumber);                           // Increase "official time"
+                  gt->s2cSetTimeRemaining(gt->getRemainingGameTimeInMs());   // Broadcast time to clients
                }
                break;
             case 2:
                if(gt)
                {
-                  gt->mGameTimer.extend(S32(mVoteNumber - gt->mGameTimer.getCurrent()));
-                  gt->s2cSetTimeRemaining(gt->mGameTimer.getCurrent());    // Broadcast time to clients
+                  gt->extendGameTime(S32(mVoteNumber - gt->getRemainingGameTimeInMs()));
+                  gt->s2cSetTimeRemaining(gt->getRemainingGameTimeInMs());    // Broadcast time to clients
                }
                break;
             case 3:
                if(gt)
                {
-                  gt->mWinningScore = mVoteNumber;
+                  gt->setWinningScore(mVoteNumber);
                   gt->s2cChangeScoreToWin(mVoteNumber, mVoteClientName);    // Broadcast score to clients
                }
                break;
@@ -1744,7 +1787,7 @@ void ClientGame::zoomCommanderMap()
 // Unused
 U32 ClientGame::getPlayerAndRobotCount() 
 { 
-   return mGameType ? mGameType->mClientList.size() : (U32)PLAYER_COUNT_UNAVAILABLE; 
+   return mGameType ? mGameType->getClientCount() : (U32)PLAYER_COUNT_UNAVAILABLE; 
 }
 
 
@@ -1755,17 +1798,15 @@ U32 ClientGame::getPlayerCount()
 
    U32 players = 0;
 
-   for(S32 i = 0; i < mGameType->mClientList.size(); i++)
-   {
-      if(!mGameType->mClientList[i]->isRobot)
+   for(S32 i = 0; i < mGameType->getClientCount(); i++)
+      if(!mGameType->getClient(i)->isRobot)
          players++;
-   }
 
    return players;
 }
 
 
-Color ClientGame::getTeamColor(S32 teamId)
+const Color *ClientGame::getTeamColor(S32 teamId) const
 {
    GameType *gameType = getGameType();
 
@@ -1773,6 +1814,23 @@ Color ClientGame::getTeamColor(S32 teamId)
       return Parent::getTeamColor(teamId);      // returns white
 
    return gameType->getTeamColor(teamId);
+}
+
+
+extern Color gNeutralTeamColor;
+extern Color gHostileTeamColor;
+
+// Generic color function, works in most cases (static method)
+const Color *Game::getBasicTeamColor(const Game *game, S32 teamId)
+{
+   TNLAssert(teamId < game->getTeamCount() || teamId < Item::TEAM_HOSTILE, "Invalid team id!");
+
+   if(teamId == Item::TEAM_NEUTRAL)
+      return &gNeutralTeamColor;
+   else if(teamId == Item::TEAM_HOSTILE)
+      return &gHostileTeamColor;
+   else
+      return game->getTeam(teamId)->getColor();  
 }
 
 
@@ -1843,6 +1901,14 @@ void ClientGame::drawStars(F32 alphaFrac, Point cameraPos, Point visibleExtent)
    glDisableClientState(GL_VERTEX_ARRAY);
 }
 
+
+boost::shared_ptr<AbstractTeam> ClientGame::getNewTeam() 
+{ 
+   TNLAssert(false, "This should never be called"); 
+   return boost::shared_ptr<AbstractTeam>(new Team); 
+}
+
+
 S32 QSORT_CALLBACK renderSortCompare(GameObject **a, GameObject **b)
 {
    return (*a)->getRenderSortValue() - (*b)->getRenderSortValue();
@@ -1850,7 +1916,7 @@ S32 QSORT_CALLBACK renderSortCompare(GameObject **a, GameObject **b)
 
 
 // Called from renderObjectiveArrow() & ship's onMouseMoved() when in commander's map
-Point ClientGame::worldToScreenPoint(Point p)
+Point ClientGame::worldToScreenPoint(const Point *point) const
 {
    const S32 canvasWidth = gScreenInfo.getGameCanvasWidth();
    const S32 canvasHeight = gScreenInfo.getGameCanvasHeight();
@@ -1883,7 +1949,7 @@ Point ClientGame::worldToScreenPoint(Point p)
 
       Point visScale(canvasWidth / modVisSize.x, canvasHeight / modVisSize.y );
 
-      Point ret = (p - offset) * visScale + Point((gScreenInfo.getGameCanvasWidth() / 2), (gScreenInfo.getGameCanvasHeight() / 2));
+      Point ret = (*point - offset) * visScale + Point((gScreenInfo.getGameCanvasWidth() / 2), (gScreenInfo.getGameCanvasHeight() / 2));
       return ret;
    }
    else                       // Normal map view
@@ -1891,7 +1957,7 @@ Point ClientGame::worldToScreenPoint(Point p)
       Point visExt = computePlayerVisArea(ship);
       Point scaleFactor((gScreenInfo.getGameCanvasWidth() / 2) / visExt.x, (gScreenInfo.getGameCanvasHeight() / 2) / visExt.y);
 
-      Point ret = (p - position) * scaleFactor + Point((gScreenInfo.getGameCanvasWidth() / 2), (gScreenInfo.getGameCanvasHeight() / 2));
+      Point ret = (*point - position) * scaleFactor + Point((gScreenInfo.getGameCanvasWidth() / 2), (gScreenInfo.getGameCanvasHeight() / 2));
       return ret;
    }
 }
@@ -1964,7 +2030,7 @@ void ClientGame::renderCommander()
    mDatabase->findObjects(CommandMapVisType, rawRenderObjects);
 
    // If we're drawing bot zones, add them to our list of render objects
-   if(gServerGame && mGameUserInterface->mDebugShowMeshZones)
+   if(gServerGame && mGameUserInterface->isShowingDebugMeshZones())
       gServerGame->getBotZoneDatabase()->findObjects(0, rawRenderObjects, BotNavMeshZoneTypeNumber);
 
    renderObjects.clear();
@@ -1984,7 +2050,7 @@ void ClientGame::renderCommander()
       if(gt)
       {
          playerTeam = u->getTeam();
-         Color teamColor = gt->getTeamColor(playerTeam);
+         Color teamColor = *gt->getTeamColor(playerTeam);
 
          for(S32 i = 0; i < renderObjects.size(); i++)
          {
@@ -2177,7 +2243,7 @@ void ClientGame::renderNormal()
    rawRenderObjects.clear();
    mDatabase->findObjects(AllObjectTypes, rawRenderObjects, extentRect);    // Use extent rects to quickly find objects in visual range
 
-   if(gServerGame && mGameUserInterface->mDebugShowMeshZones)
+   if(gServerGame && mGameUserInterface->isShowingDebugMeshZones())
        gServerGame->getBotZoneDatabase()->findObjects(0, rawRenderObjects, extentRect, BotNavMeshZoneTypeNumber);
 
    renderObjects.clear();
@@ -2243,8 +2309,6 @@ void ClientGame::render()
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-extern Color gNeutralTeamColor;
-extern Color gHostileTeamColor;
 extern EditorUserInterface gEditorUserInterface;
 
 // Constructor
@@ -2257,15 +2321,16 @@ EditorGame::EditorGame() : Game(Address())
    TNLAssert(mEditorDatabase, "WTF???");
 }     
 
-// TODO: Combine with GameType::getTeamColor
-Color EditorGame::getTeamColor(S32 teamId)
+
+const Color *EditorGame::getTeamColor(S32 teamIndex) const
 {
-   if(teamId == Item::TEAM_NEUTRAL)
-      return gNeutralTeamColor;
-   else if(teamId == Item::TEAM_HOSTILE)
-      return gHostileTeamColor;
-   else
-      return gEditorUserInterface.mTeams[teamId].color;     // TODO: Maintain teams on EditorGame object to avoid this call?
+   return Game::getBasicTeamColor(this, teamIndex); 
+}
+
+
+boost::shared_ptr<AbstractTeam> EditorGame::getNewTeam()
+{
+   return boost::shared_ptr<AbstractTeam>(new TeamEditor());
 }
 
 
