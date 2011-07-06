@@ -1,0 +1,238 @@
+//-----------------------------------------------------------------------------------
+//
+// Bitfighter - A multiplayer vector graphics space game
+// Based on Zap demo released for Torque Network Library by GarageGames.com
+//
+// Derivative work copyright (C) 2008-2009 Chris Eykamp
+// Original work copyright (C) 2004 GarageGames.com, Inc.
+// Other code copyright as noted
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful (and fun!),
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+//
+//------------------------------------------------------------------------------------
+
+#include "UIMenus.h"
+#include "UIGameParameters.h"
+#include "UIChat.h"
+#include "UIDiagnostics.h"
+#include "UIEditor.h"
+#include "UINameEntry.h"
+#include "input.h"
+#include "keyCode.h"
+#include "IniFile.h"
+#include "config.h"
+#include "gameType.h"
+
+#include "SDL/SDL.h"
+#include "SDL/SDL_opengl.h"
+
+#include <string>
+
+#ifndef min
+#define min(a,b) ((a) <= (b) ? (a) : (b))
+#define max(a,b) ((a) >= (b) ? (a) : (b))
+#endif
+
+namespace Zap
+{
+
+GameParamUserInterface gGameParamUserInterface;
+
+
+// Constructor
+GameParamUserInterface::GameParamUserInterface() : MenuUserInterface()
+{
+   setMenuID(GameParamsUI);
+   mMenuTitle = "Game Parameters Menu";
+   mMenuSubTitle = "";
+}
+
+
+void GameParamUserInterface::onActivate()
+{
+   selectedIndex = 0;                            // First item selected when we begin
+   updateMenuItems(gEditorGame->getGameType());
+   origGameParams = gEditorGame->toString();     // Save a copy of the params coming in for comparison when we leave to see what changed
+   SDL_ShowCursor(SDL_DISABLE);
+}
+
+
+extern const char *gGameTypeNames[];
+extern S32 gDefaultGameTypeIndex;
+
+
+static void changeGameTypeCallback(U32 gtIndex)
+{
+   TNL::Object *theObject = TNL::Object::create(gGameTypeNames[gtIndex]);   // Instantiate our gameType object
+   GameType *gt = dynamic_cast<GameType *>(theObject);                      // and cast it to GameType
+
+   gEditorGame->setGameType(gt);
+   gGameParamUserInterface.updateMenuItems(gt);
+}
+
+
+static void backToEditorCallback(U32 unused)
+{
+   gGameParamUserInterface.onEscape();
+}
+
+
+static Vector<string> gameTypes;
+
+static void buildGameTypeList()
+{
+   for(S32 i = 0; gGameTypeNames[i]; i++)
+   {
+      // The following seems rather wasteful, but this is hardly a performance sensitive area...
+      GameType *gameType = dynamic_cast<GameType *>(TNL::Object::create(gGameTypeNames[i]));          // Instantiate our gameType object
+      gameTypes.push_back(gameType->getGameTypeString());
+   }
+}
+
+
+// Simply breaks down gameParams into a map that looks like paramName, paramValue
+// First word is assumed to be the name, rest of the line is the value
+//static map<string,string> makeParamMap(const Vector<string> &gameParams)
+//{
+//   map<string,string> paramMap;
+//
+//   const string delimiters = " \t";       // Spaces or tabs delimit our lines
+//
+//   for(S32 i = 0; i < gameParams.size(); i++)
+//   {
+//      string str = gameParams[i];
+//      string::size_type lastPos = str.find_first_not_of(delimiters, 0);    // Skip any leading delimiters
+//      string::size_type pos     = str.find_first_of(delimiters, lastPos);  // Find first "non-delimiter"
+//
+//      string key = str.substr(lastPos, pos - lastPos);
+//      lastPos = min(str.find_first_not_of(delimiters, pos), str.size());   // Skip delimiters.  Note the "not_of"!
+//      string val = str.substr(lastPos, str.size() - lastPos);
+//
+//      paramMap[key] = val;
+//   }
+//
+//   return paramMap;
+//}
+
+
+#ifndef WIN32
+extern const S32 Game::MIN_GRID_SIZE;     // Needed by gcc, cause errors in VC++... and for Mac?
+extern const S32 Game::MAX_GRID_SIZE;
+#endif
+
+
+static S32 getGameTypeIndex(const char *gt)
+{
+   for(S32 i = 0; gGameTypeNames[i]; i++)
+      if(!strcmp(gt, gGameTypeNames[i]))
+         return i;
+
+   return -1;
+}
+
+
+
+void GameParamUserInterface::updateMenuItems(GameType *gameType)
+{
+   //map<string, string> paramMap = makeParamMap(gameParams);
+
+   if(gameTypes.size() == 0)     // Should only be run once, as these gameTypes will not change during the session
+      buildGameTypeList();
+
+   menuItems.clear();
+
+   menuItems.push_back(boost::shared_ptr<MenuItem>(new ToggleMenuItem("Game Type:",       
+                                                                      gameTypes,
+                                                                      getGameTypeIndex(gameType->getClassName()),
+                                                                      true,
+                                                                      changeGameTypeCallback,
+                                                                      gameType->getInstructionString())));
+
+
+   string fn = stripExtension(gEditorUserInterface.getLevelFileName());
+   menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem("Filename:",                         // name
+                                                                        fn,                                  // val
+                                                                        "",                                  // empty val
+                                                                        "File where this level is stored",   // help
+                                                                        MAX_FILE_NAME_LEN)));
+   const char **keys = gameType->getGameParameterMenuKeys();
+
+   S32 i = 0;
+   while(strcmp(keys[i], ""))
+   {
+      MenuItemMap::iterator iter = mMenuItemMap.find(keys[i]);
+
+      boost::shared_ptr<MenuItem> menuItem;
+
+      if(iter != mMenuItemMap.end())      
+         menuItem = iter->second;
+      else                 // Item not found
+      {
+         menuItem = gameType->getMenuItem(keys[i]);
+         TNLAssert(menuItem.get(), "Failed to make a new menu item!");
+
+         mMenuItemMap.insert(pair<const char *, boost::shared_ptr<MenuItem> >(keys[i], menuItem));
+      }
+
+      menuItems.push_back(menuItem);
+
+      i++;
+   }
+}
+
+
+// Runs as we're exiting the menu
+void GameParamUserInterface::onEscape()
+{
+   S32 gameTypeIndex = dynamic_cast<ToggleMenuItem *>(menuItems[0].get())->getValueIndex();
+
+   gEditorUserInterface.setLevelFileName(menuItems[1]->getValue());  
+
+   GameType *gameType = gEditorGame->getGameType();
+
+   const char **keys = gameType->getGameParameterMenuKeys();
+
+   S32 i = 0;
+
+   while(strcmp(keys[i], ""))
+   {
+      MenuItemMap::iterator iter = mMenuItemMap.find(keys[i]);
+
+      MenuItem *menuItem = iter->second.get();
+      gameType->saveMenuItem(menuItem, keys[i]);
+    
+      i++;
+   }
+
+   if(anythingChanged())
+   {
+      gEditorUserInterface.mNeedToSave = true;        // Need to save to retain our changes
+      gEditorUserInterface.mAllUndoneUndoLevel = -1;  // This change can't be undone
+      gEditorUserInterface.validateLevel();
+   }
+
+   // Now back to our previously scheduled program...  (which will be the editor, of course)
+   UserInterface::reactivatePrevUI();
+}
+
+
+bool GameParamUserInterface::anythingChanged()
+{
+   return origGameParams != gEditorGame->toString();
+}
+
+
+};
+
