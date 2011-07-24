@@ -260,10 +260,12 @@ void Event::onInputFocus()
 
 }
 
-void Event::onInputBlur()
-{
 
+void Event::onInputBlur()     // <=== what does this do??
+{
+   // Do nothing
 }
+
 
 void Event::onKeyDown(SDLKey key, SDLMod mod, U16 unicode)
 {
@@ -273,7 +275,7 @@ void Event::onKeyDown(SDLKey key, SDLMod mod, U16 unicode)
 
    // ALT + ENTER --> toggles window mode/full screen
    if(key == SDLK_RETURN && (mod & KMOD_ALT))
-      gOptionsMenuUserInterface.toggleDisplayMode();
+      gClientGame->getUIManager()->getOptionsMenuUserInterface()->toggleDisplayMode();
 
    // CTRL + Q --> screenshot!
    else if(key == SDLK_q && (mod & KMOD_CTRL))
@@ -289,6 +291,7 @@ void Event::onKeyDown(SDLKey key, SDLMod mod, U16 unicode)
          UserInterface::current->onKeyDown(keyCode, keyToAscii(unicode, keyCode));
    }
 }
+
 
 void Event::onKeyUp(SDLKey key, SDLMod mod, U16 unicode)
 {
