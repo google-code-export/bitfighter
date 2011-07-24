@@ -43,6 +43,19 @@ namespace Zap
 {
 using namespace std;
 
+// Constructor
+TextEntryUserInterface::TextEntryUserInterface(Game *game) : Parent(game)  
+{
+   setMenuID(TextEntryUI);
+   title = "ENTER TEXT:";
+   instr1 = "";
+   instr2 = "Enter some text above";
+   setSecret(false);
+   cursorPos = 0;
+   resetOnActivate = true;
+   lineEditor = LineEditor(MAX_PLAYER_NAME_LENGTH);
+}
+
 
 void TextEntryUserInterface::onActivate()
 {
@@ -119,11 +132,9 @@ void TextEntryUserInterface::setString(string str)
 ////////////////////////////////////////
 
 
-LevelNameEntryUserInterface gLevelNameEntryUserInterface;
-
 void LevelNameEntryUserInterface::onEscape()
 {
-   UserInterface::playBoop();
+   playBoop();
    reactivatePrevUI();      //gMainMenuUserInterface
 }
 
@@ -180,12 +191,13 @@ void LevelNameEntryUserInterface::onKeyDown(KeyCode keyCode, char ascii)
 
 void LevelNameEntryUserInterface::onAccept(const char *name)
 {
-   gEditorUserInterface.setLevelFileName(name);
-   UserInterface::playBoop();
-   gEditorUserInterface.activate(false);
+   EditorUserInterface *ui = getGame()->getUIManager()->getEditorUserInterface();
+   ui->setLevelFileName(name);
+   playBoop();
+   ui->activate(false);
    
    // Get that baby into the INI file
-   gIniSettings.lastEditorName = name;
+   getGame()->getIniSettings()->lastEditorName = name;
    saveSettingsToINI();             
 }
 
@@ -227,16 +239,14 @@ void PreGamePasswordEntryUserInterface::onAccept(const char *text)
 
 void PreGamePasswordEntryUserInterface::onEscape()
 {
-   gMainMenuUserInterface.activate();
+   getGame()->getUIManager()->getMainMenuUserInterface()->activate();
 }
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-ServerPasswordEntryUserInterface gServerPasswordEntryUserInterface;
-
 // Constructor
-ServerPasswordEntryUserInterface::ServerPasswordEntryUserInterface()        
+ServerPasswordEntryUserInterface::ServerPasswordEntryUserInterface(Game *game) : Parent(game)     
 {
    setMenuID(PasswordEntryUI);
    title = "ENTER SERVER PASSWORD:";
@@ -256,11 +266,12 @@ void InGamePasswordEntryUserInterface::onAccept(const char *text)
       submitPassword(gc, text);
 
       reactivatePrevUI();                                                  // Reactivating clears subtitle message, so reactivate first...
-      gGameMenuUserInterface.mMenuSubTitle = "** checking password **";     // ...then set the message
+      getGame()->getUIManager()->getGameMenuUserInterface()->mMenuSubTitle = "** checking password **";     // ...then set the message
    }
    else
       reactivatePrevUI();                                                  // Otherwise, just reactivate the previous menu
 }
+
 
 void InGamePasswordEntryUserInterface::onEscape()
 {
@@ -270,10 +281,8 @@ void InGamePasswordEntryUserInterface::onEscape()
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-AdminPasswordEntryUserInterface gAdminPasswordEntryUserInterface;
-
 // Constructor
-AdminPasswordEntryUserInterface::AdminPasswordEntryUserInterface()      
+AdminPasswordEntryUserInterface::AdminPasswordEntryUserInterface(Game *game) : Parent(game)     
 {
    setMenuID(AdminPasswordEntryUI);
    title = "ENTER ADMIN PASSWORD:";
@@ -291,10 +300,8 @@ void AdminPasswordEntryUserInterface::submitPassword(GameConnection *gameConnect
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-LevelChangePasswordEntryUserInterface gLevelChangePasswordEntryUserInterface;
-
 // Constructor
-LevelChangePasswordEntryUserInterface::LevelChangePasswordEntryUserInterface()      
+LevelChangePasswordEntryUserInterface::LevelChangePasswordEntryUserInterface(Game *game) : Parent(game)     
 {
    setMenuID(LevelChangePasswordEntryUI);
    title = "ENTER LEVEL CHANGE PASSWORD:";

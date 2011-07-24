@@ -38,6 +38,7 @@ extern md5wrapper md5;
 
 class TextEntryUserInterface : public UserInterface
 {
+   typedef UserInterface Parent;
 private:
    U32 cursorPos;
 
@@ -53,17 +54,7 @@ protected:
    virtual void onEscape() = 0;
 
 public:
-   TextEntryUserInterface()   // Constructor
-   {
-      setMenuID(TextEntryUI);
-      title = "ENTER TEXT:";
-      instr1 = "";
-      instr2 = "Enter some text above";
-      setSecret(false);
-      cursorPos = 0;
-      resetOnActivate = true;
-      lineEditor = LineEditor(MAX_PLAYER_NAME_LENGTH);
-   }
+   TextEntryUserInterface(Game *game);  // Constructor
 
    virtual void onActivate();
    void render();
@@ -95,7 +86,6 @@ public:
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-
 class LevelNameEntryUserInterface : public TextEntryUserInterface
 {
 
@@ -106,7 +96,7 @@ private:
    Vector<string> mLevels;
 
 public:
-   LevelNameEntryUserInterface()       // Constructor
+   LevelNameEntryUserInterface(Game *game) : Parent(game)      // Constructor
    {
       setMenuID(LevelNameEntryUI);
       title = "ENTER LEVEL TO EDIT:";
@@ -124,8 +114,6 @@ public:
    virtual void onActivate();
 };
 
-extern LevelNameEntryUserInterface gLevelNameEntryUserInterface;
-
 
 ////////////////////////////////////////
 ////////////////////////////////////////
@@ -135,7 +123,7 @@ class PasswordEntryUserInterface :  public TextEntryUserInterface
    typedef TextEntryUserInterface Parent;
 
 public:
-   PasswordEntryUserInterface()     // Constructor
+   PasswordEntryUserInterface(Game *game) : Parent(game)    // Constructor
    {
       setSecret(true);
    }
@@ -153,9 +141,12 @@ class GameConnection;
 
 class PreGamePasswordEntryUserInterface :  public PasswordEntryUserInterface
 {
+   typedef PasswordEntryUserInterface Parent;
+
 private:
    Address connectAddress;
 public:
+   PreGamePasswordEntryUserInterface(Game *game) : Parent(game) { /* Do nothing */ }    // Constructor
    void onAccept(const char *text);
    void onEscape();
    void setConnectServer(const Address &addr) { connectAddress = addr; }
@@ -167,7 +158,10 @@ public:
 
 class InGamePasswordEntryUserInterface :  public PasswordEntryUserInterface
 {
+   typedef PasswordEntryUserInterface Parent;
+
 public:
+   InGamePasswordEntryUserInterface(Game *game) : Parent(game) { /* Do nothing */ }  // Constructor
    void onAccept(const char *text);
    void onEscape();
    virtual void submitPassword(GameConnection *gameConnection, const char *text) = 0;
@@ -179,11 +173,11 @@ public:
 
 class ServerPasswordEntryUserInterface : public PreGamePasswordEntryUserInterface
 {
-public:
-   ServerPasswordEntryUserInterface();                // Constructor
-};
+   typedef PreGamePasswordEntryUserInterface Parent;
 
-extern ServerPasswordEntryUserInterface gServerPasswordEntryUserInterface;
+public:
+   ServerPasswordEntryUserInterface(Game *game);                // Constructor
+};
 
 
 ////////////////////////////////////////
@@ -191,12 +185,12 @@ extern ServerPasswordEntryUserInterface gServerPasswordEntryUserInterface;
 
 class AdminPasswordEntryUserInterface : public InGamePasswordEntryUserInterface
 {
+   typedef InGamePasswordEntryUserInterface Parent;
+
 public:
-   AdminPasswordEntryUserInterface();           // Constructor
+   AdminPasswordEntryUserInterface(Game *game);           // Constructor
    void submitPassword(GameConnection *gameConnection, const char *text);
 };
-
-extern AdminPasswordEntryUserInterface gAdminPasswordEntryUserInterface;
 
 
 ////////////////////////////////////////
@@ -204,12 +198,13 @@ extern AdminPasswordEntryUserInterface gAdminPasswordEntryUserInterface;
 
 class LevelChangePasswordEntryUserInterface : public InGamePasswordEntryUserInterface
 {
+   typedef InGamePasswordEntryUserInterface Parent;
+
 public:
-   LevelChangePasswordEntryUserInterface();     // Constructor
+   LevelChangePasswordEntryUserInterface(Game *game);     // Constructor
    void submitPassword(GameConnection *gameConnection, const char *text);
 };
 
-extern LevelChangePasswordEntryUserInterface gLevelChangePasswordEntryUserInterface;
 
 ////////////////////////////////////////
 ////////////////////////////////////////
