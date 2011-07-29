@@ -124,7 +124,7 @@ private:
    U32 mTimeUnconnectedToMaster;      // Time that we've been unconnected to the master
    bool mHaveTriedToConnectToMaster;
 
-   WallSegmentManager *mWallSegmentManager;     
+   WallSegmentManager *mWallSegmentManager;    
 
    UIManager *mUIManager;
 
@@ -145,6 +145,9 @@ private:
    void onReadLevelCreditsParam(S32 argc, const char **argv);
    
 protected:
+
+boost::shared_ptr<EditorObjectDatabase> mEditorDatabase;    // TODO: Move to clientGame
+
    virtual void cleanUp();
    U32 mNextMasterTryTime;
    bool mReadyToConnectToMaster;
@@ -161,7 +164,7 @@ protected:
       DeleteRef(GameObject *o = NULL, U32 d = 0);
    };
 
-   boost::shared_ptr<GridDatabase> mDatabase;                // Database for all normal objects
+   boost::shared_ptr<GridDatabase> mGameObjDatabase;                // Database for all normal objects
 
    Vector<DeleteRef> mPendingDeleteObjects;
    Vector<SafePtr<GameObject> > mScopeAlwaysList;
@@ -200,12 +203,12 @@ public:
 
    virtual bool isTestServer() { return false; }     // Overridden in ServerGame
 
-   virtual const Color *getTeamColor(S32 teamId) const { return &Colors::white; }  // ClientGame and EditorGame will override
+   virtual const Color *getTeamColor(S32 teamId) const { return &Colors::white; }  // ClientGame will override
    static const Color *getBasicTeamColor(const Game *game, S32 teamId);            // Color function used in most cases, overridden by some games
 
    ModuleInfo *getModuleInfo(ShipModule module) { return &mModuleInfos[(U32)module]; }
    
-   WallSegmentManager *getWallSegmentManager() const { return mWallSegmentManager; }      // Looks like this is only used in EditorGame...  TODO: Move back to EditorGame()
+   WallSegmentManager *getWallSegmentManager() const { return mWallSegmentManager; }      // TODO: Move back to ClientGame()
 
    void computeWorldObjectExtents();
    Rect computeBarrierExtents();
@@ -218,7 +221,7 @@ public:
 
    UIManager *getUIManager() { return mUIManager; }
 
-   virtual void processLevelLoadLine(U32 argc, U32 id, const char **argv);      // Only used by ServerGame and EditorGame
+   virtual void processLevelLoadLine(U32 argc, U32 id, const char **argv, GridDatabase *database);  
    bool processLevelParam(S32 argc, const char **argv);
    string toString();
 
@@ -245,7 +248,19 @@ public:
    MasterServerConnection *getConnectionToMaster();
 
    GameNetInterface *getNetInterface();
-   virtual GridDatabase *getGridDatabase() { return mDatabase.get(); }    // EditorGame, for example, returns an EditorObjectDatabase
+   virtual GridDatabase *getGameObjDatabase() { return mGameObjDatabase.get(); }    
+
+   EditorObjectDatabase *getEditorDatabase() // TODO: Only for clientGame
+   { 
+      // Lazy init
+      if(!mEditorDatabase.get())
+         mEditorDatabase = boost::shared_ptr<EditorObjectDatabase>(new EditorObjectDatabase());
+         
+      return mEditorDatabase.get(); 
+   }      
+
+   void setEditorDatabase(boost::shared_ptr<GridDatabase> database) { mEditorDatabase = boost::dynamic_pointer_cast<EditorObjectDatabase>(database); }
+
 
    const Vector<SafePtr<GameObject> > &getScopeAlwaysList() { return mScopeAlwaysList; }
 
@@ -515,42 +530,14 @@ public:
 
    boost::shared_ptr<AbstractTeam> getNewTeam();
 
+   bool processPseudoItem(S32 argc, const char **argv);        // For loading levels in editor
+
+
    /////
    // Interface methods
    GameUserInterface *getUserInterface() { return mGameUserInterface; }
 
 };
-
-
-////////////////////////////////////////
-////////////////////////////////////////
-
-
-class EditorGame : public Game
-{
-private:
-   boost::shared_ptr<EditorObjectDatabase> mEditorDatabase;
-   
-public:
-   EditorGame();     // Constructor
-
-   GameUserInterface *getUserInterface() { return NULL; }      // Not sure about this...
-
-   U32 getPlayerCount() { return 0; }                          // Client's version might be ok, not sure this is ever used
-   bool isServer() { return false; }
-   void idle(U32 timeDelta) { /* Do nothing */ }
-
-   const Color *getTeamColor(S32 teamIndex) const;             // Client's version might be ok
-
-   bool processPseudoItem(S32 argc, const char **argv);        // Not in client...
-
-   GridDatabase *getGridDatabase() { return mEditorDatabase.get(); }
-
-   void setGridDatabase(boost::shared_ptr<GridDatabase> database) { mEditorDatabase = boost::dynamic_pointer_cast<EditorObjectDatabase>(database); }
-
-   boost::shared_ptr<AbstractTeam> getNewTeam();               // Editor returns TeamEditor, client returns Team
-};
-
 
 ////////////////////////////////////////
 ////////////////////////////////////////
@@ -558,7 +545,6 @@ public:
 
 extern ServerGame *gServerGame;
 extern ClientGame *gClientGame;
-extern EditorGame *gEditorGame;
 
 extern Vector<string> gMasterAddress;
 

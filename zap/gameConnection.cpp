@@ -412,6 +412,8 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sEngineerDeployObject, (RangedU32<0,Engineer
 {
    sEngineerDeployObject(type);
 }
+
+
 // Server only, robots can run this, bypassing the net interface. Return true if successfuly deployed.
 bool GameConnection::sEngineerDeployObject(U32 type)
 {
@@ -424,7 +426,7 @@ bool GameConnection::sEngineerDeployObject(U32 type)
 
    EngineerModuleDeployer deployer;
 
-   if(!deployer.canCreateObjectAtLocation(ship, type))     
+   if(!deployer.canCreateObjectAtLocation(gServerGame->getGameObjDatabase(), ship, type))     
       s2cDisplayMessage(GameConnection::ColorRed, SFXNone, deployer.getErrorMessage().c_str());
 
    else if(deployer.deployEngineeredItem(this, type))
@@ -1047,30 +1049,31 @@ TNL_IMPLEMENT_RPC(GameConnection, s2cRemoveLevel, (S32 index), (index),
       mLevelInfos.erase(index);
 }
 
+
 extern string gLevelChangePassword;
+
 TNL_IMPLEMENT_RPC(GameConnection, c2sRequestLevelChange, (S32 newLevelIndex, bool isRelative), (newLevelIndex, isRelative), 
                               NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirClientToServer, 0)
 {
    c2sRequestLevelChange2(newLevelIndex, isRelative);
 }
+
+
 void GameConnection::c2sRequestLevelChange2(S32 newLevelIndex, bool isRelative)
 {
    if(!mIsLevelChanger)
       return;
 
    // use voting when no level change password and more then 1 players
-   if(!mIsAdmin && gLevelChangePassword.length() == 0 && gServerGame->getPlayerCount() > 1)
-   {
-      if(gServerGame->voteStart(this, 0, newLevelIndex))
-         return;
-   }
+   if(!mIsAdmin && gLevelChangePassword.length() == 0 && gServerGame->getPlayerCount() > 1&&  gServerGame->voteStart(this, 0, newLevelIndex))
+      return;
 
    bool restart = false;
 
    if(isRelative)
       newLevelIndex = (gServerGame->getCurrentLevelIndex() + newLevelIndex ) % gServerGame->getLevelCount();
    else if(newLevelIndex == ServerGame::REPLAY_LEVEL)
-         restart = true;
+      restart = true;
 
    StringTableEntry msg( restart ? "%e0 restarted the current level." : "%e0 changed the level to %e1." );
    Vector<StringTableEntry> e;

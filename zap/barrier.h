@@ -42,6 +42,8 @@ namespace Zap
 /// constructed as an expanded line segment.
 class Barrier : public GameObject
 {
+   typedef GameObject Parent;
+
 public:
    Vector<Point> mPoints; ///< The points of the barrier --> if only two, first will be start, second end of an old-school segment
 
@@ -199,8 +201,8 @@ private:
 class WallSegment : public DatabaseObject
 {
 private:
-   GridDatabase *mGridDatabase;    
-   GridDatabase *getGridDatabase() { return mGridDatabase; }      
+   GridDatabase *mDatabase;    
+   GridDatabase *getGridDatabase() { return mDatabase; }      
    S32 mOwner;
 
   void init(S32 owner);
@@ -246,7 +248,7 @@ public:
 class WallEdge : public DatabaseObject
 {
 private:
-   static GridDatabase mGridDatabase;
+   static GridDatabase mWallSegmentDatabase;
 
    Point mStart, mEnd;
 
@@ -257,8 +259,8 @@ public:
    Point *getStart() { return &mStart; }
    Point *getEnd() { return &mEnd; }
 
-   GridDatabase *getGridDatabase() { return &mGridDatabase; }      // Can't be static because it's required as part of our interfaceTODO: make private
-   static GridDatabase *getWallEdgeDatabase() { return &mGridDatabase; }    // Provide static access to our database
+   GridDatabase *getGridDatabase() { return &mWallSegmentDatabase; }      // Can't be static because it's required as part of our interfaceTODO: make private
+   static GridDatabase *getWallEdgeDatabase() { return &mWallSegmentDatabase; }    // Provide static access to our database
 
    // Note that the poly returned here is different than what you might expect -- it is composed of the edges,
    // not the corners, and is thus in A-B, C-D, E-F format rather than the more typical A-B-C-D format returned
@@ -276,16 +278,16 @@ class EditorObject;
 class WallSegmentManager
 {
 private:
-   GridDatabase *mGridDatabase;
+   GridDatabase *mWallSegmentDatabase;
 
 public:
    WallSegmentManager();   // Constructor
    ~WallSegmentManager();  // Destructor
 
-   GridDatabase *getGridDatabase() { return mGridDatabase; } 
+   GridDatabase *getGridDatabase() { return mWallSegmentDatabase; } 
 
    Vector<WallSegment *> mWallSegments;      
-   Vector<WallEdge *> mWallEdges;        // For mounting forcefields/turrets
+   Vector<WallEdge *> mWallEdges;               // For mounting forcefields/turrets
    Vector<Point> mWallEdgePoints;               // For rendering
 
    void buildAllWallSegmentEdgesAndPoints(GridDatabase *gameDatabase);

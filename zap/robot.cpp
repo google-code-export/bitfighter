@@ -961,7 +961,7 @@ U16 LuaRobot::findClosestZone(const Point &point)
       BotNavMeshZone *zone = dynamic_cast<BotNavMeshZone *>(objects[i]);
       Point center = zone->getCenter();
 
-      if(gServerGame->getGridDatabase()->pointCanSeePoint(center, point))  // This is an expensive test
+      if(gServerGame->getGameObjDatabase()->pointCanSeePoint(center, point))  // This is an expensive test
       {
          closestZone = zone->getZoneId();
          break;
@@ -1605,7 +1605,7 @@ bool Robot::runMain()
 
    try
    {
-      lua_getglobal(L, "_main");
+      lua_getglobal(L, "_main");       // _main calls main --> see robot_helper_functions.lua
       if(lua_pcall(L, 0, 0, 0) != 0)
          throw LuaException(lua_tostring(L, -1));
    }
@@ -1874,7 +1874,7 @@ void Robot::idle(GameObject::IdleCallPath path)
 
             try
             {
-               lua_getglobal(L, "_onTick");
+               lua_getglobal(L, "_onTick");   // _onTick calls onTick --> see robot_helper_functions.lua
                Lunar<LuaRobot>::push(L, this->mLuaRobot);
 
                lua_pushnumber(L, deltaT);    // Pass the time elapsed since we were last here

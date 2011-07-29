@@ -83,7 +83,6 @@ ServerGame *gServerGame = NULL;
 ClientGame *gClientGame = NULL;
 ClientGame *gClientGame1 = NULL;
 ClientGame *gClientGame2 = NULL;
-EditorGame *gEditorGame = NULL;
 
 extern ScreenInfo gScreenInfo;
 
@@ -93,7 +92,7 @@ static Vector<DatabaseObject *> fillVector2;
 //-----------------------------------------------------------------------------------
 
 // Constructor
-Game::Game(const Address &theBindAddress) : mDatabase(new GridDatabase())     //? was without new
+Game::Game(const Address &theBindAddress) : mGameObjDatabase(new GridDatabase())     //? was without new
 {
    mUIManager = new UIManager(this);                  // gets deleted in destructor
 
@@ -236,8 +235,8 @@ static string origFilename;      // Name of file we're trying to load
 
 // Process a single line of a level file, loaded in gameLoader.cpp
 // argc is the number of parameters on the line, argv is the params themselves
-// Used by ServerGame and EditorGame
-void Game::processLevelLoadLine(U32 argc, U32 id, const char **argv)
+// Used by ServerGame and the editor
+void Game::processLevelLoadLine(U32 argc, U32 id, const char **argv, GridDatabase *database)
 {
    S32 strlenCmd = (S32) strlen(argv[0]);
 
@@ -263,7 +262,7 @@ void Game::processLevelLoadLine(U32 argc, U32 id, const char **argv)
 
       bool validArgs = gt->processArguments(argc - 1, argv + 1, NULL);
 
-      gt->addToGame(this);    
+      gt->addToGame(this, database);    
 
       if(!validArgs || strcmp(gt->getClassName(), argv[0]))
          throw LevelLoadException("Improperly formed GameType parameter");
@@ -298,7 +297,7 @@ void Game::processLevelLoadLine(U32 argc, U32 id, const char **argv)
       }
 
       TNL::Object *theObject = TNL::Object::create(obj);          // Create an object of the type specified on the line
-      SafePtr<GameObject> object  = dynamic_cast<GameObject *>  (theObject);  // Force our new object to be a GameObject
+      SafePtr<GameObject> object  = dynamic_cast<GameObject *>(theObject);  // Force our new object to be a GameObject
       EditorObject *eObject = dynamic_cast<EditorObject *>(theObject);
 
 
@@ -316,7 +315,7 @@ void Game::processLevelLoadLine(U32 argc, U32 id, const char **argv)
          if(validArgs)
          {
             if(object.isValid())  // processArguments might delete this object (teleporter)
-               object->addToGame(this);
+               object->addToGame(this, database);
          }
          else
          {
@@ -606,7 +605,7 @@ void Game::processDeleteList(U32 timeDelta)
 void Game::deleteObjects(U32 typeMask)
 {
    fillVector.clear();
-   mDatabase->findObjects(typeMask, fillVector);
+   mGameObjDatabase->findObjects(typeMask, fillVector);
    for(S32 i = 0; i < fillVector.size(); i++)
    {
       GameObject *obj = dynamic_cast<GameObject *>(fillVector[i]);
@@ -618,7 +617,7 @@ void Game::deleteObjects(U32 typeMask)
 void Game::computeWorldObjectExtents()
 {
    fillVector.clear();
-   mDatabase->findObjects(fillVector);
+   mGameObjDatabase->findObjects(fillVector);
 
    if(fillVector.size() == 0)     // No objects ==> no extents!
    {
@@ -663,7 +662,7 @@ Rect Game::computeBarrierExtents()
    Rect theRect;
 
    fillVector.clear();
-   mDatabase->findObjects(BarrierType, fillVector);
+   mGameObjDatabase->findObjects(BarrierType, fillVector);
 
    for(S32 i = 0; i < fillVector.size(); i++)
       theRect.unionRect(fillVector[i]->getExtent());
@@ -739,11 +738,11 @@ void Game::cleanUp()
    // Delete any game objects that may exist  --> not sure this will be needed when we're using shared_ptr
    // sam: should be deleted to properly get removed from server's database and to remove client's net objects.
    fillVector.clear();
-   mDatabase->findObjects(fillVector);
+   mGameObjDatabase->findObjects(fillVector);
 
    for(S32 i = 0; i < fillVector.size(); i++)
    {
-      mDatabase->removeFromDatabase(fillVector[i], fillVector[i]->getExtent());
+      mGameObjDatabase->removeFromDatabase(fillVector[i], fillVector[i]->getExtent());
       delete dynamic_cast<Object *>(fillVector[i]); // dynamic_cast might be needed to avoid errors.
    }
    mTeams.resize(0);
@@ -1230,8 +1229,8 @@ void ServerGame::cycleLevel(S32 nextLevel)
    if(!getGameType())   // loadLevel can fail (missing file) and not create GameType
    {
       logprintf(LogConsumer::LogWarning, "Warning: Missing game type parameter in level \"%s\"", gServerGame->getLevelFileNameFromIndex(mCurrentLevelIndex).c_str());
-      GameType *g = new GameType;
-      g->addToGame(this);
+      GameType *gameType = new GameType;
+      gameType->addToGame(this, getGameObjDatabase());
    }
 
    if(getGameType()->makeSureTeamCountIsNotZero())
@@ -1341,20 +1340,22 @@ bool ServerGame::loadLevel(const string &origFilename2)
       return false;
    }
 
-   if(!loadLevelFromFile(filename.c_str()))
+   logprintf("1 server: %d, client %d", gServerGame->getGameObjDatabase()->getObjectCount(),gClientGame->getGameObjDatabase()->getObjectCount());
+   if(loadLevelFromFile(filename.c_str(), getGameObjDatabase()))
+      mLevelFileHash = md5.getHashFromFile(filename);    // TODO: Combine this with the reading of the file we're doing anyway in initLevelFromFile()
+   else
    {
       logprintf("Unable to process level file \"%s\".  Skipping...", origFilename.c_str());
       return false;
    }
-   else
-      mLevelFileHash = md5.getHashFromFile(filename);    // TODO: Combine this with the reading of the file we're doing anyway in initLevelFromFile()
+   logprintf("2 server: %d, client %d", gServerGame->getGameObjDatabase()->getObjectCount(),gClientGame->getGameObjDatabase()->getObjectCount());
 
    // We should have a gameType by the time we get here... but in case we don't, we'll add a default one now
    if(!getGameType())
    {
       logprintf(LogConsumer::LogWarning, "Warning: Missing game type parameter in level \"%s\"", origFilename.c_str());
-      GameType *g = new GameType;
-      g->addToGame(this);
+      GameType *gameType = new GameType;
+      gameType->addToGame(this, getGameObjDatabase());
    }
 
 
@@ -1374,7 +1375,7 @@ bool ServerGame::loadLevel(const string &origFilename2)
 
       // The script file will be the first argument, subsequent args will be passed on to the script.
       // Now we've crammed all our action into the constructor... is this ok design?
-      LuaLevelGenerator levelgen = LuaLevelGenerator(name, getGameType()->getScriptArgs(), getGridSize(), getGridDatabase(), this, gConsole);
+      LuaLevelGenerator levelgen = LuaLevelGenerator(name, getGameType()->getScriptArgs(), getGridSize(), getGameObjDatabase(), this, gConsole);
    }
 
    // Script specified in INI globalLevelLoadScript
@@ -1391,7 +1392,7 @@ bool ServerGame::loadLevel(const string &origFilename2)
 
       // The script file will be the first argument, subsequent args will be passed on to the script.
       // Now we've crammed all our action into the constructor... is this ok design?
-      LuaLevelGenerator levelgen = LuaLevelGenerator(name, getGameType()->getScriptArgs(), getGridSize(), getGridDatabase(), this, gConsole);
+      LuaLevelGenerator levelgen = LuaLevelGenerator(name, getGameType()->getScriptArgs(), getGridSize(), getGameObjDatabase(), this, gConsole);
    }
 
    //  Check after script, script might add Teams
@@ -1661,7 +1662,7 @@ void ServerGame::idle(U32 timeDelta)
    computeWorldObjectExtents();
 
    fillVector2.clear();  // need to have our own local fillVector
-   mDatabase->findObjects(fillVector2);
+   mGameObjDatabase->findObjects(fillVector2);
 
 
    // Visit each game object, handling moves and running its idle method
@@ -1938,7 +1939,7 @@ void ClientGame::idle(U32 timeDelta)
       theMove->prepare();           // Pack and unpack the move for consistent rounding errors
 
       fillVector2.clear();  // need to have our own local fillVector
-      mDatabase->findObjects(fillVector2);
+      mGameObjDatabase->findObjects(fillVector2);
 
       for(S32 i = 0; i < fillVector2.size(); i++)
       {
@@ -2153,10 +2154,10 @@ void ClientGame::drawStars(F32 alphaFrac, Point cameraPos, Point visibleExtent)
 }
 
 
+// Should only be called from Editor
 boost::shared_ptr<AbstractTeam> ClientGame::getNewTeam() 
 { 
-   TNLAssert(false, "This should never be called"); 
-   return boost::shared_ptr<AbstractTeam>(new Team); 
+   return boost::shared_ptr<AbstractTeam>(new TeamEditor());
 }
 
 
@@ -2277,7 +2278,7 @@ void ClientGame::renderCommander()
    // Render the objects.  Start by putting all command-map-visible objects into renderObjects.  Note that this no longer captures
    // walls -- those will be rendered separately.
    rawRenderObjects.clear();
-   mDatabase->findObjects(CommandMapVisType, rawRenderObjects);
+   mGameObjDatabase->findObjects(CommandMapVisType, rawRenderObjects);
 
    // If we're drawing bot zones, add them to our list of render objects
    if(gServerGame && mGameUserInterface->isShowingDebugMeshZones())
@@ -2329,7 +2330,7 @@ void ClientGame::renderCommander()
          }
 
          fillVector.clear();
-         mDatabase->findObjects(SpyBugType, fillVector);
+         mGameObjDatabase->findObjects(SpyBugType, fillVector);
 
          // Render spy bug visibility range second, so ranges appear above ship scanner range
          for(S32 i = 0; i < fillVector.size(); i++)
@@ -2425,7 +2426,7 @@ void ClientGame::renderOverlayMap()
    mapBounds.expand(Point(mapWidth * 2, mapHeight * 2));      //TODO: Fix
 
    rawRenderObjects.clear();
-   mDatabase->findObjects(CommandMapVisType, rawRenderObjects, mapBounds);
+   mGameObjDatabase->findObjects(CommandMapVisType, rawRenderObjects, mapBounds);
 
    renderObjects.clear();
    for(S32 i = 0; i < rawRenderObjects.size(); i++)
@@ -2491,8 +2492,11 @@ void ClientGame::renderNormal()
    Rect extentRect(position - screenSize, position + screenSize);
 
    rawRenderObjects.clear();
-   mDatabase->findObjects(AllObjectTypes, rawRenderObjects, extentRect);    // Use extent rects to quickly find objects in visual range
+   mGameObjDatabase->findObjects(AllObjectTypes, rawRenderObjects, extentRect);    // Use extent rects to quickly find objects in visual range
 
+   // Normally a big no-no, we'll access the server's bot zones directly if we are running locally so we can visualize them without bogging
+   // the game down with the normal process of transmitting zones from server to client.  The result is that we can only see zones on our local
+   // server.
    if(gServerGame && mGameUserInterface->isShowingDebugMeshZones())
        gServerGame->getBotZoneDatabase()->findObjects(0, rawRenderObjects, extentRect, BotNavMeshZoneTypeNumber);
 
@@ -2559,29 +2563,14 @@ void ClientGame::render()
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-// Constructor
-EditorGame::EditorGame() : Game(Address())
-{ 
-   resetLevelInfo(); 
-   //mEditorDatabase = boost::shared_ptr<EditorObjectDatabase>();
-   mEditorDatabase = boost::shared_ptr<EditorObjectDatabase>(new EditorObjectDatabase());
-   TNLAssert(mEditorDatabase, "WTF???");
-}     
+//const Color *EditorGame::getTeamColor(S32 teamIndex) const
+//{
+//   return Game::getBasicTeamColor(this, teamIndex); 
+//}
 
 
-const Color *EditorGame::getTeamColor(S32 teamIndex) const
-{
-   return Game::getBasicTeamColor(this, teamIndex); 
-}
 
-
-boost::shared_ptr<AbstractTeam> EditorGame::getNewTeam()
-{
-   return boost::shared_ptr<AbstractTeam>(new TeamEditor());
-}
-
-
-bool EditorGame::processPseudoItem(S32 argc, const char **argv)
+bool ClientGame::processPseudoItem(S32 argc, const char **argv)
 {
    if(!stricmp(argv[0], "Spawn") || !stricmp(argv[0], "FlagSpawn") || !stricmp(argv[0], "AsteroidSpawn"))
    {
@@ -2598,7 +2587,7 @@ bool EditorGame::processPseudoItem(S32 argc, const char **argv)
       bool validArgs = newObject->processArguments(argc - 1, argv + 1, this);
 
       if(validArgs)
-         newObject->addToGame(this);
+         newObject->addToEditor(this);
       else
       {
          logprintf(LogConsumer::LogWarning, "Invalid arguments in object \"%s\" in level \"%s\"", argv[0], origFilename.c_str());
@@ -2626,7 +2615,7 @@ bool EditorGame::processPseudoItem(S32 argc, const char **argv)
          
          if(wallObject->getVertCount() >= 2)
          {
-            wallObject->addToGame(this);
+            wallObject->addToGame(this, this->getEditorDatabase());
             wallObject->processEndPoints();
             //wallObject->onGeomChanged(); 
          }
@@ -2661,7 +2650,7 @@ bool EditorGame::processPseudoItem(S32 argc, const char **argv)
          
          if(newObject->getVertCount() >= 2)
          {
-            newObject->addToGame(this);
+            newObject->addToEditor(this);
             newObject->onGeomChanged(); 
          }
          else

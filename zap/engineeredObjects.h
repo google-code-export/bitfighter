@@ -65,6 +65,8 @@ public:
    EngineeredObject(S32 team = -1, Point anchorPoint = Point(), Point anchorNormal = Point(), GameObjectType objectType = UnknownType);
    virtual bool processArguments(S32 argc, const char **argv, Game *game);
 
+   virtual void onAddedToGame(Game *theGame);
+
    static const S32 MAX_SNAP_DISTANCE = 100;    // Max distance to look for a mount point
 
    void setResource(Item *resource);
@@ -338,7 +340,7 @@ private:
    string mErrorMessage;
 
 public:
-   bool canCreateObjectAtLocation(Ship *ship, U32 objectType);             // Check potential deployment position
+   bool canCreateObjectAtLocation(GridDatabase *database, Ship *ship, U32 objectType);    // Check potential deployment position
    bool deployEngineeredItem(GameConnection *connection, U32 objectType);  // Deploy!
    string getErrorMessage() { return mErrorMessage; }
 
