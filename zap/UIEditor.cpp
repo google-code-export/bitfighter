@@ -36,7 +36,7 @@
 #include "UIErrorMessage.h"
 #include "UIYesNo.h"
 #include "gameObjectRender.h"
-#include "game.h"                // For EditorGame def
+#include "game.h"                // Can delete?
 #include "gameType.h"
 #include "soccerGame.h"          // For Soccer ball radius
 #include "engineeredObjects.h"   // For Turret properties
@@ -146,7 +146,7 @@ EditorUserInterface::EditorUserInterface(Game *game) : Parent(game)
 // Encapsulate some ugliness
 const Vector<EditorObject *> *EditorUserInterface::getObjectList()
 {
-   return ((EditorObjectDatabase *)getGame()->getGridDatabase())->getObjectList();
+   return getGame()->getEditorDatabase()->getObjectList();
 }
 
 
@@ -161,7 +161,7 @@ void EditorUserInterface::addToDock(EditorObject* object)
 
 void EditorUserInterface::addDockObject(EditorObject *object, F32 xPos, F32 yPos)
 {
-   object->addToDock(getEditorGame(), Point(xPos, yPos));       
+   object->addToDock(getGame(), Point(xPos, yPos));       
    object->setTeam(mCurrentTeam);
 }
 
@@ -247,7 +247,7 @@ void EditorUserInterface::populateDock()
 // Destructor -- unwind things in an orderly fashion
 EditorUserInterface::~EditorUserInterface()
 {
-   clearDatabase(getGame()->getGridDatabase());
+   clearDatabase(getGame()->getEditorDatabase());
 
    mDockItems.clear();
    mLevelGenItems.clear();
@@ -373,7 +373,7 @@ void EditorUserInterface::deleteUndoState()
 
 void EditorUserInterface::restoreItems(const Vector<string> &from)
 {
-   GridDatabase *db = getGame()->getGridDatabase();
+   GridDatabase *db = getGame()->getEditorDatabase();
    clearDatabase(db);
 
    Vector<string> args;
@@ -394,7 +394,7 @@ void EditorUserInterface::restoreItems(const Vector<string> &from)
          args_count++;
       }
 
-      getGame()->processLevelLoadLine(args_count, 0, args_char);      // TODO: Id is wrong; shouldn't be 0
+      getGame()->processLevelLoadLine(args_count, 0, args_char, db);      // TODO: Id is wrong; shouldn't be 0
    }
 }
    
@@ -420,7 +420,7 @@ void EditorUserInterface::saveUndoState()
 
    //copyItems(getObjectList(), mUndoItems[mLastUndoIndex % UNDO_STATES]);
 
-   EditorObjectDatabase *eod = dynamic_cast<EditorObjectDatabase *>(getGame()->getGridDatabase());
+   EditorObjectDatabase *eod = getGame()->getEditorDatabase();
    TNLAssert(eod, "bad!");
 
    EditorObjectDatabase *newDB = eod;     
@@ -466,7 +466,7 @@ void EditorUserInterface::undo(bool addToRedoStack)
 
    mLastUndoIndex--;
 
-   (dynamic_cast<EditorGame *>(getGame()))->setGridDatabase(boost::dynamic_pointer_cast<GridDatabase>(mUndoItems[mLastUndoIndex % UNDO_STATES]));
+   getGame()->setEditorDatabase(boost::dynamic_pointer_cast<GridDatabase>(mUndoItems[mLastUndoIndex % UNDO_STATES]));
 
    rebuildEverything();
 
@@ -484,7 +484,7 @@ void EditorUserInterface::redo()
 
       mLastUndoIndex++;
       //restoreItems(mUndoItems[mLastUndoIndex % UNDO_STATES]);   
-      (dynamic_cast<EditorGame *>(getGame()))->setGridDatabase(mUndoItems[mLastUndoIndex % UNDO_STATES]);
+      getGame()->setEditorDatabase(mUndoItems[mLastUndoIndex % UNDO_STATES]);
       TNLAssert(mUndoItems[mLastUndoIndex % UNDO_STATES], "null!");
 
       rebuildEverything();
@@ -497,7 +497,7 @@ void EditorUserInterface::rebuildEverything()
 {
    Game *game = getGame();
 
-   game->getWallSegmentManager()->recomputeAllWallGeometry(game->getGridDatabase());
+   game->getWallSegmentManager()->recomputeAllWallGeometry(game->getEditorDatabase());
    resnapAllEngineeredItems();
 
    setNeedToSave(mAllUndoneUndoLevel != mLastUndoIndex);
@@ -510,7 +510,7 @@ void EditorUserInterface::resnapAllEngineeredItems()
 {
    fillVector.clear();
 
-   getGame()->getGridDatabase()->findObjects(EngineeredType, fillVector);
+   getGame()->getEditorDatabase()->findObjects(EngineeredType, fillVector);
 
    for(S32 i = 0; i < fillVector.size(); i++)
    {
@@ -578,25 +578,25 @@ extern ConfigDirectories gConfigDirs;
 void EditorUserInterface::loadLevel()
 {
    // Initialize
-   clearDatabase(getGame()->getGridDatabase());
+   clearDatabase(getGame()->getEditorDatabase());
    getGame()->clearTeams();
    mSnapObject = NULL;
    mSnapVertexIndex = NONE;
    mAddingVertex = false;
    clearLevelGenItems();
-   mLoadTarget = (EditorObjectDatabase *)getGame()->getGridDatabase();
+   mLoadTarget = getGame()->getEditorDatabase();
    mGameTypeArgs.clear();
 
    getGame()->resetLevelInfo();
 
-   GameType *g = new GameType;
-   g->addToGame(getGame());
-   getGame()->setGameType(g);
+   GameType *gameType = new GameType;
+   gameType->addToGame(getGame(), getGame()->getEditorDatabase());
 
    char fileBuffer[1024];
    dSprintf(fileBuffer, sizeof(fileBuffer), "%s/%s", gConfigDirs.levelDir.c_str(), mEditFileName.c_str());
 
-   if(getGame()->loadLevelFromFile(fileBuffer))   // Process level file --> returns true if file found and loaded, false if not (assume it's a new level)
+   // Process level file --> returns true if file found and loaded, false if not (assume it's a new level)
+   if(getGame()->loadLevelFromFile(fileBuffer, getGame()->getEditorDatabase()))   
    {
       // Loaded a level!
       makeSureThereIsAtLeastOneTeam(); // Make sure we at least have one team
@@ -622,14 +622,14 @@ void EditorUserInterface::loadLevel()
    //for(S32 i = 0; i < objList->size(); i++)
    //   objList->get(i)->processEndPoints();
 
-   getGame()->getWallSegmentManager()->recomputeAllWallGeometry(getGame()->getGridDatabase());
+   getGame()->getWallSegmentManager()->recomputeAllWallGeometry(getGame()->getEditorDatabase());
    
    // Snap all engineered items to the closest wall, if one is found
    resnapAllEngineeredItems();
 
    // Run onGeomChanged for all non-wall items (engineered items already had onGeomChanged run during resnap operation)
    /*fillVector.clear();
-   mGame->getGridDatabase()->findObjects(~(BarrierType | EngineeredType), fillVector);
+   mGame->getEditorDatabase()->findObjects(~(BarrierType | EngineeredType), fillVector);
    for(S32 i = 0; i < fillVector.size(); i++)
    {
       EditorObject *obj = dynamic_cast<EditorObject *>(fillVector[i]);
@@ -654,7 +654,7 @@ void EditorUserInterface::copyScriptItemsToEditor()
    saveUndoState();
 
    for(S32 i = 0; i < mLevelGenItems.size(); i++)
-      mLevelGenItems[i]->addToGame(getGame());
+      mLevelGenItems[i]->addToEditor(getGame());
       
    mLevelGenItems.clear();    // Don't want to delete these objects... we just handed them off to the database!
 
@@ -685,7 +685,7 @@ void EditorUserInterface::runLevelGenScript()
    runScript(scriptName, scriptArgs);
 
    // Reset the target
-   mLoadTarget = (EditorObjectDatabase *)getGame()->getGridDatabase();
+   mLoadTarget = getGame()->getEditorDatabase();
 }
 
 
@@ -703,7 +703,7 @@ void EditorUserInterface::runScript(const string &scriptName, const Vector<strin
 
    // TODO: Uncomment the following, make it work again (commented out during refactor of editor load process)
    // Load the items
-   //LuaLevelGenerator(name, args, mGame->getGridSize(), getGridDatabase(), this, gConsole);
+   //LuaLevelGenerator(name, args, mGame->getGridSize(), getEditorDatabase(), this, gConsole);
    
    // Process new items
    // Not sure about all this... may need to test
@@ -754,7 +754,7 @@ void EditorUserInterface::validateLevel()
    for(S32 i = 0; i < teamCount; i++)      // Initialize vector
       foundSpawn[i] = false;
 
-   GridDatabase *gridDatabase = getGame()->getGridDatabase();
+   GridDatabase *gridDatabase = getGame()->getEditorDatabase();
       
    fillVector.clear();
    gridDatabase->findObjects(ShipSpawnType, fillVector);
@@ -862,7 +862,7 @@ void EditorUserInterface::validateLevel()
 void EditorUserInterface::validateTeams()
 {
    fillVector.clear();
-   getGame()->getGridDatabase()->findObjects(fillVector);
+   getGame()->getEditorDatabase()->findObjects(fillVector);
    
    validateTeams(fillVector);
 }
@@ -1082,7 +1082,7 @@ void EditorUserInterface::onDeactivate()
 }
 
 
-void EditorUserInterface::onReactivate()
+void EditorUserInterface::onReactivate()     // Run when user re-enters the editor after testing, among other things
 {
    mDraggingObjects = false;  
 
@@ -1090,9 +1090,12 @@ void EditorUserInterface::onReactivate()
    {
       mWasTesting = false;
       mSaveMsgTimer.clear();
+
+      getGame()->setGameType(mEditorGameType); 
+
+      remove("editor.tmp");      // Delete temp file
    }
 
-   remove("editor.tmp");      // Delete temp file
 
    if(mCurrentTeam >= getGame()->getTeamCount())
       mCurrentTeam = 0;
@@ -1226,6 +1229,9 @@ static bool checkEdge(const Point &clickPoint, const Point &start, const Point &
 
 // Checks for snapping against a series of edges defined by verts in A-B-C-D format if abcFormat is true, or A-B B-C C-D if false
 // Sets snapPoint and minDist.  Returns index of closest segment found if closer than minDist.
+
+// Not currently used 
+
 S32 EditorUserInterface::checkEdgesForSnap(const Point &clickPoint, const Vector<Point> &verts, bool abcFormat,
                                            F32 &minDist, Point &snapPoint )
 {
@@ -1240,6 +1246,8 @@ S32 EditorUserInterface::checkEdgesForSnap(const Point &clickPoint, const Vector
 }
 
 
+// Not currently used 
+
 S32 EditorUserInterface::checkEdgesForSnap(const Point &clickPoint, const Vector<WallEdge *> &edges, bool abcFormat,
                                            F32 &minDist, Point &snapPoint )
 {
@@ -1247,10 +1255,8 @@ S32 EditorUserInterface::checkEdgesForSnap(const Point &clickPoint, const Vector
    S32 segFound = NONE;
 
    for(S32 i = 0; i < edges.size(); i++)
-   {
       if(checkEdge(clickPoint, *edges[i]->getStart(), *edges[i]->getEnd(), minDist, snapPoint))
          segFound = i;
-   }
 
    return segFound;
 }
@@ -1634,7 +1640,7 @@ void EditorUserInterface::render()
    else  
    {
       fillVector.clear();
-      getGame()->getGridDatabase()->findObjects(BarrierType | LineType, fillVector);
+      getGame()->getEditorDatabase()->findObjects(BarrierType | LineType, fillVector);
 
       for(S32 i = 0; i < fillVector.size(); i++)
       {
@@ -1762,9 +1768,9 @@ void EditorUserInterface::render()
 }
 
 
-const Color *EditorUserInterface::getTeamColor(S32 team) const
+const Color *EditorUserInterface::getTeamColor(S32 team)
 {
-   return gEditorGame->getTeamColor(team);
+   return getGame()->getTeamColor(team);
 }
 
 
@@ -1861,7 +1867,7 @@ void EditorUserInterface::pasteSelection()
       EditorObject *newObject = mClipboard[i]->newCopy();
       newObject->assignNewSerialNumber();
       newObject->setExtent();
-      newObject->addToDatabase();
+      newObject->addToDatabase(getGame()->getEditorDatabase());
 
       newObject->setSelected(true);
       newObject->moveTo(pos + offset);
@@ -2378,7 +2384,7 @@ void EditorUserInterface::startDraggingDockItem()
    item->moveTo(pos);
       
    //item->setWidth((mDockItems[mDraggingDockItem]->getGeomType() == geomPoly) ? .7 : 1);      // TODO: Still need this?
-   item->addToGame(getGame());          
+   item->addToEditor(getGame());          
 
    clearSelection();            // No items are selected...
    item->setSelected(true);     // ...except for the new one
@@ -2554,7 +2560,7 @@ void EditorUserInterface::changeBarrierWidth(S32 amt)
       saveUndoState(); 
 
    fillVector.clear();
-   getGame()->getGridDatabase()->findObjects(BarrierType | LineType, fillVector);
+   getGame()->getEditorDatabase()->findObjects(BarrierType | LineType, fillVector);
 
    for(S32 i = 0; i < fillVector.size(); i++)
    {
@@ -2607,7 +2613,7 @@ void EditorUserInterface::splitBarrier()
                obj->onGeomChanged();
                newItem->onGeomChanged();
                //mItems.push_back(boost::shared_ptr<EditorObject>(newItem));
-               newItem->addToGame(getGame());
+               newItem->addToEditor(getGame());
 
                goto done2;                         // Yes, gotos are naughty, but they just work so well sometimes...
             }
@@ -2722,17 +2728,17 @@ void EditorUserInterface::deleteItem(S32 itemIndex)
    if(mask & (BarrierType | PolyWallType))
    {
       // Need to recompute boundaries of any intersecting walls
-      wallSegmentManager->invalidateIntersectingSegments(game->getGridDatabase(), obj); // Mark intersecting segments invalid
+      wallSegmentManager->invalidateIntersectingSegments(game->getEditorDatabase(), obj); // Mark intersecting segments invalid
       wallSegmentManager->deleteSegments(obj->getItemId());                             // Delete the segments associated with the wall
 
-      game->getGridDatabase()->removeFromDatabase(obj, obj->getExtent());
+      game->getEditorDatabase()->removeFromDatabase(obj, obj->getExtent());
 
-      wallSegmentManager->recomputeAllWallGeometry(game->getGridDatabase());            // Recompute wall edges
+      wallSegmentManager->recomputeAllWallGeometry(game->getEditorDatabase());            // Recompute wall edges
       resnapAllEngineeredItems();         // Really only need to resnap items that were attached to deleted wall... but we
                                           // don't yet have a method to do that, and I'm feeling lazy at the moment
    }
    else
-      game->getGridDatabase()->removeFromDatabase(obj, obj->getExtent());
+      game->getEditorDatabase()->removeFromDatabase(obj, obj->getExtent());
 
    // Reset a bunch of things
    mSnapObject = NULL;
@@ -2767,7 +2773,7 @@ void EditorUserInterface::insertNewItem(GameObjectType itemType)
    TNLAssert(newObject, "Couldn't create object in insertNewItem()");
 
    newObject->moveTo(snapPoint(convertCanvasToLevelCoord(mMousePos)));
-   newObject->addToGame(getGame());    
+   newObject->addToEditor(getGame());    
    newObject->onGeomChanged();
 
    validateLevel();
@@ -3021,7 +3027,7 @@ void EditorUserInterface::onKeyDown(KeyCode keyCode, char ascii)
             delete mNewItem;
          else
          {
-            mNewItem->addToGame(getGame());
+            mNewItem->addToEditor(getGame());
             mNewItem->onGeomChanged();          // Walls need to be added to editor BEFORE onGeomChanged() is run!
          }
 
@@ -3427,9 +3433,9 @@ void EditorUserInterface::onKeyUp(KeyCode keyCode)
             fillVector.clear();
 
             if(mShowMode == ShowWallsOnly)
-               getGame()->getGridDatabase()->findObjects(BarrierType | PolyWallType, fillVector);
+               getGame()->getEditorDatabase()->findObjects(BarrierType | PolyWallType, fillVector);
             else
-               getGame()->getGridDatabase()->findObjects(fillVector);
+               getGame()->getEditorDatabase()->findObjects(fillVector);
 
 
             for(S32 i = 0; i < fillVector.size(); i++)
@@ -3718,6 +3724,8 @@ void EditorUserInterface::testLevelStart()
    SDL_ShowCursor(SDL_DISABLE);    // Turn off cursor
    bool nts = mNeedToSave;             // Save these parameters because they are normally reset when a level is saved.
    S32 auul = mAllUndoneUndoLevel;     // Since we're only saving a temp copy, we really shouldn't reset them...
+
+   mEditorGameType = getGame()->getGameType();     // Sock our current gametype away, will use it when we reenter the editor
 
    if(saveLevel(true, false))
    {

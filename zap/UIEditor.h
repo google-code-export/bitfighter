@@ -232,6 +232,7 @@ private:
    void insertNewItem(GameObjectType itemType);                      // Insert a new object into the game
 
    bool mWasTesting;
+   GameType *mEditorGameType;    // Used to store our GameType while we're testing
 
    void onFinishedDragging();    // Called when we're done dragging an object
 
@@ -283,7 +284,7 @@ public:
    void setLevelToCanvasCoordConversion();
 
 
-   const Color *getTeamColor(S32 teamId) const;
+   const Color *getTeamColor(S32 teamId);
 
    bool getNeedToSave() const { return mNeedToSave; }
    void setNeedToSave(bool needToSave) { mNeedToSave = needToSave; }
