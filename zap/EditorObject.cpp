@@ -83,16 +83,13 @@ EditorObject::~EditorObject()
 //}
 
 
-void EditorObject::addToDock(Game *game, const Point &point)
+void EditorObject::prepareForDock(Game *game, const Point &point)
 {
    mGame = game;
 
    mDockItem = true;
    
    unselectVerts();
-
-   EditorUserInterface *ui = game->getUIManager()->getEditorUserInterface();
-   ui->addToDock(this);
 }
 
 
@@ -167,10 +164,9 @@ static void renderVertex(VertexRenderStyles style, const Point &v, S32 number, F
 
 static const S32 DOCK_LABEL_SIZE = 9;      // Size to label items on the dock
 
-
-static void labelVertex(Point pos, S32 radius, const char *itemLabelTop, const char *itemLabelBottom)
+static void labelVertex(Point pos, S32 radius, const char *itemLabelTop, const char *itemLabelBottom, F32 scale)
 {
-   F32 labelSize = DOCK_LABEL_SIZE;
+   F32 labelSize = DOCK_LABEL_SIZE / scale;
 
    UserInterface::drawStringc(pos.x, pos.y - radius - labelSize - 5, labelSize, itemLabelTop);     // Above the vertex
    UserInterface::drawStringc(pos.x, pos.y + radius + 2, labelSize, itemLabelBottom);              // Below the vertex
@@ -194,7 +190,7 @@ void EditorObject::renderAttribs(F32 currentScale)
          for(S32 i = 0; i < menuSize; i++)       
          {
             string txt = attrMenu->menuItems[i]->getPrompt() + ": " + attrMenu->menuItems[i]->getValue();      // TODO: Make this concatenation a method on the menuItems themselves?
-            renderItemText(txt.c_str(), menuSize - i, 1, Point(0,0));
+            renderItemText(txt.c_str(), menuSize - i, currentScale, Point(0,0));
          }
       }
    }
@@ -212,10 +208,8 @@ void EditorObject::renderAndLabelHighlightedVertices(F32 currentScale)
       {
          glColor((vertSelected(i) || mSelected) ? SELECT_COLOR : HIGHLIGHT_COLOR);
 
-         Point pos = mGame->getUIManager()->getEditorUserInterface()->convertLevelToCanvasCoord(getVert(i));
-
-         drawSquare(pos, radius);
-         labelVertex(pos, radius, getOnScreenName(), getVertLabel(i));
+         drawSquare(getVert(i), radius / currentScale);
+         labelVertex(getVert(i), radius / currentScale, getOnScreenName(), getVertLabel(i), currentScale);
       }         
 }
 
@@ -248,7 +242,7 @@ extern void renderPolygon(const Vector<Point> &fillPoints, const Vector<Point> &
 static const S32 asteroidDesign = 2;      // Design we'll use for all asteroids in editor
 
 // Items are rendered in index order, so those with a higher index get drawn later, and hence, on top
-void EditorObject::renderInEditor(bool isScriptItem, bool showingReferenceShip, ShowMode showMode)    // TODO: pass scale
+void EditorObject::renderInEditor(F32 currentScale, const Point &currentOffset, S32 snapIndex, bool isScriptItem, bool showingReferenceShip, ShowMode showMode)
 {
    const S32 instrSize = 9;      // Size of instructions for special items
    const S32 attrSize = 10;
@@ -264,17 +258,12 @@ void EditorObject::renderInEditor(bool isScriptItem, bool showingReferenceShip, 
    else 
       glColor(getDrawColor(), alpha);
 
-   S32 snapIndex = mGame->getUIManager()->getEditorUserInterface()->getSnapVertexIndex();
-
    glEnableBlend;        // Enable transparency
 
    // Override drawColor for this special case
    if(anyVertsSelected())
       drawColor = *SELECT_COLOR;
 
-   F32 currentScale = mGame->getUIManager()->getEditorUserInterface()->getCurrentScale();
-   Point currentOffset = mGame->getUIManager()->getEditorUserInterface()->getCurrentOffset(); 
-     
    if(mDockItem)
    {
       renderDock();
@@ -285,25 +274,26 @@ void EditorObject::renderInEditor(bool isScriptItem, bool showingReferenceShip, 
    else  // Not a dock item
    {
       glPushMatrix();
-         glTranslate(mGame->getUIManager()->getEditorUserInterface()->getCurrentOffset());
-         glScale(mGame->getUIManager()->getEditorUserInterface()->getCurrentScale());
+         glTranslate(currentOffset);
+         glScale(currentScale);
 
          if(showingReferenceShip)
             render();
          else
-
             renderEditor(currentScale);
+
+         if(!showingReferenceShip)
+         {
+            // Label item with instruction message describing what happens if user presses enter
+            if(isSelected() && !isBeingEdited())
+               renderItemText(getInstructionMsg(), -1, currentScale, currentOffset);
+
+            renderAndLabelHighlightedVertices(currentScale);
+            renderAttribs(currentScale);
+         }
+
       glPopMatrix();   
 
-      if(!showingReferenceShip)
-      {
-         // Label item with instruction message describing what happens if user presses enter
-         if(isSelected() && !isBeingEdited())
-            renderItemText(getInstructionMsg(), -1, currentScale, currentOffset);
-
-         renderAndLabelHighlightedVertices(currentScale);
-         renderAttribs(currentScale);
-      }
    }
 
    glDisableBlend;
@@ -338,6 +328,13 @@ Color EditorObject::getDrawColor()
 void EditorObject::saveItem(FILE *f, F32 gridSize)
 {
    s_fprintf(f, "%s\n", toString(gridSize).c_str());
+}
+
+
+// Size of object in editor 
+F32 EditorObject::getEditorRadius(F32 currentScale)
+{
+   return 10 * currentScale;   // 10 pixels is base size
 }
 
 

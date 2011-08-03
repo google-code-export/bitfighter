@@ -88,7 +88,7 @@ public:
 
    EditorObject *newCopy();         // Copies object        // TODO: Will become call to clone, delete method
 
-   virtual void addToDock(Game *game, const Point &point);
+   virtual void prepareForDock(Game *game, const Point &point);
    void addToEditor(Game *game);
 
    void assignNewSerialNumber() { mSerialNumber = mNextSerialNumber++; }
@@ -124,7 +124,7 @@ public:
    // and these functions specify how big those boxes should be.  Override if implementing a non-standard sized item.
    // (strictly speaking, only getEditorRadius needs to be public, but it make sense to keep these together organizationally.)
    virtual S32 getDockRadius() { return 10; }                     // Size of object on dock 
-   virtual F32 getEditorRadius(F32 currentScale) { return 10; }   // Size of object in editor 
+   virtual F32 getEditorRadius(F32 currentScale);                 // Size of object in editor 
    virtual const char *getVertLabel(S32 index) { return ""; }     // Label for vertex, if any... only overridden by SimpleLine objects
 
 
@@ -212,7 +212,7 @@ public:
    //////////////
 
    //TODO: Get rid of this altogether
-   void renderInEditor(bool isScriptItem, bool showingReferenceShip, ShowMode showMode);
+   void renderInEditor(F32 currentScale, const Point &currentOffset, S32 snapIndex, bool isScriptItem, bool showingReferenceShip, ShowMode showMode);
 
 };
 

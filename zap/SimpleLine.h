@@ -61,7 +61,7 @@ public:
 
    virtual void newObjectFromDock(F32 gridSize);
 
-   void addToDock(Game *game, const Point &point);
+   void prepareForDock(Game *game, const Point &point);
 };
 
 

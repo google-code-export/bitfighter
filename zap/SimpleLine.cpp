@@ -122,16 +122,14 @@ void SimpleLine::renderItemText(const char *text, S32 offset, F32 currentScale, 
 {
    glColor(INSTRUCTION_TEXTCOLOR);
    S32 off = (INSTRUCTION_TEXTSIZE + INSTRUCTION_TEXTGAP) * offset - 10 - ((offset > 0) ? 5 : 0);
-   UserInterface::drawStringf_2pt(getVert(0) * currentScale * currentOffset, 
-                                  getVert(1) * currentScale * currentOffset, 
-                                  F32(INSTRUCTION_TEXTSIZE), F32(off), text);
+   UserInterface::drawStringf_2pt(getVert(0), getVert(1) , F32(INSTRUCTION_TEXTSIZE) / currentScale, F32(off) / currentScale, text);
 }
 
 
-void SimpleLine::addToDock(Game *game, const Point &point)
+void SimpleLine::prepareForDock(Game *game, const Point &point)
 {
    setVert(point, 0);
-   EditorParent::addToDock(game, point);
+   EditorParent::prepareForDock(game, point);
 }
 
 
