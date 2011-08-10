@@ -236,11 +236,8 @@ void BfObject::addToGame(Game *game, GridDatabase *database)
 
 void BfObject::removeFromGame()
 {
-   if(mGame)
-   {
-      removeFromDatabase();
-      mGame = NULL;
-   }
+   removeFromDatabase();
+   mGame = NULL;
 }
 
 
