@@ -130,6 +130,7 @@ void Ship::initialize(Point &pos)
 
    mHealth = 1.0;       // Start at full health
    hasExploded = false; // Haven't exploded yet!
+   mSpawnShield = SpawnShieldTime;
 
    for(S32 i = 0; i < TrailCount; i++)          // Clear any vehicle trails
       mTrail[i].reset();
@@ -452,6 +453,12 @@ void Ship::idle(GameObject::IdleCallPath path)
                getControllingClient()->lostContact())
          return;  // If we're out-of-touch, don't move the ship... moving won't actually hurt, but this seems somehow better
 
+
+      if(mSpawnShield <= mCurrentMove.time) // update spawn timer
+         mSpawnShield = 0;
+      else
+         mSpawnShield -= mCurrentMove.time;
+
       // Apply impulse vector and reset it
       mMoveState[ActualState].vel += mImpulseVector;
       mImpulseVector.set(0,0);
@@ -713,8 +720,9 @@ void Ship::processEnergy()
       {
          if(i == ModuleSensor)
          {
-            mSensorZoomTimer.reset(SensorZoomTime - mSensorZoomTimer.getCurrent(), SensorZoomTime);
             mSensorStartTime = getGame()->getCurrentTime();
+            if(mModuleActive[i])
+               mEnergy -= EnergyMax * 1/20; // inital energy use, prevents tapping to see cloaked
          }
          else if(i == ModuleCloak)
             mCloakTimer.reset(CloakFadeTime - mCloakTimer.getCurrent(), CloakFadeTime);
@@ -749,6 +757,10 @@ void Ship::damageObject(DamageInfo *theInfo)
          //mEnergy -= EnergyShieldHitDrain;                                       // have been hit.
          return;
       }
+
+      if(mSpawnShield != 0)
+         return;
+
 
       // Having armor halves the damage
       if(hasModule(ModuleArmor))
@@ -884,8 +896,6 @@ U32 Ship::packUpdate(GhostConnection *connection, U32 updateMask, BitStream *str
 
    if(isInitialUpdate())      // This stuff gets sent only once per ship
    {
-      stream->writeFlag(getGame()->getCurrentTime() - mRespawnTime < 300 && !hasExploded);  // If true, ship will appear to spawn on client
-
       // Now write all the mounts:
       for(S32 i = 0; i < mMountedItems.size(); i++)
       {
@@ -914,12 +924,6 @@ U32 Ship::packUpdate(GhostConnection *connection, U32 updateMask, BitStream *str
 
 
 
-   // Respawn --> only used by robots, but will be set on ships if all mask bits
-   // are set (as happens when a ship comes into scope).  Therefore, we'll force
-   // this to be robot only.
-   if(stream->writeFlag((updateMask & RespawnMask) && isRobot()))
-      stream->writeFlag(getGame()->getCurrentTime() - mRespawnTime < 300 && !hasExploded);  // If true, ship will appear to spawn on client
-
    if(stream->writeFlag(updateMask & HealthMask))     // Health
       stream->writeFloat(mHealth, 6);
 
@@ -932,7 +936,14 @@ U32 Ship::packUpdate(GhostConnection *connection, U32 updateMask, BitStream *str
          stream->writeEnum(mWeapon[i], WeaponCount);
    }
 
-   stream->writeFlag(hasExploded);
+   if(!stream->writeFlag(hasExploded))
+      if(stream->writeFlag(updateMask & RespawnMask))
+      {
+         stream->writeFlag(getGame()->getCurrentTime() - mRespawnTime < 300 && !hasExploded);  // If true, ship will appear to spawn on client
+         if(stream->writeFlag(mSpawnShield >= 20))
+            stream->writeInt((mSpawnShield + 20) / 40, 8);  // in case a ship goes in scope with mSpawnShield half way done..
+      }
+
    stream->writeFlag(getControllingClient()->isBusy());
 
    stream->writeFlag((updateMask & WarpPositionMask) && updateMask != 0xFFFFFFFF);
@@ -978,8 +989,6 @@ void Ship::unpackUpdate(GhostConnection *connection, BitStream *stream)
    if(isInitialUpdate())
    {
       wasInitialUpdate = true;
-      shipwarped = true;
-      playSpawnEffect = stream->readFlag();
 
       // Read mounted items:
       while(stream->readFlag())
@@ -1003,27 +1012,63 @@ void Ship::unpackUpdate(GhostConnection *connection, BitStream *stream)
    }
 
 
-   if(stream->readFlag())        // Respawn <--- will only occur on robots, will always be false with ships
-   {
-      hasExploded = false;
-      playSpawnEffect = stream->readFlag();    // prevent spawn effect every time the robot goes into scope.
-      shipwarped = true;
-      if(! isCollisionEnabled()) enableCollision();
-   }
 
    if(stream->readFlag())        // Health
       mHealth = stream->readFloat(6);
 
    if(stream->readFlag())        // New module configuration
    {
+      bool hadSensorThen = false;
+      bool hasSensorNow = false;
       for(S32 i = 0; i < ShipModuleCount; i++)
+      {
+         // Check old loadout for sensor
+         if(mModule[i] == ModuleSensor)
+            hadSensorThen = true;
+
+         // Set to new loadout
          mModule[i] = (ShipModule) stream->readEnum(ModuleCount);
+
+         // Check new loadout for sensor
+         if(mModule[i] == ModuleSensor)
+            hasSensorNow = true;
+      }
+
+      // Set sensor zoom timer if sensor carrying status has switched
+      if (hadSensorThen != hasSensorNow && !isInitialUpdate())  // ! isInitialUpdate(), don't do zoom out effect of ship spawn
+         mSensorZoomTimer.reset(SensorZoomTime - mSensorZoomTimer.getCurrent(), SensorZoomTime);
 
       for(S32 i = 0; i < ShipWeaponCount; i++)
          mWeapon[i] = (WeaponType) stream->readEnum(WeaponCount);
    }
 
-   bool explode = stream->readFlag();
+   if(stream->readFlag())
+   {
+      if(!hasExploded)
+      {
+         hasExploded = true;
+         disableCollision();
+
+         if(!wasInitialUpdate)
+            emitShipExplosion(mMoveState[ActualState].pos);    // Boom!
+      }
+   }
+   else
+   {
+      if(stream->readFlag())        // Respawn
+      {
+         if(hasExploded)
+            enableCollision();
+         hasExploded = false;
+         playSpawnEffect = stream->readFlag();    // prevent spawn effect every time the robot goes into scope.
+         shipwarped = true;
+         if(stream->readFlag())
+            mSpawnShield = stream->readInt(8) * 40;  // in case a ship goes in scope with mSpawnShield half way done..
+         else
+            mSpawnShield = 0;
+      }
+   }
+
    isBusy = stream->readFlag();
 
    if(stream->readFlag())        // Ship made a large change in position
@@ -1056,10 +1101,7 @@ void Ship::unpackUpdate(GhostConnection *connection, BitStream *stream)
          wasActive[i] = mModuleActive[i];
          mModuleActive[i] = stream->readFlag();
          if(i == ModuleSensor && wasActive[i] != mModuleActive[i])
-         {
-            mSensorZoomTimer.reset(SensorZoomTime - mSensorZoomTimer.getCurrent(), SensorZoomTime);
             mSensorStartTime = getGame()->getCurrentTime();
-         }
          if(i == ModuleCloak && wasActive[i] != mModuleActive[i])
             mCloakTimer.reset(CloakFadeTime - mCloakTimer.getCurrent(), CloakFadeTime);
       }
@@ -1086,14 +1128,6 @@ void Ship::unpackUpdate(GhostConnection *connection, BitStream *stream)
       mInterpolating = true;
 
 
-   if(explode && !hasExploded)
-   {
-      hasExploded = true;
-      disableCollision();
-
-      if(!wasInitialUpdate)
-         emitShipExplosion(mMoveState[ActualState].pos);    // Boom!
-   }
 
    if(playSpawnEffect)
    {
@@ -1285,8 +1319,6 @@ void Ship::kill()
       if(getOwner())
          getLoadout(getOwner()->mOldLoadout);
    }
-   //else
-   //   S32 x = 0;     // TODO: Delete this
 
    deleteObject(KillDeleteDelay);
    hasExploded = true;
@@ -1500,7 +1532,12 @@ void Ship::render(S32 layerIndex)
    bool localShip = ! (conn && conn->getControlObject() != this);    // i.e. a ship belonging to a remote player
    S32 localPlayerTeam = (conn && conn->getControlObject()) ? conn->getControlObject()->getTeam() : Item::NO_TEAM; // To show cloaked teammates
 
-   F32 alpha = isModuleActive(ModuleCloak) ? mCloakTimer.getFraction() : 1 - mCloakTimer.getFraction();
+   F32 alpha = 1.0f;
+   if (mSpawnShield != 0)  // Fade the ship a little if it is invulnerable
+      alpha = 0.5f;
+
+   // now adjust if using cloak module
+   alpha = isModuleActive(ModuleCloak) ? mCloakTimer.getFraction() * alpha : alpha - (mCloakTimer.getFraction() * alpha);
 
    glPushMatrix();
    glTranslatef(mMoveState[RenderState].pos.x, mMoveState[RenderState].pos.y, 0);
@@ -1585,8 +1622,10 @@ void Ship::render(S32 layerIndex)
          alpha = 0.5;
    }
 
+
    renderShip(gameType->getShipColor(this), alpha, thrusts, mHealth, mRadius, clientGame->getCurrentTime() - mSensorStartTime, 
               isModuleActive(ModuleCloak), isModuleActive(ModuleShield), isModuleActive(ModuleSensor), hasModule(ModuleArmor));
+
 
    if(alpha != 1.0)
       glEnableBlend;

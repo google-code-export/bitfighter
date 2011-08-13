@@ -728,8 +728,9 @@ void GameUserInterface::renderLoadoutIndicators()
    // Next, loadout modules
    for(U32 i = 0; i < (U32)ShipModuleCount; i++)
    {
-      if(getGame()->getModuleInfo(localShip->getModule(i))->getUseType() == ModuleUsePassive)
-         glColor3f(1,1,0);      // yellow = passive indicator
+      if( getGame()->getModuleInfo(localShip->getModule(i))->getUseType() == ModuleUsePassive ||
+            getGame()->getModuleInfo(localShip->getModule(i))->getUseType() == ModuleUseHybrid )
+         glColor(Colors::yellow);      // yellow = passive indicator
       else if(localShip->isModuleActive(localShip->getModule(i)))
          glColor(INDICATOR_ACTIVE_COLOR);
       else 
@@ -1048,8 +1049,8 @@ void GameUserInterface::onKeyDown(KeyCode keyCode, char ascii)
             ship = dynamic_cast<Ship *>(getGame()->getConnectionToServer()->getControlObject());
          if(ship)
          {
-            if(keyCode == keyMOD1[gIniSettings.inputMode] && ship->getModule(0) == ModuleEngineer || 
-               keyCode == keyMOD2[gIniSettings.inputMode] && ship->getModule(1) == ModuleEngineer)
+            if( (keyCode == keyMOD1[gIniSettings.inputMode] && ship->getModule(0) == ModuleEngineer) ||
+               (keyCode == keyMOD2[gIniSettings.inputMode] && ship->getModule(1) == ModuleEngineer) )
             {
                string msg = EngineerModuleDeployer::checkResourcesAndEnergy(ship);      // Returns "" if ok, error message otherwise
 

@@ -879,6 +879,7 @@ class InsertStatsToDatabaseThread : public TNL::Thread
 public:
    VersionedGameStats mStats;
    InsertStatsToDatabaseThread(const VersionedGameStats &stats) {mStats = stats;}
+   virtual ~InsertStatsToDatabaseThread() {}
 
    U32 run()
    {
@@ -1346,7 +1347,7 @@ void GameType::performProxyScopeQuery(GameObject *scopeObject, GameConnection *c
 
          Point pos = ship->getActualPos();
          Rect queryRect(pos, pos);
-         queryRect.expand( Game::getScopeRange(ship->isModuleActive(ModuleSensor)) );
+         queryRect.expand( Game::getScopeRange(ship->hasModule(ModuleSensor)) );
 
          if (scopeObject == ship)
             mGame->getGameObjDatabase()->findObjects((TestFunc)isAnyObjectType, fillVector, queryRect);
@@ -1365,7 +1366,7 @@ void GameType::performProxyScopeQuery(GameObject *scopeObject, GameConnection *c
       TNLAssert(co, "Null control object!");
 
       Rect queryRect(pos, pos);
-      queryRect.expand( Game::getScopeRange(co->isModuleActive(ModuleSensor)) );
+      queryRect.expand( Game::getScopeRange(co->hasModule(ModuleSensor)) );
 
       fillVector.clear();
       mGame->getGameObjDatabase()->findObjects((TestFunc)isAnyObjectType, fillVector, queryRect);
@@ -1427,7 +1428,7 @@ void GameType::queryItemsOfInterest()
          delta.x = fabs(delta.x);
          delta.y = fabs(delta.y);
 
-         if( (theShip->isModuleActive(ModuleSensor) && delta.x < Game::PLAYER_SENSOR_VISUAL_DISTANCE_HORIZONTAL && delta.y < Game::PLAYER_SENSOR_VISUAL_DISTANCE_VERTICAL) ||
+         if( (theShip->hasModule(ModuleSensor) && delta.x < Game::PLAYER_SENSOR_VISUAL_DISTANCE_HORIZONTAL && delta.y < Game::PLAYER_SENSOR_VISUAL_DISTANCE_VERTICAL) ||
                (delta.x < Game::PLAYER_VISUAL_DISTANCE_HORIZONTAL && delta.y < Game::PLAYER_VISUAL_DISTANCE_VERTICAL) )
             ioi.teamVisMask |= (1 << theShip->getTeam());      // Mark object as visible to theShip's team
       }
@@ -2460,7 +2461,7 @@ void GameType::processServerCommand(ClientRef *clientRef, const char *cmd, Vecto
       {
          S32 time = S32(60 * 1000 * atof(args[0].getString()));
 
-         if(time < 0 || time == 0 && (stricmp(args[0].getString(), "0") && stricmp(args[0].getString(), "unlim")))  // 0 --> unlimited
+         if((time < 0 || time == 0) && (stricmp(args[0].getString(), "0") && stricmp(args[0].getString(), "unlim")))  // 0 --> unlimited
             clientRef->clientConnection->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "!!! Invalid time... game time not changed");
          else
          {
