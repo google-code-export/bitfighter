@@ -58,7 +58,7 @@ public:
    LuaShip() { /* do nothing */ };             // C++ default constructor ==> not used.  Constructor with Ship (above) used instead
    LuaShip(lua_State *L) { /* do nothing */ }; // Lua constructor ==> not used.  Class only instantiated from C++.
 
-   ~LuaShip(){ logprintf(LogConsumer::LogLuaObjectLifecycle, "Killing luaShip %d", mId); };                      // Destructor
+   virtual ~LuaShip(){ logprintf(LogConsumer::LogLuaObjectLifecycle, "Killing luaShip %d", mId); };     // Destructor
 
    static S32 id;
    S32 mId;
@@ -112,6 +112,7 @@ private:
    bool mIsRobot;
 
    U32 mRespawnTime;
+   U32 mSpawnShield;
 
    // Find objects of specified type that may be under the ship, and put them in fillVector
    void findObjectsUnderShip(U8 typeNumber);
@@ -131,6 +132,7 @@ protected:
 public:
    static const S32 CollisionRadius = 24;
    static const S32 RepairRadius = 65;
+   static const U32 SpawnShieldTime = 1000;
 
    enum {
       MaxVelocity = 450,        // points per second
