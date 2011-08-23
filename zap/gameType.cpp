@@ -24,8 +24,8 @@
 //------------------------------------------------------------------------------------
 
 #include "gameType.h"
-#include "UIGame.h"
-#include "UIMenus.h"
+#include "UIGame.h"        // TODO: Get this out of here
+#include "UIMenus.h"       // TODO: Get this out of here
 #include "gameNetInterface.h"
 #include "flagItem.h"
 #include "gameItems.h"     // For asteroid def.
@@ -1477,7 +1477,7 @@ S32 GameType::getTeam(const char *playerName)
       if(!strcmp(mClientList[i]->name.getString(), playerName))
          return(mClientList[i]->getTeam());
 
-   return(MoveItem::TEAM_NEUTRAL);    // If we can't find the team, let's call it neutral
+   return(TEAM_NEUTRAL);    // If we can't find the team, let's call it neutral
 }
 
 
