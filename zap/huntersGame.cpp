@@ -31,7 +31,7 @@
 #include "GeomUtils.h"        // For centroid calculation for labeling
 #include "stringUtils.h"      // For itos
 #include "game.h"
-#include "UIMenuItems.h"
+#include "gameConnection.h"
 
 // Things I think should not be on server side
 #include "Colors.h"
@@ -42,9 +42,11 @@
 
 #ifndef ZAP_DEDICATED
 #include "ClientGame.h"
+#include "UIGame.h"
+#include "UIMenuItems.h"
+#include "SDL/SDL_opengl.h"
 #endif
 
-#include "SDL/SDL_opengl.h"
 
 #include <math.h>
 
@@ -214,6 +216,7 @@ void HuntersGameType::itemDropped(Ship *ship, MoveItem *item)
 }
 
 
+#ifndef ZAP_DEDICATED
 // Any unique items defined here must be handled in both getMenuItem() and saveMenuItem() below!
 const char **HuntersGameType::getGameParameterMenuKeys()
 {
@@ -261,6 +264,7 @@ bool HuntersGameType::saveMenuItem(const MenuItem *menuItem, const char *key)
 
    return true;
 }
+#endif
 
 
 TNL_IMPLEMENT_NETOBJECT(HuntersNexusObject);
@@ -446,6 +450,7 @@ extern Color gNexusClosedColor;
 #define NEXUS_STR mNexusIsOpen ?  "Nexus closes: " : "Nexus opens: "
 #define NEXUS_NEVER_STR mNexusIsOpen ? "Nexus never closes" : "Nexus never opens"
 
+#ifndef ZAP_DEDICATED
 void HuntersGameType::renderInterfaceOverlay(bool scoreboardVisible)
 {
    Parent::renderInterfaceOverlay(scoreboardVisible);
@@ -476,6 +481,7 @@ void HuntersGameType::renderInterfaceOverlay(bool scoreboardVisible)
    for(S32 i = 0; i < mNexus.size(); i++)
       renderObjectiveArrow(dynamic_cast<GameObject *>(mNexus[i].getPointer()), mNexusIsOpen ? &gNexusOpenColor : &gNexusClosedColor);
 }
+#endif
 
 #undef NEXUS_STR
 
@@ -564,6 +570,7 @@ HuntersFlagItem::HuntersFlagItem(Point pos, Point vel, bool useDropDelay) : Flag
 
 void HuntersFlagItem::renderItem(Point pos)
 {
+#ifndef ZAP_DEDICATED
    // Don't render flags on cloaked ships
    if(mMount.isValid() && mMount->isModuleActive(ModuleCloak))
       return;
@@ -583,6 +590,7 @@ void HuntersFlagItem::renderItem(Point pos)
 
       UserInterface::drawStringf(pos.x + 10, pos.y - 46, 12, "%d", mFlagCount);
    }
+#endif
 }
 
 //////////  END Client only code

@@ -28,11 +28,14 @@
 #include "goalZone.h"
 #include "gameType.h"
 #include "flagItem.h"
-#include "UI.h"
 #include "game.h"
 #include "gameConnection.h"
+#include "stringUtils.h"
 
+#ifndef ZAP_DEDICATED
+#include "UI.h"
 #include "SDL/SDL_opengl.h"
+#endif
 
 namespace Zap
 {
@@ -87,6 +90,10 @@ string MoveItem::toString(F32 gridSize) const
 ////////////////////////////////////////
 ////////////////////////////////////////
 
+#ifndef ZAP_DEDICATED
+#endif
+#ifndef ZAP_DEDICATED
+#endif
 
 // Client only, in-game
 void MoveItem::render()
@@ -210,6 +217,12 @@ void MoveItem::setZone(GoalZone *theZone)
    // Now we can get around to setting the zone, like we came here to do
    mZone = theZone;
    setMaskBits(ZoneMask);
+}
+
+
+GoalZone *MoveItem::getZone()
+{
+	return mZone;
 }
 
 

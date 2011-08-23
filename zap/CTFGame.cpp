@@ -27,9 +27,11 @@
 #include "ship.h"
 #include "flagItem.h"
 #include "game.h"
+#include "gameConnection.h"
 
 #ifndef ZAP_DEDICATED
 #include "ClientGame.h"
+#include "UIGame.h"
 #endif
 
 #include <stdio.h>

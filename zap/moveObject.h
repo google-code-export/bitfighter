@@ -216,8 +216,8 @@ public:
    virtual bool isItemThatMakesYouVisibleWhileCloaked() { return true; }      // HuntersFlagItem overrides to false
 
    void setZone(GoalZone *theZone);
-   GoalZone *getZone() { return mZone; }
-   bool isInZone() { return mZone == NULL; }
+   GoalZone *getZone();
+   bool isInZone() { return mZone.isValid(); }
    void setCollideable(bool isCollideable) { mIsCollideable = isCollideable; }
 
    Ship *getMount();
