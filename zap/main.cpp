@@ -47,15 +47,26 @@ XXX need to document timers, new luavec stuff XXX
 
  */
 /* Fixes after 015a
+<h2>New features</h2>
+<ul>
+<li>Added /leveldir command to change folder where levels are read.  Change affects current session only, and will not be saved in the INI.
+<li>Can now specify whether soccer game permits picking up the ball or not
+</ul>
+
+<h2>Bot scripting</h2>
+<ul>
+<li>Lua added copyMoveFromObject, Lua getCurrLoadout and getReqLoadout can now be used for ships
+</ul>
+
 <h2>Bug Fixes</h2>
 <ul>
-<li>Fix team bitmatch suicide score. 
-<li>Teleporter, added Delay option in levels for teleporters
-<li>SoccerBallItem, added individual Pickup=yes or no
+<li>Fix team bitmatch suicide score
+<li>Teleporter, added Delay option in levels for teleporters      <<=== what is this??
+</ul>
+
 <li>Deprecated SoccerPickup parameter -- now stored as an option on the Specials line.  Will be completely removed in 017.  Easiest fix is to load
     level into editor and save; parameter will be properly rewritten.
 <li>Reduced CPU usage for overlapping asteroids
-<li>LUA added copyMoveFromObject, LUA getCurrLoaduot and getReqLoadout can now be used for ships
 </ul>
 */
 
@@ -736,6 +747,8 @@ void readFolderLocationParams(Vector<StringPtr> &argv)
          }
 
          gCmdLineSettings.dirs.rootDataDir = argv[i+1].getString();
+         gConfigDirs.rootDataDir = gCmdLineSettings.dirs.rootDataDir;      // Also sock it away here
+
          argv.erase(i);
          argv.erase(i);
          i--;
@@ -1851,7 +1864,7 @@ int main(int argc, char **argv)
 
    if(gCmdLineSettings.serverMode)           // Only set when 1) compiled as a dedicated server; or 2) -dedicated param is specified
    {
-      Vector<string> levels = LevelListLoader::buildLevelList();
+      Vector<string> levels = LevelListLoader::buildLevelList(gConfigDirs.levelDir);
       initHostGame(gBindAddress, levels, false);     // Start hosting
    }
 
