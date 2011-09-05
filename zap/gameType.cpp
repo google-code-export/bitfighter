@@ -132,9 +132,6 @@ ClientRef::~ClientRef()
 
 TNL_IMPLEMENT_NETOBJECT(GameType);
 
-struct ClientInfo;
-extern ClientInfo gClientInfo;
-
 // Constructor
 GameType::GameType(S32 winningScore) : mScoreboardUpdateTimer(1000) , mGameTimer(DefaultGameTime) , mGameTimeUpdateTimer(30000)
 {
@@ -160,10 +157,9 @@ GameType::GameType(S32 winningScore) : mScoreboardUpdateTimer(1000) , mGameTimer
    mEngineerEnabled = false;
    mBotsAllowed = true;
 
-   mLevelCredits = gClientInfo.name;
+   mLevelCredits = gClientGame ? gClientGame->getClientInfo()->name : "";     // I *think* this is only here to provide a default for the editor
    mGame = NULL;
 }
-
 
 
 bool GameType::processArguments(S32 argc, const char **argv, Game *game)
@@ -1229,7 +1225,6 @@ void GameType::setClientShipLoadout(ClientRef *cl, const Vector<U32> &loadout, b
 #endif
    }
 
-
    Ship *theShip = dynamic_cast<Ship *>(cl->clientConnection->getControlObject());
    if(theShip)
       theShip->setLoadout(loadout, silent);
@@ -1418,12 +1413,14 @@ void GameType::queryItemsOfInterest()
       ItemOfInterest &ioi = mItemsOfInterest[i];
       if(ioi.theItem.isNull())
       {
-         // Currently can happen when dropping HuntersFlagItem in ZoneControlGameType.
+         // This can happen when dropping HuntersFlagItem in ZoneControlGameType
          TNLAssert(false,"item in ItemOfInterest is NULL. This can happen when an item got deleted.");
-         mItemsOfInterest.erase(i);    // non-debug mode will skip TNLAssert, do this to fix this error.
+         mItemsOfInterest.erase(i);    // When not in debug mode, the TNLAssert is not fired.  Delete the problem object and carry on.
          break;
       }
+
       ioi.teamVisMask = 0;                         // Reset mask, object becomes invisible to all teams
+      
       Point pos = ioi.theItem->getActualPos();
       Point scopeRange(Game::PLAYER_SENSOR_VISUAL_DISTANCE_HORIZONTAL, Game::PLAYER_SENSOR_VISUAL_DISTANCE_VERTICAL);
       Rect queryRect(pos, pos);
@@ -1882,7 +1879,6 @@ S32 GameType::getEventScore(ScoringGroup scoreGroup, ScoringEvent scoreEvent, S3
 
 
 #ifndef ZAP_DEDICATED
-extern ClientInfo gClientInfo;
 
 static void switchTeamsCallback(ClientGame *game, U32 unused)
 {
@@ -1904,7 +1900,7 @@ static void switchTeamsCallback(ClientGame *game, U32 unused)
    {
       TeamMenuUserInterface *ui = game->getUIManager()->getTeamMenuUserInterface();
       ui->activate();     // Show menu to let player select a new team
-      ui->nameToChange = gClientInfo.name;
+      ui->nameToChange = game->getClientInfo()->name;
    }
  }
 

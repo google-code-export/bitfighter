@@ -45,6 +45,20 @@ namespace Zap
 {
 
 
+struct ClientInfo
+{
+   string name;
+   Nonce id;
+   bool authenticated;
+   F32 simulatedPacketLoss;
+   U32 simulatedLag;
+
+   ClientInfo();   // Constructor
+};
+
+
+////////////////////////////////////////
+////////////////////////////////////////
 
 class ClientGame : public Game
 {
@@ -74,10 +88,14 @@ private:
 
    Vector<string> mMuteList;        // List of players we aren't listening to anymore because they've annoyed us!
 
+   ClientInfo mClientInfo;
 
 public:
    ClientGame(const Address &bindAddress);
    virtual ~ClientGame();
+
+   void joinGame(Address remoteAddress, bool isFromMaster, bool local);
+   void endGame();
 
    UserInterfaceData *mUserInterfaceData;
 
@@ -88,7 +106,6 @@ public:
    void setConnectionToServer(GameConnection *connection);
 
    UIManager *getUIManager() { return mUIManager; }
-
 
    bool getInCommanderMap() { return mInCommanderMap; }
    void setInCommanderMap(bool inCommanderMap) { mInCommanderMap = inCommanderMap; }
@@ -108,6 +125,8 @@ public:
    bool isServer() { return false; }
    void idle(U32 timeDelta);
    void zoomCommanderMap();
+
+   ClientInfo *getClientInfo() { return &mClientInfo; }
 
    bool isShowingDebugShipCoords() const { return mDebugShowShipCoords; }     // Show coords on ship?
    void toggleShowingShipCoords() { mDebugShowShipCoords = !mDebugShowShipCoords; }
@@ -140,10 +159,8 @@ public:
    void setRemoteLevelDownloadFilename(const string &filename) { mRemoteLevelDownloadFilename = filename; }
 
    void changePassword(GameConnection::ParamType type, const Vector<string> &words, bool required);
-   void changeServerNameDescr(GameConnection::ParamType type, const Vector<string> &words);
+   void changeServerParam(GameConnection::ParamType type, const Vector<string> &words);
    bool checkName(const string &name);    // Make sure name is valid, and correct case of name if otherwise correct
-
-
 
 
    // Alert users when they get a reply to their request for elevated permissions

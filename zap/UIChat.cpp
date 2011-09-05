@@ -58,13 +58,15 @@ ChatMessage AbstractChat::mMessages[MESSAGES_TO_RETAIN];
 std::map<string, Color> AbstractChat::mFromColors;       // Map nicknames to colors
 
 
-AbstractChat::AbstractChat()
+AbstractChat::AbstractChat(ClientGame *game)
 {
+   mGame = game;
    mLineEditor = LineEditor(200);
 }
 
 AbstractChat::~AbstractChat()
 {
+   // Do nothing
 }
 
 Color AbstractChat::getColor(string name)
@@ -76,22 +78,18 @@ Color AbstractChat::getColor(string name)
 }
 
 
-extern ClientInfo gClientInfo;
-
 // We received a new incoming chat message...  Add it to the list
-void AbstractChat::newMessage(string from, string message, bool isPrivate, bool isSystem)
+void AbstractChat::newMessage(const string &from, const string &message, bool isPrivate, bool isSystem, bool fromSelf)
 {
-   bool isFromUs = (from == gClientInfo.name);  // Is this message from us?
-
    // Choose a color
    Color color;
 
-   if(isFromUs)
-      color = Colors::white;                               // If so, use white
-   else                                                   // Otherwise...
+   if(fromSelf)
+      color = Colors::white;                  
+   else                                       
    {
-      if(mFromColors.count(from) == 0)                   // ...see if we have a color for this nick.  If we don't, count will be 0
-         mFromColors[from] = getNextColor();              // If not, get a new one
+      if(mFromColors.count(from) == 0)        // See if we have a color for this nick
+         mFromColors[from] = getNextColor();  // If not, get one
 
       color = mFromColors[from];
    }
@@ -99,12 +97,10 @@ void AbstractChat::newMessage(string from, string message, bool isPrivate, bool 
    mMessages[mMessageCount % MESSAGES_TO_RETAIN] = ChatMessage(from, message, color, isPrivate, isSystem);
    mMessageCount++;
 
-   if(isFromUs && isPrivate)
+   if(fromSelf && isPrivate)     // I don't think this can ever happen!  ==> Should be !fromSelf ?
       deliverPrivateMessage(from.c_str(), message.c_str());
 }
 
-
-extern ClientInfo gClientInfo;
 
 void AbstractChat::setPlayersInGlobalChat(const Vector<StringTableEntry> &playerNicks)
 {
@@ -120,21 +116,25 @@ void AbstractChat::playerJoinedGlobalChat(const StringTableEntry &playerNick)
    mPlayersInGlobalChat.push_back(playerNick);
 
    // Make the following be from us, so it will be colored white
-   newMessage(gClientInfo.name, "----- Player " + string(playerNick.getString()) + " joined the conversation -----", false, true);
+   string msg = "----- Player " + string(playerNick.getString()) + " joined the conversation -----";
+   newMessage(mGame->getClientInfo()->name, msg, false, true, true);
    SoundSystem::playSoundEffect(SFXPlayerJoined, gIniSettings.sfxVolLevel);   // Make sound?
 }
 
 
 void AbstractChat::playerLeftGlobalChat(const StringTableEntry &playerNick)
 {
-   ChatUserInterface *ui = gClientGame->getUIManager()->getChatUserInterface();
+   ChatUserInterface *ui = mGame->getUIManager()->getChatUserInterface();
 
    for(S32 i = 0; i < ui->mPlayersInGlobalChat.size(); i++)
       if(ui->mPlayersInGlobalChat[i] == playerNick)
       {
          ui->mPlayersInGlobalChat.erase_fast(i);
-         newMessage(gClientInfo.name, "----- Player " + string(playerNick.getString()) + " left the conversation -----", false, true);
-         SoundSystem::playSoundEffect(SFXPlayerLeft, gIniSettings.sfxVolLevel);   // Make sound?
+
+         string msg = "----- Player " + string(playerNick.getString()) + " left the conversation -----";
+         newMessage(mGame->getClientInfo()->name, msg, false, true, true);
+         
+         SoundSystem::playSoundEffect(SFXPlayerLeft, gIniSettings.sfxVolLevel);   // Me make sound!
          break;
       }
 }
@@ -176,10 +176,12 @@ Color AbstractChat::getNextColor()
 // Announce we're ducking out for a spell...
 void AbstractChat::leaveGlobalChat()
 {
-   MasterServerConnection *conn = gClientGame->getConnectionToMaster();
+   MasterServerConnection *conn = mGame->getConnectionToMaster();
+
    if(conn)
       conn->c2mLeaveGlobalChat();
 }
+
 
 void AbstractChat::renderMessages(U32 ypos, U32 lineCountToDisplay)  // ypos is starting location of first message
 {
@@ -292,9 +294,9 @@ void AbstractChat::deliverPrivateMessage(const char *sender, const char *message
    UIID currId = UserInterface::current->getMenuID();
    if(currId != ChatUI && currId != QueryServersScreenUI )
    {
-      gClientGame->getUIManager()->getGameUserInterface()->displayChatMessage(GameUserInterface::privateF5MessageDisplayedInGameColor,
+      mGame->getUIManager()->getGameUserInterface()->displayChatMessage(GameUserInterface::privateF5MessageDisplayedInGameColor,
          "Private message from %s: Press [%s] to enter chat mode", sender, keyCodeToString(keyOUTGAMECHAT));
-      gClientGame->getUIManager()->getGameUserInterface()->displayChatMessage(GameUserInterface::privateF5MessageDisplayedInGameColor, "%s %s", ARROW, message);
+      mGame->getUIManager()->getGameUserInterface()->displayChatMessage(GameUserInterface::privateF5MessageDisplayedInGameColor, "%s %s", ARROW, message);
    }
 }
 
@@ -305,12 +307,12 @@ void AbstractChat::issueChat()
    if(mLineEditor.length() > 0)
    {
       // Send message
-      MasterServerConnection *conn = gClientGame->getConnectionToMaster();
+      MasterServerConnection *conn = mGame->getConnectionToMaster();
       if(conn)
          conn->c2mSendChat(mLineEditor.c_str());
 
       // And display it locally
-      newMessage(gClientInfo.name, mLineEditor.getString(), false, false);
+      newMessage(mGame->getClientInfo()->name, mLineEditor.getString(), false, false, true);
    }
    clearChat();     // Clear message
 
@@ -344,7 +346,7 @@ void AbstractChat::renderChatters(S32 xpos, S32 ypos)
 ////////////////////////////////////////
 
 // Constructor
-ChatUserInterface::ChatUserInterface(ClientGame *game) : Parent(game)
+ChatUserInterface::ChatUserInterface(ClientGame *game) : Parent(game), ChatParent(game)
 {
    setMenuID(GlobalChatUI);
 }
@@ -455,8 +457,6 @@ void ChatUserInterface::onKeyDown(KeyCode keyCode, char ascii)
 }
 
 
-extern bool gDisableShipKeyboardInput;
-
 // Run when UIChat is called in normal UI mode
 void ChatUserInterface::onActivate()
 {
@@ -466,7 +466,7 @@ void ChatUserInterface::onActivate()
 
    mPlayersInGlobalChat.clear();
    mRenderUnderlyingUI = true;
-   gDisableShipKeyboardInput = true;       // Keep keystrokes from getting to game
+   mDisableShipKeyboardInput = true;       // Keep keystrokes from getting to game
 }
 
 

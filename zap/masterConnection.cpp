@@ -166,7 +166,6 @@ TNL_IMPLEMENT_RPC_OVERRIDE(MasterServerConnection, m2sClientRequestedArrangedCon
 
 
 #ifndef ZAP_DEDICATED
-extern ClientInfo gClientInfo;
 
 TNL_IMPLEMENT_RPC_OVERRIDE(MasterServerConnection, m2cArrangedConnectionAccepted, 
                            (U32 requestId, Vector<IPAddress> possibleAddresses, ByteBufferPtr connectionData))
@@ -189,8 +188,9 @@ TNL_IMPLEMENT_RPC_OVERRIDE(MasterServerConnection, m2cArrangedConnectionAccepted
       Nonce serverNonce(connectionData->getBuffer() + Nonce::NonceSize);
 
       // Client is creating new connection to game server
-      GameConnection *gameConnection = new GameConnection(gClientInfo);
-      dynamic_cast<ClientGame *>(mGame)->setConnectionToServer(gameConnection);
+      ClientGame *clientGame = dynamic_cast<ClientGame *>(mGame);
+      GameConnection *gameConnection = new GameConnection(clientGame->getClientInfo());
+      clientGame->setConnectionToServer(gameConnection);
 
       gameConnection->connectArranged(getInterface(), fullPossibleAddresses, nonce, serverNonce, theSharedData, true);
    }
@@ -223,19 +223,22 @@ TNL_IMPLEMENT_RPC_OVERRIDE(MasterServerConnection, m2cSetAuthenticated,
    if(mGame->isServer())
       return;
 
+   ClientGame *clientGame = (ClientGame *)mGame;
+
    if((AuthenticationStatus)authStatus.value == AuthenticationStatusAuthenticatedName)
    {
       // Hmmm.... same info in two places...
-      gClientInfo.name = correctedName.getString();
+      clientGame->getClientInfo()->name = correctedName.getString();
       gIniSettings.name = correctedName.getString();  
 
-      gClientInfo.authenticated = true;
+      clientGame->getClientInfo()->authenticated = true;
+
       GameConnection *gc = dynamic_cast<ClientGame *>(mGame)->getConnectionToServer();
       if(gc)
          gc->c2sSetAuthenticated();
    }
    else 
-      gClientInfo.authenticated = false;
+      clientGame->getClientInfo()->authenticated = false;
 }
 #endif
 
@@ -328,7 +331,7 @@ TNL_IMPLEMENT_RPC_OVERRIDE(MasterServerConnection, m2cPlayerJoinedGlobalChat, (S
    if(mGame->isServer())
       return;
 
-   dynamic_cast<ClientGame *>(mGame)->playerJoinedGlobalChat(playerNick);
+   ((ClientGame *)mGame)->playerJoinedGlobalChat(playerNick);
 }
 
 
@@ -379,7 +382,7 @@ void MasterServerConnection::writeConnectRequest(BitStream *bstream)
 
    if(bstream->writeFlag(mGame->isServer()))     // We're a server, tell the master a little about us
    {
-      ServerGame *serverGame = dynamic_cast<ServerGame *>(mGame);
+      ServerGame *serverGame = (ServerGame *)mGame;
 
       bstream->write((U32) 1000);                             // CPU speed  (dummy)
       bstream->write((U32) 0xFFFFFFFF);                       // region code (dummy) --> want to use this?
@@ -397,9 +400,12 @@ void MasterServerConnection::writeConnectRequest(BitStream *bstream)
    else     // We're a client
    {
 #ifndef ZAP_DEDICATED
-      bstream->writeString(gClientInfo.name.c_str());   // User's nickname
-      bstream->writeString(gPlayerPassword.c_str());    // and whatever password they supplied
-      gClientInfo.id.write(bstream);
+      ClientGame *clientGame = (ClientGame *)mGame;
+
+      bstream->writeString(clientGame->getClientInfo()->name.c_str());   // User's nickname
+      bstream->writeString(gPlayerPassword.c_str());                     // and whatever password they supplied
+
+      clientGame->getClientInfo()->id.write(bstream);
 #endif
    }
 }
@@ -416,21 +422,22 @@ void MasterServerConnection::onConnectionEstablished()
 
       TNLAssert(dynamic_cast<ClientGame *>(mGame), "mGame is not ClientGame");
 
-      // Clear old Player list that might be there from client's lost connection to master while in game lobby
+      // Clear old player list that might be there from client's lost connection to master while in game lobby
       Vector<StringTableEntry> emptyPlayerList;
       ((ClientGame *)mGame)->setPlayersInGlobalChat(emptyPlayerList);
    }
 
    if(gCmdLineSettings.masterAddress == "" && gMasterAddress.size() >= 2)
    {
-      // If there is 2 or more master address, the first address is the one used to connect..
-      string string1;
+      // If there are 2 or more master addresses, the first is the one used to connect
+      string addressList;
+      
       for(S32 i = 0; i < gMasterAddress.size() - 1; i++)
-      {
-         string1 = string1 + gMasterAddress[i] + ",";
-      }
-      string1 += gMasterAddress[gMasterAddress.size()-1];
-      gIniSettings.masterAddress = string1;
+         addressList += gMasterAddress[i] + ",";
+
+      addressList += gMasterAddress[gMasterAddress.size() - 1];
+
+      gIniSettings.masterAddress = addressList;
    }
 }
 

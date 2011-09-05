@@ -1342,8 +1342,16 @@ void Ship::setLoadout(const Vector<U32> &loadout, bool silent)
    GameConnection *cc = getControllingClient();
 
 #ifndef ZAP_DEDICATED
-   if(!cc && gClientGame)
-      cc = gClientGame->getConnectionToServer();      // Second try
+   if(!cc)
+   {
+      ClientGame *clientGame = dynamic_cast<ClientGame *>(getGame());
+
+      if(clientGame)
+      {
+         TNLAssert(false, "Please document code path/circumstances this is triggered!");
+         cc = clientGame->getConnectionToServer();      // Second try  ==> under what circumstances can this happen?
+      }
+   }
 #endif
 
    if(cc)
@@ -1615,13 +1623,10 @@ void Ship::render(S32 layerIndex)
       glEnableBlend;
       F32 textAlpha = 0.5f * alpha;
       S32 textSize = 14;
-#ifdef TNL_OS_XBOX
-      textAlpha *= 1 - gClientGame->getCommanderZoomFraction();
-      textSize = 23;
-#else
+
       glLineWidth(gLineWidth1);
-#endif
-      glColor4f(1,1,1,textAlpha);
+
+      glColor(Colors::white, textAlpha);
       UserInterface::drawStringc(0, 30, (F32)textSize, str.c_str());
 
       // Underline name if player is authenticated
@@ -1649,7 +1654,7 @@ void Ship::render(S32 layerIndex)
       // Draw the outline of the ship in solid black -- this will block out any stars and give
       // a tantalizing hint of motion when the ship is cloaked.  Could also try some sort of star-twinkling or
       // scrambling thing here as well...
-      glColor3f(0,0,0);
+      glColor(Colors::black);
       glDisableBlendfromLineSmooth;
       glBegin(GL_POLYGON);
          glVertex2f(-20, -15);
@@ -1665,6 +1670,7 @@ void Ship::render(S32 layerIndex)
    // LayerIndex == 1
 
    GameType *gameType = clientGame->getGameType();
+
    if(!gameType)
       return;     // This will likely never happen
 

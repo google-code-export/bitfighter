@@ -41,7 +41,7 @@ namespace Zap
 class ChatMessage
 {
 public:
-   ChatMessage() { /* do nothing */ }                             // Quickie constructor
+   ChatMessage() { /* Do nothing */ }                             // Quickie constructor
 
    ChatMessage(string frm, string msg, Color col, bool isPriv, bool isSys)    // "Real" constructor
    {
@@ -80,6 +80,8 @@ private:
 
    Color getColor(string name);
 
+   ClientGame *mGame;
+
 protected:
    // Message data
    static ChatMessage mMessages[MESSAGES_TO_RETAIN];
@@ -93,9 +95,9 @@ protected:
    bool composingMessage() { return mLineEditor.length() > 0; }
 
 public:
-   AbstractChat();                        // Constructor
+   AbstractChat(ClientGame *game);        // Constructor
    virtual ~AbstractChat();               // Destructor
-   void newMessage(string from, string message, bool isPrivate, bool isSystem);   // Handle incoming msg
+   void newMessage(const string &from, const string &message, bool isPrivate, bool isSystem, bool fromSelf);   // Handle incoming msg
 
    void clearChat();                      // Clear message being composed
    virtual void issueChat();              // Send chat message
@@ -131,6 +133,7 @@ public:
 class ChatUserInterface : public UserInterface, public AbstractChat
 {
    typedef UserInterface Parent;
+   typedef AbstractChat ChatParent;
 
 private:
    Color mMenuSubTitleColor;

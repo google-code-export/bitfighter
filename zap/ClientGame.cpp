@@ -86,17 +86,39 @@ bool showDebugBots = false;
 
 
 // Global Game objects
+// TODO: Replace this rigamarole with something like: Vector<ClientGame *> gClientGames;
 ClientGame *gClientGame = NULL;
 ClientGame *gClientGame1 = NULL;
 ClientGame *gClientGame2 = NULL;
 
 extern ScreenInfo gScreenInfo;
+extern CmdLineSettings gCmdLineSettings;
 
 static Vector<DatabaseObject *> fillVector2;
 
-//-----------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------
+////////////////////////////////////////
+////////////////////////////////////////
 
+// Constructor
+ClientInfo::ClientInfo()   
+{ 
+   id.getRandom();    // Generate a player ID
+   simulatedPacketLoss = gCmdLineSettings.loss;
+   simulatedLag = gCmdLineSettings.lag;
+
+   if(gCmdLineSettings.name != "")
+      name = gCmdLineSettings.name;
+   else if(gIniSettings.name != "")
+      name = gIniSettings.name;
+   else
+      name = gIniSettings.lastName;
+
+   authenticated = false;
+}
+
+
+////////////////////////////////////////
+////////////////////////////////////////
 
 // Constructor
 ClientGame::ClientGame(const Address &bindAddress) : Game(bindAddress)
@@ -107,7 +129,7 @@ ClientGame::ClientGame(const Address &bindAddress) : Game(bindAddress)
 
    mRemoteLevelDownloadFilename = "downloaded.level";
 
-   mUIManager = new UIManager(this);                  // gets deleted in destructor
+   mUIManager = new UIManager(this);        // Gets deleted in destructor
 
 
    // Create some random stars
@@ -147,30 +169,103 @@ ClientGame::~ClientGame()
    cleanUp();
    delete mUserInterfaceData;
    delete mUIManager;   
+   delete mConnectionToServer;
 }
 
+
+// Player has selected a game from the QueryServersUserInterface, and is ready to join
+void ClientGame::joinGame(Address remoteAddress, bool isFromMaster, bool local)
+{
+   MasterServerConnection *connToMaster = getConnectionToMaster();
+   if(isFromMaster && connToMaster && connToMaster->getConnectionState() == NetConnection::Connected)     // Request arranged connection
+   {
+      connToMaster->requestArrangedConnection(remoteAddress);
+      getUIManager()->getGameUserInterface()->activate();
+   }
+   else                                                         // Try a direct connection
+   {
+      GameConnection *gameConnection = new GameConnection(getClientInfo());
+
+      setConnectionToServer(gameConnection);
+
+      if(local)   // We're a local client, running in the same process as the server... connect to that server
+      {
+         // Stuff on client side, so interface will offer the correct options.
+         // Note that if we're local, the passed address is probably a dummy; check caller if important.
+         gameConnection->connectLocal(getNetInterface(), gServerGame->getNetInterface());
+         gameConnection->setIsAdmin(true);              // Local connection is always admin
+         gameConnection->setIsLevelChanger(true);       // Local connection can always change levels
+
+         GameConnection *gc = dynamic_cast<GameConnection *>(gameConnection->getRemoteConnectionObject());
+
+         // Stuff on server side
+         if(gc)                              
+         {
+            gc->setIsAdmin(true);            // Set isAdmin on server
+            gc->setIsLevelChanger(true);     // Set isLevelChanger on server
+            gc->sendLevelList();
+
+            gc->s2cSetIsAdmin(true);                        // Set isAdmin on the client
+            gc->s2cSetIsLevelChanger(true, false);          // Set isLevelChanger on the client
+            gc->setServerName(gServerGame->getHostName());  // Server name is whatever we've set locally
+
+            gc->setAuthenticated(getClientInfo()->authenticated); // Tell local host if we're authenticated... no need to verify
+         }
+      }
+      else        // Connect to a remote server, but not via the master server
+         gameConnection->connect(getNetInterface(), remoteAddress);  
+
+      getUIManager()->getGameUserInterface()->activate();
+   }
+
+   //if(gClientGame2 && gClientGame != gClientGame2)  // make both client connect for now, until menus works in both clients.
+   //{
+   //   gClientGame = gClientGame2;
+   //   joinGame(remoteAddress, isFromMaster, local);
+   //   gClientGame = gClientGame1;
+   //}
+}
+
+
+// Called when connection to game server is terminated for one reason or another
+void ClientGame::endGame()
+{
+    // Cancel any in-progress attempts to connect
+   if(getConnectionToMaster())
+      getConnectionToMaster()->cancelArrangedConnectionAttempt();
+
+   // Disconnect from game server
+   if(getConnectionToServer())
+      getConnectionToServer()->disconnect(NetConnection::ReasonSelfDisconnect, "");
+
+   getUIManager()->getHostMenuUserInterface()->levelLoadDisplayDisplay = false;
+}
 
 bool ClientGame::hasValidControlObject()
 {
    return mConnectionToServer.isValid() && mConnectionToServer->getControlObject();
 }
 
+
 bool ClientGame::isConnectedToServer()
 {
    return mConnectionToServer.isValid() && mConnectionToServer->getConnectionState() == NetConnection::Connected;
 }
+
 
 GameConnection *ClientGame::getConnectionToServer()
 {
    return mConnectionToServer;
 }
 
+
 void ClientGame::setConnectionToServer(GameConnection *theConnection)
 {
    TNLAssert(theConnection, "Passing null connection.  Bah!");
    TNLAssert(mConnectionToServer.isNull(), "Error, a connection already exists here.");
+
    mConnectionToServer = theConnection;
-   theConnection->mClientGame = this;
+   theConnection->setClientGame(this);
 }
 
 
@@ -365,7 +460,7 @@ void ClientGame::gotServerListFromMaster(const Vector<IPAddress> &serverList)
 
 void ClientGame::gotChatMessage(const char *playerNick, const char *message, bool isPrivate, bool isSystem)
 {
-   getUIManager()->getChatUserInterface()->newMessage(playerNick, message, isPrivate, isSystem);
+   getUIManager()->getChatUserInterface()->newMessage(playerNick, message, isPrivate, isSystem, false);
 }
 
 
@@ -562,8 +657,7 @@ void ClientGame::changePassword(GameConnection::ParamType type, const Vector<str
 }
 
 
-// TODO: Probably misnamed... handles deletes too
-void ClientGame::changeServerNameDescr(GameConnection::ParamType type, const Vector<string> &words)
+void ClientGame::changeServerParam(GameConnection::ParamType type, const Vector<string> &words)
 {
    // Concatenate all params into a single string
    string allWords = concatenate(words, 1);
@@ -571,7 +665,12 @@ void ClientGame::changeServerNameDescr(GameConnection::ParamType type, const Vec
    // Did the user provide a name/description?
    if(type != GameConnection::DeleteLevel && allWords == "")
    {
-      displayErrorMessage(type == GameConnection::ServerName ? "!!! Need to supply a name" : "!!! Need to supply a description");
+      if(type == GameConnection::LevelDir)
+         displayErrorMessage("!!! Need to supply a folder name");
+      else if(type == GameConnection::ServerName)
+         displayErrorMessage("!!! Need to supply a name");
+      else
+         displayErrorMessage("!!! Need to supply a description");
       return;
    }
 
@@ -688,8 +787,6 @@ void ClientGame::onConnectionTerminated(const Address &serverAddress, NetConnect
 }
 
 
-extern ClientInfo gClientInfo;
-
 void ClientGame::onConnectionToMasterTerminated(NetConnection::TerminationReason reason, const char *reasonStr)
 {
    ErrorMessageUserInterface *ui = getUIManager()->getErrorMsgUserInterface();
@@ -707,7 +804,7 @@ void ClientGame::onConnectionToMasterTerminated(NetConnection::TerminationReason
          if(getConnectionToServer())
             setReadyToConnectToMaster(false);  // New ID might cause Authentication (underline name) problems if connected to game server...
          else
-            gClientInfo.id.getRandom();        // Get another ID, if not connected to game server
+            getClientInfo()->id.getRandom();        // Get another ID, if not connected to game server
          break;
 
       case NetConnection::ReasonBadLogin:
@@ -1121,11 +1218,11 @@ void ClientGame::renderCommander()
    glPushMatrix();
 
    GameObject *controlObject = mConnectionToServer->getControlObject();
-   Ship *u = dynamic_cast<Ship *>(controlObject);      // This is the local player's ship
+   Ship *ship = dynamic_cast<Ship *>(controlObject);      // This is the local player's ship
    
-   Point position = u ? u->getRenderPos() : Point(0,0);
+   Point position = ship ? ship->getRenderPos() : Point(0,0);
 
-   Point visSize = u ? computePlayerVisArea(u) * 2 : worldExtents;
+   Point visSize = ship ? computePlayerVisArea(ship) * 2 : worldExtents;
    Point modVisSize = (worldExtents - visSize) * zoomFrac + visSize;
 
    // Put (0,0) at the center of the screen
@@ -1143,7 +1240,7 @@ void ClientGame::renderCommander()
    // Render the objects.  Start by putting all command-map-visible objects into renderObjects.  Note that this no longer captures
    // walls -- those will be rendered separately.
    rawRenderObjects.clear();
-   if(u->isModuleActive(ModuleSensor))
+   if(ship->isModuleActive(ModuleSensor))
       mGameObjDatabase->findObjects((TestFunc)isVisibleOnCmdrsMapWithSensorType, rawRenderObjects);
    else
       mGameObjDatabase->findObjects((TestFunc)isVisibleOnCmdrsMapType, rawRenderObjects);
@@ -1160,7 +1257,7 @@ void ClientGame::renderCommander()
       for(S32 i = 0; i < Robot::robots.size(); i++)
          renderObjects.push_back(Robot::robots[i]);
 
-   if(u)
+   if(ship)
    {
       // Get info about the current player
       GameType *gt = getGameType();
@@ -1168,7 +1265,7 @@ void ClientGame::renderCommander()
 
       if(gt)
       {
-         playerTeam = u->getTeam();
+         playerTeam = ship->getTeam();
          Color teamColor = *gt->getTeamColor(playerTeam);
 
          for(S32 i = 0; i < renderObjects.size(); i++)
@@ -1177,14 +1274,14 @@ void ClientGame::renderCommander()
             if(renderObjects[i]->getObjectTypeNumber() == PlayerShipTypeNumber ||
                   renderObjects[i]->getObjectTypeNumber() == RobotShipTypeNumber)
             {
-               Ship *ship = dynamic_cast<Ship *>(renderObjects[i]);
+               Ship *otherShip = dynamic_cast<Ship *>(renderObjects[i]);
 
                // Get team of this object
-               S32 ourTeam = ship->getTeam();
-               if((ourTeam == playerTeam && getGameType()->isTeamGame()) || ship == u)  // On our team (in team game) || the ship is us
+               S32 otherShipTeam = otherShip->getTeam();
+               if((otherShipTeam == playerTeam && getGameType()->isTeamGame()) || otherShip == ship)  // On our team (in team game) || the ship is us
                {
-                  Point p = ship->getRenderPos();
-                  Point visExt = computePlayerVisArea(ship);
+                  Point p = otherShip->getRenderPos();
+                  Point visExt = computePlayerVisArea(otherShip);
 
                   glColor(teamColor * zoomFrac * 0.35f);
 
@@ -1221,7 +1318,7 @@ void ClientGame::renderCommander()
                glEnd();
 
                glColor(teamColor * 0.8f);     // Draw a marker in the middle
-               drawCircle(u->getRenderPos(), 2);
+               drawCircle(ship->getRenderPos(), 2);
             }
          }
       }
@@ -1264,9 +1361,9 @@ void ClientGame::renderOverlayMap()
    const S32 canvasHeight = gScreenInfo.getGameCanvasHeight();
 
    GameObject *controlObject = mConnectionToServer->getControlObject();
-   Ship *u = dynamic_cast<Ship *>(controlObject);
+   Ship *ship = dynamic_cast<Ship *>(controlObject);
 
-   Point position = u->getRenderPos();
+   Point position = ship->getRenderPos();
 
    S32 mapWidth = canvasWidth / 4;
    S32 mapHeight = canvasHeight / 4;
@@ -1295,7 +1392,7 @@ void ClientGame::renderOverlayMap()
    mapBounds.expand(Point(mapWidth * 2, mapHeight * 2));      //TODO: Fix
 
    rawRenderObjects.clear();
-   if(u->isModuleActive(ModuleSensor))
+   if(ship->isModuleActive(ModuleSensor))
       mGameObjDatabase->findObjects((TestFunc)isVisibleOnCmdrsMapWithSensorType, rawRenderObjects);
    else
       mGameObjDatabase->findObjects((TestFunc)isVisibleOnCmdrsMapType, rawRenderObjects);
@@ -1339,19 +1436,18 @@ void ClientGame::renderNormal()
    if(!hasValidControlObject())
       return;
 
-   GameObject *controlObject = mConnectionToServer->getControlObject();
-   Ship *u = dynamic_cast<Ship *>(controlObject);      // This is the local player's ship
-   if(!u)
+   Ship *ship = dynamic_cast<Ship *>(mConnectionToServer->getControlObject());  // This is the local player's ship
+   if(!ship)
       return;
 
-   position.set(u->getRenderPos());
+   position.set(ship->getRenderPos());
 
    glPushMatrix();
 
    // Put (0,0) at the center of the screen
    glTranslatef(gScreenInfo.getGameCanvasWidth() / 2.f, gScreenInfo.getGameCanvasHeight() / 2.f, 0);       
 
-   Point visExt = computePlayerVisArea(dynamic_cast<Ship *>(u));
+   Point visExt = computePlayerVisArea(ship);
    glScalef((gScreenInfo.getGameCanvasWidth()  / 2) / visExt.x, 
             (gScreenInfo.getGameCanvasHeight() / 2) / visExt.y, 1);
 
@@ -1394,21 +1490,13 @@ void ClientGame::renderNormal()
 
    FXTrail::renderTrails();
 
-   Ship *ship = NULL;
-   if(mConnectionToServer.isValid())
-      ship = dynamic_cast<Ship *>(mConnectionToServer->getControlObject());
-
-   if(ship)
-      getUIManager()->getGameUserInterface()->renderEngineeredItemDeploymentMarker(ship);
+   getUIManager()->getGameUserInterface()->renderEngineeredItemDeploymentMarker(ship);
 
    glPopMatrix();
 
    // Render current ship's energy
    if(ship)
-   {
       renderEnergyGuage(ship->mEnergy, Ship::EnergyMax, Ship::EnergyCooldownThreshold);
-   }
-
 
    //renderOverlayMap();     // Draw a floating overlay map
 }
@@ -1434,13 +1522,6 @@ void ClientGame::render()
 
 ////////////////////////////////////////
 ////////////////////////////////////////
-
-//const Color *EditorGame::getTeamColor(S32 teamIndex) const
-//{
-//   return Game::getBasicTeamColor(this, teamIndex); 
-//}
-
-
 
 bool ClientGame::processPseudoItem(S32 argc, const char **argv, const string &levelFileName)
 {
@@ -1491,7 +1572,6 @@ bool ClientGame::processPseudoItem(S32 argc, const char **argv, const string &le
          {
             wallObject->addToGame(this, this->getEditorDatabase());
             wallObject->processEndPoints();
-            //wallObject->onGeomChanged(); 
          }
          else
             delete wallObject;

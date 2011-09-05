@@ -47,15 +47,26 @@ XXX need to document timers, new luavec stuff XXX
 
  */
 /* Fixes after 015a
+<h2>New features</h2>
+<ul>
+<li>Added /leveldir command to change folder where levels are read.  Change affects current session only, and will not be saved in the INI.
+<li>Can now specify whether soccer game permits picking up the ball or not
+</ul>
+
+<h2>Bot scripting</h2>
+<ul>
+<li>Lua added copyMoveFromObject, Lua getCurrLoadout and getReqLoadout can now be used for ships
+</ul>
+
 <h2>Bug Fixes</h2>
 <ul>
-<li>Fix team bitmatch suicide score. 
-<li>Teleporter, added Delay option in levels for teleporters
-<li>SoccerBallItem, added individual Pickup=yes or no
+<li>Fix team bitmatch suicide score
+<li>Teleporter, added Delay option in levels for teleporters      <<=== what is this??
+</ul>
+
 <li>Deprecated SoccerPickup parameter -- now stored as an option on the Specials line.  Will be completely removed in 017.  Easiest fix is to load
     level into editor and save; parameter will be properly rewritten.
 <li>Reduced CPU usage for overlapping asteroids
-<li>LUA added copyMoveFromObject, LUA getCurrLoaduot and getReqLoadout can now be used for ships
 </ul>
 */
 
@@ -177,7 +188,6 @@ md5wrapper md5;
 
 
 bool gShowAimVector = false;     // Do we render an aim vector?  This should probably not be a global, but until we find a better place for it...
-bool gDisableShipKeyboardInput;  // Disable ship movement while user is in menus
 
 CIniFile gINI("dummy");          // This is our INI file.  Filename set down in main(), but compiler seems to want an arg here.
 
@@ -202,7 +212,7 @@ Color gHelpTextColor(Colors::green);
 
 S32 gMaxPolygonPoints = 32;                     // Max number of points we can have in Nexuses, LoadoutZones, etc.
 
-static const F32 MIN_SCALING_FACT = 0.15f;       // Limits minimum window size
+//static const F32 MIN_SCALING_FACT = 0.15f;      // Limits minimum window size
 
 string gServerPassword = "";
 string gAdminPassword = "";
@@ -210,8 +220,10 @@ string gLevelChangePassword = "";
 
 DataConnection *dataConn = NULL;
 
+U16 DEFAULT_GAME_PORT = 28000;
+
 Vector<string> gMasterAddress;
-Address gBindAddress(IPProtocol, Address::Any, 28000);      // Good for now, may be overwritten by INI or cmd line setting
+Address gBindAddress(IPProtocol, Address::Any, DEFAULT_GAME_PORT);      // Good for now, may be overwritten by INI or cmd line setting
 // Above is equivalent to ("IP:Any:28000")
 
 Vector<StringTableEntry> gLevelSkipList;  // Levels we'll never load, to create a semi-delete function for remote server mgt
@@ -221,10 +233,6 @@ ScreenInfo gScreenInfo;
 ZapJournal gZapJournal;          // Our main journaling object
 
 string gPlayerPassword;
-
-struct ClientInfo;
-ClientInfo gClientInfo;          // Info about the client used for establishing connection to server -- only needed on client side
-
 
 void exitGame(S32 errcode)
 {
@@ -329,11 +337,10 @@ U32 getServerMaxPlayers()
 // Host a game (and maybe even play a bit, too!)
 void initHostGame(Address bindAddress, Vector<string> &levelList, bool testMode)
 {
-   gServerGame = new ServerGame(bindAddress, getServerMaxPlayers(), gHostName.c_str(), testMode);
+   gServerGame = new ServerGame(bindAddress, gHostName, gHostDescr, getServerMaxPlayers(), testMode);
 
    gServerGame->setReadyToConnectToMaster(true);
    seedRandomNumberGenerator(gHostName);
-   gClientInfo.id.getRandom();                    // Generate a player ID
 
    // Don't need to build our level list when in test mode because we're only running that one level stored in editor.tmp
    if(!testMode)
@@ -344,10 +351,9 @@ void initHostGame(Address bindAddress, Vector<string> &levelList, bool testMode)
       logprintf(LogConsumer::ServerFilter, "Loaded %d levels:", levelList.size());
    }
 
-   // Parse all levels, make sure they are in some sense valid, and record some critical parameters
    if(levelList.size())
    {
-      gServerGame->buildLevelList(levelList);     // Take levels in gLevelList and create a set of empty levelInfo records
+      gServerGame->buildBasicLevelInfoList(levelList);     // Take levels in gLevelList and create a set of empty levelInfo records
       gServerGame->resetLevelLoadIndex();
 
 #ifndef ZAP_DEDICATED
@@ -355,7 +361,7 @@ void initHostGame(Address bindAddress, Vector<string> &levelList, bool testMode)
          gClientGame->getUIManager()->getHostMenuUserInterface()->levelLoadDisplayDisplay = true;
 #endif
    }
-   else
+   else  // No levels!
    {
       abortHosting_noLevels();
       return;
@@ -379,7 +385,7 @@ void hostGame()
 
    for(S32 i = 0; i < gServerGame->getLevelNameCount(); i++)
       logprintf(LogConsumer::ServerFilter, "\t%s [%s]", gServerGame->getLevelNameFromIndex(i).getString(), 
-            gServerGame->getLevelFileNameFromIndex(i).c_str());
+                gServerGame->getLevelFileNameFromIndex(i).c_str());
 
    if(gServerGame->getLevelNameCount())                  // Levels loaded --> start game!
       gServerGame->cycleLevel(ServerGame::FIRST_LEVEL);  // Start with the first level
@@ -391,14 +397,14 @@ void hostGame()
    }
 
 #ifndef ZAP_DEDICATED
-   if(!gDedicatedServer)                  // If this isn't a dedicated server...
+   if(gClientGame)      // Should be true if this isn't a dedicated server...
    {
       HostMenuUserInterface *ui = gClientGame->getUIManager()->getHostMenuUserInterface();
 
       ui->levelLoadDisplayDisplay = false;
       ui->levelLoadDisplayFadeTimer.reset();
 
-      joinGame(Address(), false, true);   // ...then we'll play, too!
+      gClientGame->joinGame(Address(), false, true);   // ...then we'll play, too!
    }
 #endif
 }
@@ -471,7 +477,7 @@ void idle()
    if(gServerGame)
    {
       if(gServerGame->hostingModePhase == ServerGame::LoadingLevels)
-         gServerGame->loadNextLevel();
+         gServerGame->loadNextLevelInfo();
       else if(gServerGame->hostingModePhase == ServerGame::DoneLoadingLevels)
          hostGame();
    }
@@ -589,75 +595,12 @@ FileLogConsumer gServerLog;       // We'll apply a filter later on, in main()
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-#ifndef ZAP_DEDICATED
-// Player has selected a game from the QueryServersUserInterface, and is ready to join
-void joinGame(Address remoteAddress, bool isFromMaster, bool local)
-{
-   MasterServerConnection *connToMaster = gClientGame->getConnectionToMaster();
-   if(isFromMaster && connToMaster && connToMaster->getConnectionState() == NetConnection::Connected)     // Request arranged connection
-   {
-      connToMaster->requestArrangedConnection(remoteAddress);
-      gClientGame->getUIManager()->getGameUserInterface()->activate();
-   }
-   else                                                         // Try a direct connection
-   {
-      GameConnection *gameConnection = new GameConnection(gClientInfo);
-
-      gClientGame->setConnectionToServer(gameConnection);
-
-      if(local)   // We're a local client, running in the same process as the server... connect to that server
-      {
-         // Stuff on client side, so interface will offer the correct options.
-         // Note that if we're local, the passed address is probably a dummy; check caller if important.
-         gameConnection->connectLocal(gClientGame->getNetInterface(), gServerGame->getNetInterface());
-         gameConnection->setIsAdmin(true);              // Local connection is always admin
-         gameConnection->setIsLevelChanger(true);       // Local connection can always change levels
-
-         GameConnection *gc = dynamic_cast<GameConnection *>(gameConnection->getRemoteConnectionObject());
-
-         // Stuff on server side
-         if(gc)                              
-         {
-            gc->setIsAdmin(true);            // Set isAdmin on server
-            gc->setIsLevelChanger(true);     // Set isLevelChanger on server
-
-            gc->s2cSetIsAdmin(true);                // Set isAdmin on the client
-            gc->s2cSetIsLevelChanger(true, false);  // Set isLevelChanger on the client
-            gc->setServerName(gServerGame->getHostName());     // Server name is whatever we've set locally
-
-            gc->setAuthenticated(gClientInfo.authenticated);   // Tell the local host whether we're authenticated... no need to verify
-         }
-      }
-      else        // Connect to a remote server, but not via the master server
-         gameConnection->connect(gClientGame->getNetInterface(), remoteAddress);  
-
-      gClientGame->getUIManager()->getGameUserInterface()->activate();
-   }
-   //if(gClientGame2 && gClientGame != gClientGame2)  // make both client connect for now, until menus works in both clients.
-   //{
-   //   gClientGame = gClientGame2;
-   //   joinGame(remoteAddress, isFromMaster, local);
-   //   gClientGame = gClientGame1;
-   //}
-
-}
-#endif
-
-
 // Disconnect from servers and exit game in an orderly fashion.  But stay connected to the master until we exit the program altogether
 void endGame()
 {
 #ifndef ZAP_DEDICATED
-   // Cancel any in-progress attempts to connect
-   if(gClientGame && gClientGame->getConnectionToMaster())
-      gClientGame->getConnectionToMaster()->cancelArrangedConnectionAttempt();
-
-   // Disconnect from game server
-   if(gClientGame && gClientGame->getConnectionToServer())
-      gClientGame->getConnectionToServer()->disconnect(NetConnection::ReasonSelfDisconnect, "");
-
    if(gClientGame)
-      gClientGame->getUIManager()->getHostMenuUserInterface()->levelLoadDisplayDisplay = false;
+      gClientGame->endGame();
 #endif
 
    delete gServerGame;
@@ -736,6 +679,8 @@ void readFolderLocationParams(Vector<StringPtr> &argv)
          }
 
          gCmdLineSettings.dirs.rootDataDir = argv[i+1].getString();
+         gConfigDirs.rootDataDir = gCmdLineSettings.dirs.rootDataDir;      // Also sock it away here
+
          argv.erase(i);
          argv.erase(i);
          i--;
@@ -902,7 +847,8 @@ TNL_IMPLEMENT_JOURNAL_ENTRYPOINT(ZapJournal, readCmdLineParams, (Vector<StringPt
             gCmdLineSettings.hostaddr = argv[i+1];
          else
          {
-            logprintf(LogConsumer::LogError, "You must specify a host address for the host to listen on (e.g. IP:Any:28000 or IP:192.169.1.100:5500)");
+            string msg = "You must specify a host address for the host to listen on (e.g. IP:Any:" + itos(DEFAULT_GAME_PORT) + " or IP:192.169.1.100:5500)";
+            logprintf(LogConsumer::LogError, msg.c_str());
             exitGame(1);
          }
       }
@@ -1205,6 +1151,7 @@ void InitSdlVideo()
 }
 #endif
 
+
 // Now integrate INI settings with those from the command line and process them
 void processStartupParams()
 {
@@ -1214,9 +1161,6 @@ void processStartupParams()
 
    if(!gCmdLineSettings.dedicated.empty())
       gBindAddress.set(gCmdLineSettings.dedicated);
-
-   gClientInfo.simulatedPacketLoss = gCmdLineSettings.loss;
-   gClientInfo.simulatedLag = gCmdLineSettings.lag;
 
    // Enable some logging...
    gMainLog.setMsgType(LogConsumer::LogConnectionProtocol, gIniSettings.logConnectionProtocol);
@@ -1240,24 +1184,6 @@ void processStartupParams()
    gMainLog.setMsgType(LogConsumer::ServerFilter, gIniSettings.serverFilter); 
 
 
-   // These options can come either from cmd line or INI file
-   //if(gCmdLineSettings.name != "")
-   //   gNameEntryUserInterface.setString(gCmdLineSettings.name);
-   //else if(gIniSettings.name != "")
-   //   gNameEntryUserInterface.setString(gIniSettings.name);
-   //else
-   //   gNameEntryUserInterface.setString(gIniSettings.lastName);
-
-
-   if(gCmdLineSettings.name != "")
-      gClientInfo.name = gCmdLineSettings.name;
-   else if(gIniSettings.name != "")
-      gClientInfo.name = gIniSettings.name;
-   else
-      gClientInfo.name = gIniSettings.lastName;
-
-   gClientInfo.authenticated = false;
-
    if(gCmdLineSettings.password != "")
       gPlayerPassword = gCmdLineSettings.password;
    else if(gIniSettings.password != "")
@@ -1266,7 +1192,6 @@ void processStartupParams()
       gPlayerPassword = gIniSettings.lastPassword;
 
 
-   
    if(gCmdLineSettings.serverPassword != "")
       gServerPassword = gCmdLineSettings.serverPassword;
    else if(gIniSettings.serverPassword != "")
@@ -1317,7 +1242,7 @@ void processStartupParams()
    if(gCmdLineSettings.ypos != -9999)
       gIniSettings.winYPos = gCmdLineSettings.ypos;
    if(gCmdLineSettings.winWidth > 0)
-      gIniSettings.winSizeFact = max((F32) gCmdLineSettings.winWidth / (F32) gScreenInfo.getGameCanvasWidth(), MIN_SCALING_FACT);
+      gIniSettings.winSizeFact = max((F32) gCmdLineSettings.winWidth / (F32) gScreenInfo.getGameCanvasWidth(), gScreenInfo.getMinScalingFactor());
 
    string strings;
    if(gCmdLineSettings.masterAddress != "")
@@ -1366,7 +1291,6 @@ void processStartupParams()
          }
          gClientGame->getUIManager()->getNameEntryUserInterface()->activate();
          seedRandomNumberGenerator(gIniSettings.lastName);
-         gClientInfo.id.getRandom();                           // Generate a player ID
       }
       else
       {
@@ -1383,7 +1307,6 @@ void processStartupParams()
 
          gClientGame->setReadyToConnectToMaster(true);         // Set elsewhere if in dedicated server mode
          seedRandomNumberGenerator(gIniSettings.name);
-         gClientInfo.id.getRandom();                           // Generate a player ID
       }
    }
 #endif
@@ -1402,7 +1325,7 @@ bool writeToConsole()
 
    try
    {
-      int m_nCRTOut= _open_osfhandle((intptr_t) GetStdHandle(STD_OUTPUT_HANDLE), _O_TEXT);
+      int m_nCRTOut = _open_osfhandle((intptr_t) GetStdHandle(STD_OUTPUT_HANDLE), _O_TEXT);
       if(m_nCRTOut == -1)
          return false;
 
@@ -1668,9 +1591,9 @@ void actualizeScreenMode(bool changingInterfaces)
    if (displayMode == DISPLAY_MODE_FULL_SCREEN_UNSTRETCHED)
    {
       glScissor(gScreenInfo.getHorizPhysicalMargin(),    // x
-            gScreenInfo.getVertPhysicalMargin(),     // y
-            gScreenInfo.getDrawAreaWidth(),          // width
-            gScreenInfo.getDrawAreaHeight());        // height
+                gScreenInfo.getVertPhysicalMargin(),     // y
+                gScreenInfo.getDrawAreaWidth(),          // width
+                gScreenInfo.getDrawAreaHeight());        // height
 
       glEnable(GL_SCISSOR_TEST);    // Turn on clipping to keep the margins clear
    }
@@ -1828,6 +1751,7 @@ int main(int argc, char **argv)
       argVector.push_back(argv[i]);
 
    readFolderLocationParams(argVector);      // Reads folder location params, and removes them from argVector
+
    gConfigDirs.resolveDirs();                // Resolve all folders except for levels folder, resolved later
 
    // Before we go any further, we should get our log files in order.  Now we know where they'll be, as the 
@@ -1851,7 +1775,7 @@ int main(int argc, char **argv)
 
    if(gCmdLineSettings.serverMode)           // Only set when 1) compiled as a dedicated server; or 2) -dedicated param is specified
    {
-      Vector<string> levels = LevelListLoader::buildLevelList();
+      Vector<string> levels = LevelListLoader::buildLevelList(gConfigDirs.levelDir);
       initHostGame(gBindAddress, levels, false);     // Start hosting
    }
 

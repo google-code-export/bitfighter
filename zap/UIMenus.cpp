@@ -85,12 +85,11 @@ MenuUserInterface::MenuUserInterface(ClientGame *game) : UserInterface(game)
    mRenderInstructions = true;
 }
 
-extern bool gDisableShipKeyboardInput;
 
 // Gets run when menu is activated.  This is also called by almost all other menus/subclasses.
 void MenuUserInterface::onActivate()
 {
-   gDisableShipKeyboardInput = true;       // Keep keystrokes from getting to game
+   mDisableShipKeyboardInput = true;       // Keep keystrokes from getting to game
    selectedIndex = 0;
    currOffset = 0;
 }
@@ -98,7 +97,7 @@ void MenuUserInterface::onActivate()
 
 void MenuUserInterface::onReactivate()
 {
-   gDisableShipKeyboardInput = true;       // Keep keystrokes from getting to game
+   mDisableShipKeyboardInput = true;       // Keep keystrokes from getting to game
 }
 
 
@@ -1007,8 +1006,6 @@ void OptionsMenuUserInterface::onEscape()
 ////////////////////////////////////////
 
 extern string gPlayerPassword;
-extern ClientInfo gClientInfo;
-
 
 // Constructor
 NameEntryUserInterface::NameEntryUserInterface(ClientGame *game) : MenuUserInterface(game)
@@ -1049,16 +1046,16 @@ static void nameAndPasswordAcceptCallback(ClientGame *clientGame, U32 unused)
 
    clientGame->resetMasterConnectTimer();
 
-   clientGame->getIniSettings()->lastName     = gClientInfo.name = ui->menuItems[1]->getValueForWritingToLevelFile();
-   clientGame->getIniSettings()->lastPassword = gPlayerPassword  = ui->menuItems[2]->getValueForWritingToLevelFile();
+   clientGame->getIniSettings()->lastName     = clientGame->getClientInfo()->name = ui->menuItems[1]->getValueForWritingToLevelFile();
+   clientGame->getIniSettings()->lastPassword = gPlayerPassword                   = ui->menuItems[2]->getValueForWritingToLevelFile();
 
    saveSettingsToINI(&gINI);             // Get that baby into the INI file
 
    clientGame->setReadyToConnectToMaster(true);
-   seedRandomNumberGenerator(gClientInfo.name);
-   //gClientInfo.id.getRandom();          // Generate a player ID - messes up with the rename and Authentication
+   seedRandomNumberGenerator(clientGame->getClientInfo()->name);
+
    if(clientGame->getConnectionToServer())                 // Rename while in game server, if connected
-      clientGame->getConnectionToServer()->c2sRenameClient(gClientInfo.name);
+      clientGame->getConnectionToServer()->c2sRenameClient(clientGame->getClientInfo()->name);
 }
 
 
@@ -1067,7 +1064,7 @@ void NameEntryUserInterface::setupMenu()
    menuItems.clear();
 
    menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "OK", nameAndPasswordAcceptCallback, "")));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem(getGame(), "NICKNAME:", gClientInfo.name, "ChumpChange", "", MAX_PLAYER_NAME_LENGTH)));
+   menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem(getGame(), "NICKNAME:", getGame()->getClientInfo()->name, "ChumpChange", "", MAX_PLAYER_NAME_LENGTH)));
    menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem(getGame(), "PASSWORD:", gPlayerPassword, "", "", MAX_PLAYER_PASSWORD_LENGTH)));
    
    menuItems[1]->setFilter(LineEditor::noQuoteFilter);      // quotes are incompatible with PHPBB3 logins
@@ -1144,13 +1141,15 @@ void HostMenuUserInterface::onActivate()
 extern string gHostName, gHostDescr;
 extern string gLevelChangePassword, gAdminPassword, gServerPassword;
 extern void initHostGame(Address bindAddress, Vector<string> &levelList, bool testMode);
+extern ConfigDirectories gConfigDirs;
+extern U16 DEFAULT_GAME_PORT;
 
 static void startHostingCallback(ClientGame *game, U32 unused)
 {
    game->getUIManager()->getHostMenuUserInterface()->saveSettings();
 
-   Vector<string> levelList = LevelListLoader::buildLevelList();
-   initHostGame(Address(IPProtocol, Address::Any, 28000), levelList, false);
+   Vector<string> levelList = LevelListLoader::buildLevelList(gConfigDirs.levelDir);
+   initHostGame(Address(IPProtocol, Address::Any, DEFAULT_GAME_PORT), levelList, false);
 }
 
 void HostMenuUserInterface::setupMenus()
@@ -1176,7 +1175,7 @@ void HostMenuUserInterface::setupMenus()
    menuItems.push_back(boost::shared_ptr<MenuItem>(new YesNoMenuItem(getGame(), "ALLOW MAP DOWNLOADS:", gIniSettings.allowGetMap, NULL, "", KEY_M)));
 
    //menuItems.push_back(boost::shared_ptr<MenuItem>(new CounterMenuItem("MAXIMUM PLAYERS:",   gIniSettings.maxplayers, 1, 2, MAX_PLAYERS, "", "", "", KEY_P)));
-   //menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem("PORT:",                  "28000",              "Use default of 28000", 
+   //menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem("PORT:",             itos(DEFAULT_GAME_PORT),  "Use default of " + itos(DEFAULT_GAME_PORT), 
    //                                         "", 10, KEY_P)));
 }
 
@@ -1552,8 +1551,9 @@ void LevelMenuSelectUserInterface::onActivate()
 
    if(!strcmp(category.c_str(), UPLOAD_LEVELS))
    {
-      mLevels = LevelListLoader::buildLevelList();
-      for(S32 i=0; i < mLevels.size(); i++)
+      mLevels = LevelListLoader::buildLevelList(gConfigDirs.levelDir);     // Get all the playable levels in levelDir
+
+      for(S32 i = 0; i < mLevels.size(); i++)
       {
          c[0] = mLevels[i].c_str()[0];
          menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), i | UPLOAD_LEVELS_BIT, mLevels[i].c_str(), 
