@@ -145,9 +145,9 @@ GameUserInterface::GameUserInterface(ClientGame *game) : Parent(game),
 // Destructor
 GameUserInterface::~GameUserInterface()
 {
-   //if(mOutputFile)
-   //   fclose(mOutputFile);
+   // Do nothing
 }
+
 
 void processGameConsoleCommand(void *gamePtr, OGLCONSOLE_Console console, char *cmd)
 {
@@ -174,11 +174,9 @@ void processGameConsoleCommand(void *gamePtr, OGLCONSOLE_Console console, char *
 }
 
 
-extern bool gDisableShipKeyboardInput;
-
 void GameUserInterface::onActivate()
 {
-   gDisableShipKeyboardInput = false;  // Make sure our ship controls are active
+   mDisableShipKeyboardInput = false;  // Make sure our ship controls are active
    mMissionOverlayActive = false;      // Turn off the mission overlay (if it was on)
    SDL_ShowCursor(SDL_DISABLE);        // Turn off cursor
    onMouseMoved();                     // Make sure ship pointed is towards mouse
@@ -209,7 +207,7 @@ void GameUserInterface::onReactivate()
    if(getGame()->isSuspended())
       unsuspendGame();
 
-   gDisableShipKeyboardInput = false;
+   mDisableShipKeyboardInput = false;
    SDL_ShowCursor(SDL_DISABLE);    // Turn off cursor
    enterMode(PlayMode);
 
@@ -480,7 +478,7 @@ void GameUserInterface::render()
 
 #if 0
 // Some code for outputting the position of the ship for finding good spawns
-GameConnection *con = gClientGame->getConnectionToServer();
+GameConnection *con = getGame()->getConnectionToServer();
 
 if(con)
 {
@@ -1456,21 +1454,28 @@ void GameUserInterface::setLevPassHandler(ClientGame *game, const Vector<string>
 void GameUserInterface::setServerNameHandler(ClientGame *game, const Vector<string> &words)
 {
    if(game->hasAdmin("!!! You don't have permission to set the server name"))
-      game->changeServerNameDescr(GameConnection::ServerName, words);
+      game->changeServerParam(GameConnection::ServerName, words);
 }
 
 
 void GameUserInterface::setServerDescrHandler(ClientGame *game, const Vector<string> &words)
 {
    if(game->hasAdmin("!!! You don't have permission to set the server description"))
-      game->changeServerNameDescr(GameConnection::ServerDescr, words);
+      game->changeServerParam(GameConnection::ServerDescr, words);
+}
+
+
+void GameUserInterface::setLevelDirHandler(ClientGame *game, const Vector<string> &words)
+{
+   if(game->hasAdmin("!!! You don't have permission to set the leveldir param"))
+      game->changeServerParam(GameConnection::LevelDir, words);
 }
 
 
 void GameUserInterface::deleteCurrentLevelHandler(ClientGame *game, const Vector<string> &words)
 {
    if(game->hasAdmin("!!! You don't have permission to delete the current level"))
-      game->changeServerNameDescr(GameConnection::DeleteLevel, words);    // handles deletes too
+      game->changeServerParam(GameConnection::DeleteLevel, words);    // handles deletes too
 }
 
 
@@ -1617,6 +1622,7 @@ CommandInfo chatCmds[] = {
    { "setlevpass",         GameUserInterface::setLevPassHandler,         { STR },     1,  ADMIN_COMMANDS, 0, {"[passwd]"},           "Set server password  (use blank to clear)" },
    { "setadminpass",       GameUserInterface::setAdminPassHandler,       { STR },     1,  ADMIN_COMMANDS, 0, {"[passwd]"},           "Set level change password (use blank to clear)" },
    { "setserverpass",      GameUserInterface::setServerPassHandler,      { STR },     1,  ADMIN_COMMANDS, 0, {"<passwd>"},           "Set admin password" },
+   { "leveldir",           GameUserInterface::setLevelDirHandler,        { STR },     1,  ADMIN_COMMANDS, 0, {"<new level folder>"}, "Set leveldir param on the server (changes levels available)" },
    { "setservername",      GameUserInterface::setServerNameHandler,      { STR },     1,  ADMIN_COMMANDS, 0, {"<name>"},             "Set server name" },
    { "setserverdescr",     GameUserInterface::setServerDescrHandler,     { STR },     1,  ADMIN_COMMANDS, 0, {"<descr>"},            "Set server description" },
    { "deletecurrentlevel", GameUserInterface::deleteCurrentLevelHandler, { },         0,  ADMIN_COMMANDS, 0, {""},                   "Remove current level from server" },
@@ -1907,10 +1913,6 @@ void GameUserInterface::processChatModeKey(KeyCode keyCode, char ascii)
       {
          S32 promptSize = getStringWidth(CHAT_FONT_SIZE, mCurrentChatType == TeamChat ? "(Team): " : "(Global): ");
 
-         //Ship *ship = dynamic_cast<Ship *>(gClientGame->getConnectionToServer()->getControlObject());
-         //if(!ship)
-         //   return;  // problem with unable to type something while trying to respawn.
-
          S32 nameSize = getStringWidthf(CHAT_FONT_SIZE, "%s: ", getGame()->getConnectionToServer()->getClientName().getString());
          S32 nameWidth = max(nameSize, promptSize);
          // Above block repeated above
@@ -1966,7 +1968,7 @@ void GameUserInterface::onKeyUp(KeyCode keyCode)
 // Runs only on client
 Move *GameUserInterface::getCurrentMove()
 {
-   if((mCurrentMode != ChatMode) && !gDisableShipKeyboardInput && !OGLCONSOLE_GetVisibility())
+   if((mCurrentMode != ChatMode) && !mDisableShipKeyboardInput && !OGLCONSOLE_GetVisibility())
    {
       InputMode inputMode = gIniSettings.inputMode;
       mCurrentMove.x = F32((!mRightDisabled && getKeyState(keyRIGHT[inputMode]) ? 1 : 0) - (!mLeftDisabled && getKeyState(keyLEFT[inputMode]) ? 1 : 0));

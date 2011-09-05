@@ -80,19 +80,19 @@ GameConnection::GameConnection()
 }
 
 
-GameConnection::GameConnection(const ClientInfo &clientInfo)
+GameConnection::GameConnection(const ClientInfo *clientInfo)
 {
    initialize();
 
-   if(clientInfo.name == "")
+   if(clientInfo->name == "")
       mClientName = "Chump";
    else
-      mClientName = clientInfo.name.c_str();
+      mClientName = clientInfo->name.c_str();
 
-   mClientId = clientInfo.id;
+   mClientId = clientInfo->id;
 
-   setAuthenticated(clientInfo.authenticated);
-   setSimulatedNetParams(clientInfo.simulatedPacketLoss, clientInfo.simulatedLag);
+   setAuthenticated(clientInfo->authenticated);
+   setSimulatedNetParams(clientInfo->simulatedPacketLoss, clientInfo->simulatedLag);
 }
 
 
@@ -259,7 +259,7 @@ ClientRef *GameConnection::getClientRef()
 // 4. server send CommandComplete
 TNL_IMPLEMENT_RPC(GameConnection, c2sRequestCurrentLevel, (), (), NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirClientToServer, 0)
 {
-   if(! gIniSettings.allowGetMap)
+   if(!gIniSettings.allowGetMap)
    {
       s2rCommandComplete(COMMAND_NOT_ALLOWED);  
       return;
@@ -299,7 +299,8 @@ TNL_IMPLEMENT_RPC(GameConnection, s2rSendLine, (StringPtr line), (line),
    // else... what?
    if(mDataBuffer)
    {
-      if(mDataBuffer->getBufferSize() < maxDataBufferSize)  // limit memory, to avoid eating too much memory.
+      // Limit memory consumption:
+      if(mDataBuffer->getBufferSize() < maxDataBufferSize)                                   
          mDataBuffer->appendBuffer((U8 *)line.getString(), (U32)strlen(line.getString()));
    }
    else
@@ -323,7 +324,7 @@ TNL_IMPLEMENT_RPC(GameConnection, s2rCommandComplete, (RangedU32<0,SENDER_STATUS
 
 #ifndef ZAP_DEDICATED
    // Server might need mOutputFile, if the server were to receive files.  Currently, server doesn't receive files in-game.
-   TNLAssert(mClientGame != NULL, "trying to get mOutputFile, mClientGame is NULL");
+   TNLAssert(mClientGame != NULL, "We need a clientGame to proceed...");
 
    if(mClientGame)
    {
@@ -448,7 +449,7 @@ bool GameConnection::sEngineerDeployObject(U32 type)
 
    EngineerModuleDeployer deployer;
 
-   if(!deployer.canCreateObjectAtLocation(gServerGame->getGameObjDatabase(), ship, type))     
+   if(!deployer.canCreateObjectAtLocation(ship->getGame()->getGameObjDatabase(), ship, type))     
       s2cDisplayErrorMessage(deployer.getErrorMessage().c_str());
 
    else if(deployer.deployEngineeredItem(this, type))
@@ -485,8 +486,14 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sAdminPassword, (StringPtr pass), (pass),
    // If gAdminPassword is blank, no one can get admin permissions except the local host, if there is one...
    if(gAdminPassword != "" && !strcmp(md5.getSaltedHashFromString(gAdminPassword).c_str(), pass))
    {
-      setIsAdmin(true);          // Enter admin PW and...
-      setIsLevelChanger(true);   // ...get these permissions too!
+      setIsAdmin(true);             // Enter admin PW and...
+
+      if(!isLevelChanger())
+      {
+         setIsLevelChanger(true);   // ...get these permissions too!
+         sendLevelList();
+      }
+      
       s2cSetIsAdmin(true);                                                 // Tell client they have been granted access
 
       if(gIniSettings.allowAdminMapUpload)
@@ -509,7 +516,9 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sLevelChangePassword, (StringPtr pass), (pas
    if(gLevelChangePassword == "" || !strcmp(md5.getSaltedHashFromString(gLevelChangePassword).c_str(), pass))
    {
       setIsLevelChanger(true);
+
       s2cSetIsLevelChanger(true, true);                                           // Tell client they have been granted access
+      sendLevelList();                                                            // Send client the level list
       gServerGame->getGameType()->s2cClientBecameLevelChanger(mClientRef->name);  // Announce change to world
    }
    else
@@ -526,12 +535,12 @@ extern Vector<StringTableEntry> gLevelSkipList;
 TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, (StringPtr param, RangedU32<0, GameConnection::ParamTypeCount> type), (param, type),
                   NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirClientToServer, 0)
 {
-   if(!isAdmin())    // Do nothing --> non-admins have no pull here
-      return;
+   if(!isAdmin())    // Do nothing --> non-admins have no pull here.  Note that this should never happen; client should filter out
+      return;        // non-admins before we get here, but we'll check anyway in case the client has been hacked.
 
-   // Check for forbidden blank parameters
-   if( (type == (U32)AdminPassword || type == (U32)ServerName || type == (U32)ServerDescr) &&
-                          !strcmp(param.getString(), ""))    // Some params can't be blank
+   // Check for forbidden blank parameters -- the following commands require a value to be passed in param
+   if( (type == (U32)AdminPassword || type == (U32)ServerName || type == (U32)ServerDescr || type == (U32)LevelDir) &&
+                          !strcmp(param.getString(), ""))
       return;
 
    // Add a message to the server log
@@ -540,9 +549,9 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, (StringPtr param, RangedU32<0, Ga
                                                 gServerGame->getCurrentLevelFileName().getString());
    else
    {
-      const char *types[] = { "level change password", "admin password", "server password", "server name", "server description" };
-      logprintf(LogConsumer::ServerFilter, "User [%s] %s %s", mClientRef->name.getString(), 
-                                                strcmp(param.getString(), "") ? "set" : "cleared", types[type]);
+      const char *types[] = { "level change password", "admin password", "server password", "server name", "server description", "leveldir param" };
+      logprintf(LogConsumer::ServerFilter, "User [%s] %s to [%s]", mClientRef->name.getString(), 
+                                                strcmp(param.getString(), "") ? "changed" : "cleared", types[type]);
    }
 
    // Update our in-memory copies of the param
@@ -562,6 +571,68 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, (StringPtr param, RangedU32<0, Ga
       gServerGame->setHostDescr(param.getString());    // Do we also need to set gHost
       gHostDescr = param.getString();                  // Needed on local host?
    }
+   else if(type == (U32)LevelDir)
+   {
+      string candidate = ConfigDirectories::resolveLevelDir(gConfigDirs.rootDataDir, param.getString());
+
+      if(gConfigDirs.levelDir == candidate)
+      {
+         s2cDisplayErrorMessage("!!! Specified folder is already the current level folder");
+         return;
+      }
+
+      // Make sure the specified dir exists; hopefully it contains levels
+      if(candidate == "" || !fileExists(candidate))
+      {
+         s2cDisplayErrorMessage("!!! Could not find specified folder");
+         return;
+      }
+
+      Vector<string> newLevels = LevelListLoader::buildLevelList(candidate, true);
+
+      if(newLevels.size() == 0)
+      {
+         s2cDisplayErrorMessage("!!! Specified folder contains no levels");
+         return;
+      }
+
+      gServerGame->buildBasicLevelInfoList(newLevels);      // Populates mLevelInfos on gServerGame with nearly empty LevelInfos 
+
+      bool anyLoaded = false;
+
+      for(S32 i = 0; i < newLevels.size(); i++)
+      {
+         string levelFile = ConfigDirectories::findLevelFile(candidate, newLevels[i]);
+
+         LevelInfo levelInfo(newLevels[i]);
+         if(gServerGame->getLevelInfo(levelFile, levelInfo))
+         {
+            if(!anyLoaded)    // i.e. we just found the first valid level; safe to clear out old list
+               gServerGame->clearLevelInfos();
+
+            anyLoaded = true;
+
+            gServerGame->addLevelInfo(levelInfo);
+         }
+      }
+
+      if(!anyLoaded)
+      {
+         s2cDisplayErrorMessage("!!! Specified folder contains no valid levels.  See server log for details.");
+         return;
+      }
+
+      gConfigDirs.levelDir = candidate;
+
+      // Send the new list of levels to all levelchangers
+      for(GameConnection *walk = getClientList(); walk; walk = walk->getNextClient())
+         if(walk->isLevelChanger())
+            sendLevelList();
+
+      s2cDisplayMessage(ColorAqua, SFXNone, "Level folder changed");
+
+   }  // end change leveldir
+
    else if(type == (U32)DeleteLevel)
    {
       // Avoid duplicates on skip list
@@ -582,7 +653,7 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, (StringPtr param, RangedU32<0, Ga
       }
    }
 
-   if(type != (U32)DeleteLevel)
+   if(type != (U32)DeleteLevel && type != (U32)LevelDir)
    {
       const char *keys[] = { "LevelChangePassword", "AdminPassword", "ServerPassword", "ServerName", "ServerDescription" };
 
@@ -592,14 +663,14 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, (StringPtr param, RangedU32<0, Ga
    }
 
    // Some messages we might show the user... should these just be inserted directly below?
-   static StringTableEntry levelPassChanged("Level change password changed");
-   static StringTableEntry levelPassCleared("Level change password cleared -- anyone can change levels");
-   static StringTableEntry adminPassChanged("Admin password changed");
-   static StringTableEntry serverPassChanged("Server password changed -- only players with the password can connect");
-   static StringTableEntry serverPassCleared("Server password cleared -- anyone can connect");
-   static StringTableEntry serverNameChanged("Server name changed");
-   static StringTableEntry serverDescrChanged("Server description changed");
-   static StringTableEntry serverLevelDeleted("Level added to skip list; level will stay in rotation until server restarted");
+   static StringTableEntry levelPassChanged   = "Level change password changed";
+   static StringTableEntry levelPassCleared   = "Level change password cleared -- anyone can change levels";
+   static StringTableEntry adminPassChanged   = "Admin password changed";
+   static StringTableEntry serverPassChanged  = "Server password changed -- only players with the password can connect";
+   static StringTableEntry serverPassCleared  = "Server password cleared -- anyone can connect";
+   static StringTableEntry serverNameChanged  = "Server name changed";
+   static StringTableEntry serverDescrChanged = "Server description changed";
+   static StringTableEntry serverLevelDeleted = "Level added to skip list; level will stay in rotation until server restarted";
 
    // Pick out just the right message
    StringTableEntry msg;
@@ -614,9 +685,12 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, (StringPtr param, RangedU32<0, Ga
             if(!walk->isLevelChanger())
             {
                walk->setIsLevelChanger(true);
+               walk->sendLevelList();
                walk->s2cSetIsLevelChanger(true, false);     // Silently
             }
-     }else{ //if setting a password, remove everyone permission (except admin)
+      }
+      else  // If setting a password, remove everyone's permissions (except admins)
+      { 
          for(GameConnection *walk = getClientList(); walk; walk = walk->getNextClient())
             if(walk->isLevelChanger() && (! walk->isAdmin()))
             {
@@ -773,7 +847,12 @@ TNL_IMPLEMENT_RPC(GameConnection, s2cSetIsAdmin, (bool granted), (granted),
 
    // Admin permissions automatically give level change permission
    if(granted)                      // Don't rescind level change permissions for entering a bad admin PW
+   {
+      if(!isLevelChanger())
+         sendLevelList();
+
       setIsLevelChanger(true);
+   }
 
 
    // If we entered a password, and it worked, let's save it for next time
@@ -984,6 +1063,20 @@ void GameConnection::displayMessageE(U32 color, U32 sfx, StringTableEntry format
 }
 
 
+void GameConnection::sendLevelList()
+{
+   // Send blank entry to clear the remote list
+   s2cAddLevel("", "");    
+
+   // Build list remotely by sending level names one-by-one
+   for(S32 i = 0; i < gServerGame->getLevelCount(); i++)
+   {
+      LevelInfo levelInfo = gServerGame->getLevelInfo(i);
+      s2cAddLevel(levelInfo.levelName, levelInfo.levelType);
+   }
+}
+
+
 //class RPC_GameConnection_s2cDisplayMessage : public TNL::RPCEvent { \
 //public: \
 //   TNL::FunctorDecl<void (GameConnection::*) args > mFunctorDecl;\
@@ -1002,13 +1095,7 @@ TNL_IMPLEMENT_RPC(GameConnection, s2cDisplayMessage,
                   (color, sfx, formatString),
                   NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirServerToClient, 0)
 {
-   static const S32 STRLEN = 256;
-   char outputBuffer[STRLEN];
-
-   strncpy(outputBuffer, formatString.getString(), STRLEN - 1);
-   outputBuffer[STRLEN - 1] = '\0';    // Make sure we're null-terminated
-
-   displayMessage(color, sfx, outputBuffer);
+   displayMessage(color, sfx, formatString.getString());
 }
 
 
@@ -1018,13 +1105,7 @@ TNL_IMPLEMENT_RPC(GameConnection, s2cDisplayErrorMessage,
                   NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirServerToClient, 0)
 {
 #ifndef ZAP_DEDICATED
-   static const S32 STRLEN = 256;
-   char outputBuffer[STRLEN];
-
-   strncpy(outputBuffer, formatString.getString(), STRLEN - 1);
-   outputBuffer[STRLEN - 1] = '\0';    // Make sure we're null-terminated
-
-   mClientGame->displayMessage(Colors::red, "%s", outputBuffer);
+   mClientGame->displayErrorMessage(formatString.getString());
 #endif
 }
 
@@ -1038,15 +1119,21 @@ TNL_IMPLEMENT_RPC(GameConnection, s2cDisplayMessageBox, (StringTableEntry title,
 }
 
 
-// Server sends the name and type of a level to the client (gets run repeatedly when client connects to the server)
+// Server sends the name and type of a level to the client (gets run repeatedly when client connects to the server). 
+// Sending a blank name and type will clear the list.
 TNL_IMPLEMENT_RPC(GameConnection, s2cAddLevel, (StringTableEntry name, StringTableEntry type), (name, type),
                   NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirServerToClient, 0)
 {
-   mLevelInfos.push_back(LevelInfo(name, type));
+   // Sending a blank name and type will clear the list.  Type should never be blank except in this use case, so check it first.
+   if(type == "" && name == "")
+      mLevelInfos.clear();
+   else
+      mLevelInfos.push_back(LevelInfo(name, type));
 }
 
 
 // Server sends the level that got removed, or removes all levels from list when index is -1
+// Unused??
 TNL_IMPLEMENT_RPC(GameConnection, s2cRemoveLevel, (S32 index), (index),
                   NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirServerToClient, 0)
 {
@@ -1071,8 +1158,8 @@ void GameConnection::c2sRequestLevelChange2(S32 newLevelIndex, bool isRelative)
    if(!mIsLevelChanger)
       return;
 
-   // use voting when no level change password and more then 1 players
-   if(!mIsAdmin && gLevelChangePassword.length() == 0 && gServerGame->getPlayerCount() > 1&&  gServerGame->voteStart(this, 0, newLevelIndex))
+   // Use voting when there is no level change password and there is more then 1 player
+   if(!mIsAdmin && gLevelChangePassword.length() == 0 && gServerGame->getPlayerCount() > 1 && gServerGame->voteStart(this, 0, newLevelIndex))
       return;
 
    bool restart = false;
@@ -1208,56 +1295,7 @@ TNL_IMPLEMENT_RPC(GameConnection, s2rSendableFlags, (U8 flags), (flags), NetClas
 }
 
 
-LevelInfo getLevelInfo(char *level, S32 size)
-{
-   S32 cur = 0;
-   S32 startingCur = 0;
-
-   LevelInfo levelInfo;
-   levelInfo.levelName = "";
-   levelInfo.levelType = "Bitmatch";
-   levelInfo.minRecPlayers = 0;
-   levelInfo.maxRecPlayers = 0;
-
-   while(cur < size)
-   {
-      if(level[cur] < 32)
-      {
-         if(cur - startingCur > 5)
-         {
-            char c = level[cur];
-            level[cur] = 0;
-            Vector<string> list = parseString(string(&level[startingCur]));
-            level[cur] = c;
-            if(list.size() >= 1 && list[0].find("GameType") != string::npos)
-            {
-               TNL::Object *theObject = TNL::Object::create(list[0].c_str());  // Instantiate a gameType object
-               GameType *gt = dynamic_cast<GameType*>(theObject);              // and cast it
-               if(gt)
-               {
-                  levelInfo.levelType = gt->getGameTypeString();
-                  delete gt;
-               }
-            }
-            else if(list.size() >= 2 && list[0] == "LevelName")
-            {
-               string levelName = list[1];
-               for(S32 i=2; i<list.size(); i++)
-                  levelName += " " + list[i];
-               levelInfo.levelName = levelName;
-            }
-            else if(list.size() >= 2 && list[0] == "MinPlayers")
-               levelInfo.minRecPlayers = atoi(list[1].c_str());
-            else if(list.size() >= 2 && list[0] == "MaxPlayers")
-               levelInfo.maxRecPlayers = atoi(list[1].c_str());
-         }
-         startingCur = cur + 1;
-      }
-      cur++;
-   }
-   return levelInfo;
-}
-
+extern LevelInfo getLevelInfoFromFileChunk(char *chunk, S32 size, LevelInfo &levelInfo);
 
 TNL_IMPLEMENT_RPC(GameConnection, s2rSendDataParts, (U8 type, ByteBufferPtr data), (type, data), NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirAny, 0)
 {
@@ -1279,7 +1317,8 @@ TNL_IMPLEMENT_RPC(GameConnection, s2rSendDataParts, (U8 type, ByteBufferPtr data
       (gIniSettings.allowMapUpload || (gIniSettings.allowAdminMapUpload && isAdmin())) &&
       !isInitiator() && mDataBuffer->getBufferSize() != 0)
    {
-      LevelInfo levelInfo = getLevelInfo((char *)mDataBuffer->getBuffer(), mDataBuffer->getBufferSize());
+      LevelInfo levelInfo("Transmitted Level");
+      getLevelInfoFromFileChunk((char *)mDataBuffer->getBuffer(), mDataBuffer->getBufferSize(), levelInfo);
 
       //BitStream s(mDataBuffer.getBuffer(), mDataBuffer.getBufferSize());
       char filename[128];
@@ -1294,11 +1333,11 @@ TNL_IMPLEMENT_RPC(GameConnection, s2rSendDataParts, (U8 type, ByteBufferPtr data
          fwrite(mDataBuffer->getBuffer(), 1, mDataBuffer->getBufferSize(), f);
          fclose(f);
          logprintf(LogConsumer::ServerFilter, "%s %s Uploaded %s", getNetAddressString(), mClientName.getString(), filename);
-         S32 id = gServerGame->addLevelInfo(filename, levelInfo);
+         S32 id = gServerGame->addUploadedLevelInfo(filename, levelInfo);
          c2sRequestLevelChange2(id, false);
       }
       else
-         s2cDisplayErrorMessage("!!! Upload Failed, server can't write file");
+         s2cDisplayErrorMessage("!!! Upload failed -- server can't write file");
    }
 
    if(type != 0)
@@ -1511,6 +1550,7 @@ string GameConnection::makeUnique(string name)
 }
 
 
+// Runs on client and server?
 void GameConnection::onConnectionEstablished()
 {
    U32 minPacketSendPeriod = 40; //50;   <== original zap setting
@@ -1523,7 +1563,7 @@ void GameConnection::onConnectionEstablished()
    {
       minPacketSendPeriod = 15;
       minPacketRecvPeriod = 15;
-      maxSendBandwidth = 65535;    // Error when higher than 65535
+      maxSendBandwidth = 65535;     // Error when higher than 65535
       maxRecvBandwidth = 65535;
    }
    
@@ -1590,6 +1630,7 @@ void GameConnection::onConnectionEstablished()
       {
          setIsLevelChanger(true);
          s2cSetIsLevelChanger(true, false);         // Tell client, but don't display notification
+         sendLevelList();
       }
 
       //s2mRequestNameVerification(this->mClientName, this->mClientNonce);

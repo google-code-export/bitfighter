@@ -87,7 +87,7 @@ static void prevButtonClickedCallback(ClientGame *game)
 
 
 // Constructor
-QueryServersUserInterface::QueryServersUserInterface(ClientGame *game) : UserInterface(game)
+QueryServersUserInterface::QueryServersUserInterface(ClientGame *game) : UserInterface(game), ChatParent(game)
 {
    setMenuID(QueryServersScreenUI);
    mLastUsedServerId = 0;
@@ -119,8 +119,8 @@ QueryServersUserInterface::QueryServersUserInterface(ClientGame *game) : UserInt
    S32 textsize = 12;
    S32 ypos = BANNER_HEIGHT - 30;
 
-   Button prevButton = Button(horizMargin, ypos, textsize, 4, "PREV", Colors::white, Colors::yellow, prevButtonClickedCallback);
-   Button nextButton = Button(gScreenInfo.getGameCanvasWidth() - horizMargin - 50, ypos, 
+   Button prevButton = Button(getGame(), horizMargin, ypos, textsize, 4, "PREV", Colors::white, Colors::yellow, prevButtonClickedCallback);
+   Button nextButton = Button(getGame(), gScreenInfo.getGameCanvasWidth() - horizMargin - 50, ypos, 
                               textsize, 4, "NEXT", Colors::white, Colors::yellow, nextButtonClickedCallback);
    
    buttons.push_back(prevButton);
@@ -154,7 +154,7 @@ void QueryServersUserInterface::onActivate()
       s.serverName = name;
       s.id = i;
       s.pingTime = Random::readF() * 512;
-      s.serverAddress.port = 28000;
+      s.serverAddress.port = DEFAULT_GAME_PORT;
       s.serverAddress.netNum[0] = Random::readI();
       s.maxPlayers = Random::readF() * 16 + 8;
       s.playerCount = Random::readF() * s.maxPlayers;
@@ -185,7 +185,7 @@ void QueryServersUserInterface::contactEveryone()
 {
    mBroadcastPingSendTime = Platform::getRealMilliseconds();
 
-   //Address broadcastAddress(IPProtocol, Address::Broadcast, 28000);
+   //Address broadcastAddress(IPProtocol, Address::Broadcast, DEFAULT_GAME_PORT);
    //getGame()->getNetInterface()->sendPing(broadcastAddress, mNonce);
 
    // Always ping these servers -- typically a local server
@@ -1026,7 +1026,7 @@ void QueryServersUserInterface::onKeyDown(KeyCode keyCode, char ascii)
 
                // Join the selected game...   (what if we select a local server from the list...  wouldn't 2nd param be true?)
                // Second param, false when we can ping that server, allows faster connect. If we can ping, we can connect without master help.
-               joinGame(servers[currentIndex].serverAddress, servers[currentIndex].isFromMaster && (gIniSettings.neverConnectDirect || !servers[currentIndex].everGotQueryResponse), false);
+               getGame()->joinGame(servers[currentIndex].serverAddress, servers[currentIndex].isFromMaster && (gIniSettings.neverConnectDirect || !servers[currentIndex].everGotQueryResponse), false);
                mLastSelectedServer = servers[currentIndex];    // Save this because we'll need the server name when connecting.  Kind of a hack.
 
                // ...and clear out the server list so we don't do any more pinging
@@ -1335,6 +1335,8 @@ void QueryServersUserInterface::sort()
 }
 
 
+extern U16 DEFAULT_GAME_PORT;
+
 // Look for /commands in chat message before handing off to parent
 void QueryServersUserInterface::issueChat()
 {
@@ -1343,7 +1345,7 @@ void QueryServersUserInterface::issueChat()
       const char *str1 = mLineEditor.c_str();
       S32 a = 0;
 
-      while(a < 9)      // compare character by character, now case insensitive
+      while(a < 9)      // Compare character by character, now case insensitive
       {       
          if(str1[a] != "/connect "[a] && str1[a] != "/CONNECT "[a] ) 
             a = S32_MAX;
@@ -1356,23 +1358,26 @@ void QueryServersUserInterface::issueChat()
          if(address.isValid())
          {
             if(address.port == 0)
-               address.port = 28000;   //default port number, if user did not enter port number
-            joinGame(address, false, false);
+               address.port = DEFAULT_GAME_PORT;   // Use default port number if the user did not supply one
+
+            getGame()->joinGame(address, false, false);
          }
          else
-            newMessage("","INVALID ADDRESS",false,true);
+            newMessage("", "INVALID ADDRESS", false, true, true);
          return;
       }
    }
    ChatParent::issueChat();
 }
 
+
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 // Contstructor -- x,y are UL corner of button
-Button::Button(S32 x, S32 y, S32 textSize, S32 padding, const char *label, Color fgColor, Color hlColor, void (*onClickCallback)(ClientGame *))
+Button::Button(ClientGame *game, S32 x, S32 y, S32 textSize, S32 padding, const char *label, Color fgColor, Color hlColor, void (*onClickCallback)(ClientGame *))
 {
+   mGame = game;
    mX = x;
    mY = y;
    mTextSize = textSize;
@@ -1395,7 +1400,7 @@ bool Button::mouseOver(F32 mouseX, F32 mouseY)
 void Button::onClick(F32 mouseX, F32 mouseY)
 {
    if(mOnClickCallback && mouseOver(mouseX, mouseY))
-      mOnClickCallback(gClientGame);
+      mOnClickCallback(mGame);
 }
 
 

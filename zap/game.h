@@ -316,27 +316,15 @@ public:
    S32 minRecPlayers;               // Min recommended number of players for this level
    S32 maxRecPlayers;               // Max recommended number of players for this level
 
-   
-   LevelInfo() { /* Do nothing */ }    // Default constructor
+   LevelInfo();      // Default constructor used on server side
 
-   // Used on client side where we don't care about min/max players
-   LevelInfo(StringTableEntry name, StringTableEntry type)     
-   {
-      levelName = name;  
-      levelType = type; 
-   }
+   // Constructor, used on client side where we don't care about min/max players
+   LevelInfo(const StringTableEntry &name, const StringTableEntry &type);
 
-   // Used on server side, augmented with setInfo method below
-   LevelInfo(string levelFile)
-   {
-      levelFileName = levelFile.c_str();
-   }
+   // Constructor, used on server side, augmented with setInfo method below
+   LevelInfo(const string &levelFile);
 
-   // Used on server side
-   void setInfo(StringTableEntry name, StringTableEntry type, S32 minPlayers, S32 maxPlayers)
-   {
-      levelName = name;  levelType = type;  minRecPlayers = minPlayers;  maxRecPlayers = maxPlayers; 
-   }
+   void initialize();      // Called by constructors
 };
 
 
@@ -352,7 +340,7 @@ class ServerGame : public Game
 private:
    enum {
       LevelSwitchTime = 5000,
-      UpdateServerStatusTime = 20000,      // How often we update our status on the master server (ms)
+      UpdateServerStatusTime = 20000,    // How often we update our status on the master server (ms)
       CheckServerStatusTime = 5000,      // If it did not send updates, recheck after ms
    };
 
@@ -382,7 +370,7 @@ private:
 
 public:
    U32 mInfoFlags;           // Not used for much at the moment, but who knows? --> propagates to master
-   ServerGame(const Address &theBindAddress, U32 maxPlayers, const char *hostName, bool testMode);    // Constructor
+   ServerGame(const Address &theBindAddress, const string &hostName, const string &hostDescr, U32 maxPlayers, bool testMode);    // Constructor
    virtual ~ServerGame();   // Destructor
 
    U32 mVoteTimer;
@@ -423,9 +411,10 @@ public:
 
    void setShuttingDown(bool shuttingDown, U16 time, ClientRef *who, StringPtr reason);  
 
-   void buildLevelList(Vector<string> &levelList);
+   void buildBasicLevelInfoList(const Vector<string> &levelList);
    void resetLevelLoadIndex();
-   void loadNextLevel();
+   void loadNextLevelInfo();
+   bool getLevelInfo(const string &fullFilename, LevelInfo &levelInfo);   // Populates levelInfo with data from fullFilename
    string getLastLevelLoadName();             // For updating the UI
 
    bool loadLevel(const string &fileName);    // Load a level
@@ -450,6 +439,10 @@ public:
    S32 getRobotCount();
    S32 getCurrentLevelIndex() { return mCurrentLevelIndex; }
    S32 getLevelCount() { return mLevelInfos.size(); }
+   LevelInfo getLevelInfo(S32 index) { return mLevelInfos[index]; }
+   void clearLevelInfos() { mLevelInfos.clear(); }
+   void addLevelInfo(const LevelInfo &levelInfo) { mLevelInfos.push_back(levelInfo); }
+
    bool isTestServer() { return mTestMode; }
 
    DataSender dataSender;
@@ -461,7 +454,7 @@ public:
    void suspenderLeftGame() { mSuspendor = NULL; }
    GameConnection *getSuspendor() { return mSuspendor; }
 
-   S32 addLevelInfo(const char *filename, LevelInfo &info);
+   S32 addUploadedLevelInfo(const char *filename, LevelInfo &info);
 
    HostingModePhases hostingModePhase;
 
@@ -475,7 +468,6 @@ extern ServerGame *gServerGame;
 
 extern Vector<string> gMasterAddress;
 
-extern void joinGame(Address remoteAddress, bool isFromMaster, bool local);
 extern void endGame();
 
 };

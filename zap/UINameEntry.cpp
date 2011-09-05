@@ -152,20 +152,22 @@ void LevelNameEntryUserInterface::onEscape()
 }
 
 
+extern ConfigDirectories gConfigDirs;
+
 void LevelNameEntryUserInterface::onActivate()
 {
    Parent::onActivate();
    mLevelIndex = 0;
 
-   mLevels = LevelListLoader::buildLevelList();
+   mLevels = LevelListLoader::buildLevelList(gConfigDirs.levelDir);
 
    // Remove the extension from the level file
    for(S32 i = 0; i < mLevels.size(); i++)
-       mLevels[i] = mLevels[i].substr(0, mLevels[i].find_last_of('.'));
+       mLevels[i] = stripExtension(mLevels[i]);
 
-   // See if our current level name is on the list -- if so, set mLevelIndex to that level
+   // See if our current level is on the list -- if so, set mLevelIndex to that level
    for(S32 i = 0; i < mLevels.size(); i++)
-      if(!stricmp(mLevels[i].c_str(), lineEditor.c_str()))
+      if(mLevels[i] == lineEditor.getString())
       {
          mLevelIndex = i;
          break;
@@ -251,7 +253,7 @@ void PasswordEntryUserInterface::render()
 
 void PreGamePasswordEntryUserInterface::onAccept(const char *text)
 {
-   joinGame(connectAddress, false, false);      // Not from master, not local
+   getGame()->joinGame(connectAddress, false, false);      // Not from master, not local
 }
 
 

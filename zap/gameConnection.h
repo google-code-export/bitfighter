@@ -58,19 +58,6 @@ static const char USED_EXTERNAL *gConnectStatesTable[] = {
       ""
 };
 
-////////////////////////////////////////
-////////////////////////////////////////
-
-struct ClientInfo
-{
-   string name;
-   Nonce id;
-   bool authenticated;
-   F32 simulatedPacketLoss;
-   U32 simulatedLag;
-};
-
-
 
 ////////////////////////////////////////
 ////////////////////////////////////////
@@ -78,7 +65,7 @@ struct ClientInfo
 class ClientRef;
 class ClientGame;
 struct LevelInfo;
-
+struct ClientInfo;
 
 class GameConnection: public ControlObjectConnection, public DataSendable
 {
@@ -97,7 +84,12 @@ private:
    // The server maintains a linked list of clients...
    GameConnection *mNext;
    GameConnection *mPrev;
+
    static GameConnection gClientList;
+
+#ifndef ZAP_DEDICATED
+   ClientGame *mClientGame;
+#endif
 
    bool mInCommanderMap;
    bool mIsRobot;
@@ -124,10 +116,6 @@ private:
 
 
 public:
-#ifndef ZAP_DEDICATED
-   ClientGame *mClientGame;
-#endif
-
    Vector<U32> mOldLoadout;   // Server: to respawn with old loadout  Client: to check if using same loadout configuration
    U16 switchedTeamCount;
 
@@ -155,18 +143,24 @@ public:
    enum ParamType             // Be careful changing the order of this list... c2sSetParam() expects this for message creation
    {
       LevelChangePassword = 0,
-      AdminPassword = 1,
-      ServerPassword = 2,
-      ServerName = 3,
-      ServerDescr = 4,
-      DeleteLevel = 5,
-      ParamTypeCount       // Must be last
+      AdminPassword,
+      ServerPassword,
+      ServerName,
+      ServerDescr,
+
+      // Items not listed in c2sSetParam()::*keys[] should be added here
+      LevelDir, 
+
+      // Items not listed in c2sSetParam()::*types[] should be added here
+      DeleteLevel,            
+
+      ParamTypeCount          // Must be last
    };
 
    static const S32 BanDuration = 30000;     // Players are banned for 30secs after being kicked
 
    GameConnection();                                  // Constructor
-   GameConnection(const ClientInfo &clientInfo);      // Constructor
+   GameConnection(const ClientInfo *clientInfo);      // Constructor
    ~GameConnection();                                 // Destructor
 
 
@@ -174,6 +168,9 @@ public:
    TNL_DECLARE_RPC(s2rSendLine, (StringPtr line));
    TNL_DECLARE_RPC(s2rCommandComplete, (RangedU32<0,SENDER_STATUS_COUNT> status));
 
+
+   ClientGame *getClientGame() { return mClientGame; }
+   void setClientGame(ClientGame *game) { mClientGame = game; }
 
    S32 mScore;                // Total points scored my this connection
    S32 mTotalScore;           // Total points scored by anyone while this connection is alive
@@ -214,6 +211,8 @@ public:
 
    bool isLevelChanger() { return mIsLevelChanger; }
    void setIsLevelChanger(bool levelChanger) { mIsLevelChanger = levelChanger; }
+
+   void sendLevelList();
 
    // Tell UI we're waiting for password confirmation from server
    void setWaitingForPermissionsReply(bool waiting) { mWaitingForPermissionsReply = waiting; }
@@ -266,8 +265,10 @@ public:
    TNL_DECLARE_RPC(s2cDisplayErrorMessage, (StringTableEntry formatString));    
 
    TNL_DECLARE_RPC(s2cDisplayMessageBox, (StringTableEntry title, StringTableEntry instr, Vector<StringTableEntry> message));
+
    TNL_DECLARE_RPC(s2cAddLevel, (StringTableEntry name, StringTableEntry type));
    TNL_DECLARE_RPC(s2cRemoveLevel, (S32 index));
+
    TNL_DECLARE_RPC(c2sRequestLevelChange, (S32 newLevelIndex, bool isRelative));
    void c2sRequestLevelChange2(S32 newLevelIndex, bool isRelative);
    TNL_DECLARE_RPC(c2sRequestShutdown, (U16 time, StringPtr reason));
