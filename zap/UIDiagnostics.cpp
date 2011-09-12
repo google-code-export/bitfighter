@@ -47,8 +47,6 @@ namespace Zap
 {
 
 extern CmdLineSettings gCmdLineSettings;
-extern U32 getServerMaxPlayers();
-extern Address gBindAddress;
 
 static const char *pageHeaders[] = {
    "PLAYING",
@@ -490,7 +488,7 @@ void DiagnosticUserInterface::render()
 
       ypos += showNameDescrBlock(settings->getHostName(), settings->getHostDescr(), ypos, textsize, gap);
 
-      drawCenteredStringPair2Colf(ypos, textsize, true, "Host Addr:", "%s", gBindAddress.toString());
+      drawCenteredStringPair2Colf(ypos, textsize, true, "Host Addr:", "%s", settings->getHostAddress().c_str());
       drawCenteredStringPair2Colf(ypos, 14, false, "Lvl Change PW:", "%s", settings->getLevelChangePassword() == "" ?
                                                                     "None - anyone can change" : settings->getLevelChangePassword().c_str());
       ypos += textsize + gap;
@@ -506,11 +504,12 @@ void DiagnosticUserInterface::render()
       ypos += textsize + gap;
       ypos += textsize + gap;
 
-      S32 x = getCenteredString2ColStartingPosf(textsize, false, "Max Players: %d", getServerMaxPlayers());
+      S32 x = getCenteredString2ColStartingPosf(textsize, false, "Max Players: %d", settings->getMaxPlayers());
+
       glColor(Colors::white);
       x += drawStringAndGetWidthf(x, ypos, textsize, "Max Players: ");
       glColor(Colors::yellow);
-      x += drawStringAndGetWidthf(x, ypos, textsize, "%d", getServerMaxPlayers());
+      x += drawStringAndGetWidthf(x, ypos, textsize, "%d", settings->getMaxPlayers());
 
       ypos += textsize + gap;
 

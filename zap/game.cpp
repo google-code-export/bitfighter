@@ -749,11 +749,9 @@ void LevelInfo::initialize()
 extern CmdLineSettings gCmdLineSettings;
 
 // Constructor
-ServerGame::ServerGame(const Address &theBindAddress, GameSettings *settings, U32 maxPlayers, bool testMode, bool dedicated) : 
-      Game(theBindAddress, settings)
+ServerGame::ServerGame(const Address &address, GameSettings *settings, bool testMode, bool dedicated) : 
+      Game(address, settings)
 {
-   mMaxPlayers = maxPlayers;
-
    mVoteTimer = 0;
    mNextLevel = NEXT_LEVEL;
    mPlayerCount = 0;
@@ -1782,7 +1780,7 @@ void ServerGame::idle(U32 timeDelta)
             prevCurrentLevelType = getCurrentLevelType();
             prevRobotCount = getRobotCount();
             prevPlayerCount = mPlayerCount;
-            masterConn->updateServerStatus(getCurrentLevelName(), getCurrentLevelType(), getRobotCount(), mPlayerCount, mMaxPlayers, mInfoFlags);
+            masterConn->updateServerStatus(getCurrentLevelName(), getCurrentLevelType(), getRobotCount(), mPlayerCount, mSettings->getMaxPlayers(), mInfoFlags);
             mMasterUpdateTimer.reset(UpdateServerStatusTime);
          }
          else
@@ -1844,6 +1842,7 @@ void ServerGame::idle(U32 timeDelta)
       obj->setCurrentMove(thisMove);
       obj->idle(GameObject::ServerIdleMainLoop);
    }
+
    if(mGameType)
    {
       mGameType->idle(GameObject::ServerIdleMainLoop, timeDelta);
@@ -1865,6 +1864,26 @@ void ServerGame::idle(U32 timeDelta)
    // Lastly, play any sounds server might have made...
    if(isDedicated())   // non-dedicated will process sound in client side.
       SoundSystem::processAudio(gIniSettings.alertsVolLevel);
+}
+
+
+bool ServerGame::startHosting()
+{
+   if(mSettings->getConfigDirs()->levelDir == "")     // Never did resolve a leveldir... no hosting for you!
+      return false;
+
+   hostingModePhase = Hosting;
+
+   for(S32 i = 0; i < getLevelNameCount(); i++)
+      logprintf(LogConsumer::ServerFilter, "\t%s [%s]", getLevelNameFromIndex(i).getString(), 
+                getLevelFileNameFromIndex(i).c_str());
+
+   if(!getLevelNameCount())      // No levels loaded... we'll crash if we try to start a game       
+      return false;      
+
+   cycleLevel(FIRST_LEVEL);      // Start with the first level
+
+   return true;
 }
 
 
