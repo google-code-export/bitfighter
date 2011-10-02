@@ -1702,6 +1702,16 @@ void GameConnection::endOfGameScoringHandler()
 }
 
 
+// Gets run when game is really and truly over, after post-game scoreboard is displayed.  Over.
+// Client only
+void GameConnection::onEndGhosting()
+{
+   TNLAssert(isConnectionToServer() && mClientGame, "when else is this called?");
+   
+   Parent::onEndGhosting();
+   mClientGame->clearClientList();
+}
+
 };
 
 
