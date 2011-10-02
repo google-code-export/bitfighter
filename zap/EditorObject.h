@@ -108,7 +108,7 @@ public:
    virtual Point getEditorSelectionOffset(F32 currentScale);  
 
    void renderAndLabelHighlightedVertices(F32 currentScale);   // Render selected and highlighted vertices, called from renderEditor
-   virtual void renderItemText(const char *text, S32 offset, F32 currentScale, const Point &currentOffset) { };    // Render some text, with specified vertical offset
+   virtual void renderItemText(const char *text, S32 offset, F32 currentScale) { };    // Render some text, with specified vertical offset
    virtual void renderEditor(F32 currentScale) { TNLAssert(false, "renderEditor not implemented!"); }
 
    // Should we show item attributes when it is selected? (only overridden by TextItem)
@@ -211,10 +211,10 @@ public:
    virtual const char *getOnDockName()       { TNLAssert(false, "getOnDockName method not implemented!"); return NULL; }
    virtual const char *getOnScreenName()     { TNLAssert(false, "getOnScreenName method not implemented!"); return NULL; }   
 
-   virtual const char *getInstructionMsg() { return ""; }      // Message printed below item when it is selected
+   virtual const char *getInstructionMsg() { return ""; }              // Message printed below item when it is selected
 
-   virtual EditorAttributeMenuUI *getAttributeMenu() { return NULL; }    // Override if child class has an attribute menu
-   virtual void doneEditing(EditorAttributeMenuUI *attributeMenu) {}
+   virtual EditorAttributeMenuUI *getAttributeMenu() { return NULL; }  // Override in child if it has an attribute menu
+   virtual void doneEditing(EditorAttributeMenuUI *attributeMenu) { /* Do nothing */ }
 
 
    //////////////
@@ -237,7 +237,7 @@ class EditorPointObject : public EditorObject, public PointGeometry
 public:
    //EditorPointObject();       // Constructor
 
-   virtual void renderItemText(const char *text, S32 offset, F32 currentScale, const Point &currentOffset);
+   virtual void renderItemText(const char *text, S32 offset, F32 currentScale);
    void prepareForDock(Game *game, const Point &point);
 };
 
