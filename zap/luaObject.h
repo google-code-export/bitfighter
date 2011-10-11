@@ -57,7 +57,6 @@ class Ship;
 class LuaObject
 {
 protected:
-   static int luaPanicked(lua_State *L);
    static void clearStack(lua_State *L);
    static void checkArgCount(lua_State *L, S32 argsWanted, const char *functionName);
    static F32 getFloat(lua_State *L, S32 index, const char *functionName);
@@ -89,17 +88,64 @@ public:
    static S32 returnPlayerInfo(lua_State *L, LuaPlayerInfo *playerInfo);
 
    static void stackdump(lua_State* L);
-   static void cleanupAndTerminate(lua_State *L);
 
-   static void setLuaArgs(lua_State *L, const string &scriptName, const Vector<string> *args);     // Used by bots and levelgens
-
-   static void setModulePath(lua_State *L, const string &scriptDir);
    static void openLibs(lua_State *L);
 
 };
 
+
 ////////////////////////////////////////
 ////////////////////////////////////////
+
+class LuaScriptRunner
+{
+public:
+   enum ScriptType {
+      ROBOT,
+      LEVELGEN,
+      PLUGIN
+   };
+
+private:
+   string mScriptingDir;
+   bool mScriptingDirSet;
+
+   bool loadHelperFunctions(const string &helperName);
+   void setLuaArgs();
+   void setModulePath();
+
+   bool loadScript(const string &scriptName);
+   bool runChunk();
+
+protected:
+   lua_State *L;                 // Main Lua state variable
+   string mScriptName;           // Fully qualified script name, with path and everything
+   Vector<string> mScriptArgs;   // List of arguments passed to the script
+
+   bool loadScript();
+   bool startLua(ScriptType scriptType);
+   bool runMain();               // Run a script's main() function
+
+
+   virtual void logError(const char *format, ...) = 0;
+
+   static int luaPanicked(lua_State *L);
+
+   virtual void registerClasses() = 0;
+   virtual void setPointerToThis() = 0;
+
+public:
+   LuaScriptRunner();               // Constructor
+   virtual ~LuaScriptRunner();      // Destructor
+
+   void setScriptingDir(const string &scriptingDir);
+   lua_State *getL();
+};
+
+
+////////////////////////////////////////
+////////////////////////////////////////
+
 
 class LuaItem : public LuaObject
 {

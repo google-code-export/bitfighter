@@ -27,7 +27,6 @@
 #define _LUALEVELGENERATOR_H_
 
 #include "luaObject.h"
-#include "luaUtil.h"
 #include "gameLoader.h"
 #include "tnlLog.h"
 #include "oglconsole.h"    // For logging to the console
@@ -39,28 +38,30 @@ namespace Zap
 
 class GridDatabase;
 
-class LuaLevelGenerator: public LuaObject
+class LuaLevelGenerator: public LuaScriptRunner, public LuaObject
 {
 private:
-   string mFilename;
-   const Vector<string> *mScriptArgs;
-   string mScriptDir;
    GridDatabase *mGridDatabase;
 
    OGLCONSOLE_Console mConsole;
-   bool loadLuaHelperFunctions(lua_State *L, const char *caller);
-   bool loadLevelGenHelperFunctions(lua_State *L);
+
+   LevelLoader *mCaller;
+   F32 mGridSize;
 
 public:
-   LuaLevelGenerator(const string &scriptName, const string &scriptDir, const Vector<string> *scriptArgs, F32 gridsize, GridDatabase *gridDatabase, 
+   LuaLevelGenerator() { TNLAssert(false, "Who wants this???"); }
+   LuaLevelGenerator(const string &scriptName, const string &scriptDir, const Vector<string> &scriptArgs, F32 gridsize, GridDatabase *gridDatabase, 
                      LevelLoader *caller, OGLCONSOLE_Console console);   // C++ constructor
 
    LuaLevelGenerator(lua_State *L);      // Lua constructor
    virtual ~LuaLevelGenerator();         // Destructor
 
-   void runScript(lua_State *L, F32 gridSize);
+   void setPointerToThis();
+   void registerClasses();
+   void onScriptInitialized();
+   bool runScript();                     
    void logError(const char *format, ...);
-
+   void logError(const char *msg, const char *filename);
 
    static const char className[];
 
@@ -82,7 +83,28 @@ public:
    // Implement LevelLoader abstract method
    void processLevelLoadLine(int argc, U32 id, const char **argv, GridDatabase *database, bool inEditor, const string &levelFileName);
 };
+/*
 
+class LuaEditorPlugin : public LuaLevelGenerator
+{
+   typedef LuaLevelGenerator Parent;
+
+public:
+   LuaEditorPlugin() { TNLAssert(false, "Who wants this???"); }
+   LuaEditorPlugin(const string &scriptName, const string &scriptDir, const Vector<string> *scriptArgs, F32 gridsize, GridDatabase *gridDatabase, 
+                     LevelLoader *caller, OGLCONSOLE_Console console);   // C++ constructor
+
+   LuaEditorPlugin(lua_State *L);      // Lua constructor
+   virtual ~LuaEditorPlugin();         // Destructor
+
+   static const char className[];
+
+   void getMenus();
+
+   void runScript();    
+   bool runMain();
+};
+*/
 
 };
 

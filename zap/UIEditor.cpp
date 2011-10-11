@@ -621,6 +621,9 @@ void EditorUserInterface::runScript(const FolderManager *folderManager, const st
 {
    string name = folderManager->findLevelGenScript(scriptName);  // Find full name of levelgen script
 
+
+   getGame()->runLevelGenScript(folderManager, scriptName, args, mLoadTarget);
+
    if(name == "")
    {
       logprintf(LogConsumer::LogWarning, "Warning: Could not find script \"%s\"",  scriptName.c_str());
@@ -629,7 +632,14 @@ void EditorUserInterface::runScript(const FolderManager *folderManager, const st
    }
 
    // Load the items
-   LuaLevelGenerator(name, folderManager->luaDir, &args, getGame()->getGridSize(), mLoadTarget, getGame(), gConsole);
+   LuaLevelGenerator levelGen(name, folderManager->luaDir, args, getGame()->getGridSize(), mLoadTarget, getGame(), gConsole);
+
+   if(!levelGen.runScript())
+   {
+      logprintf(LogConsumer::LogWarning, "Warning: Error running script \"%s\"",  scriptName.c_str());
+      // TODO: Show an error to the user
+      return;
+   }
 
    // Process new items
    // Not sure about all this... may need to test
@@ -654,6 +664,45 @@ void EditorUserInterface::runScript(const FolderManager *folderManager, const st
    // When I came through here in early june, there was nothing else here... shouldn't there be some handling of non-wall objects?  -CE
    // June of what year?  -bbr
 }
+
+
+void EditorUserInterface::runPlugin(const FolderManager *folderManager, const string &scriptName, const Vector<string> &args)
+{
+   //string name = folderManager->findLevelGenScript(scriptName);  // Find full name of levelgen script
+
+   //if(name == "")
+   //{
+   //   logprintf(LogConsumer::LogWarning, "Warning: Could not find script \"%s\"",  scriptName.c_str());
+   //   // TODO: Show an error to the user
+   //   return;
+   //}
+
+   //// Load the items
+   //LuaEditorPlugin plugin(name, folderManager->luaDir, &args, getGame()->getGridSize(), getGame()->getEditorDatabase(), getGame(), gConsole);
+   //plugin.getMenus();
+   //plugin.runScript();
+
+   //// Process new items
+   //// Not sure about all this... may need to test
+   //// Bulk-process new items, walls first
+
+   //fillVector.clear();
+   //mLoadTarget->findObjects((TestFunc)isWallType, fillVector);
+
+   //for(S32 i = 0; i < fillVector.size(); i++)
+   //{
+   //   EditorObject *obj = dynamic_cast<EditorObject *>(fillVector[i]);
+
+   //   if(obj->getVertCount() < 2)      // Invalid item; delete
+   //      mLoadTarget->removeFromDatabase(obj, obj->getExtent());
+
+   //   if(obj->getObjectTypeNumber() == PolyWallTypeNumber)
+   //      dynamic_cast<PolyWall *>(obj)->processEndPoints();
+   //   else
+   //      dynamic_cast<WallItem *>(obj)->processEndPoints();
+   //}
+}
+
 
 
 void EditorUserInterface::validateLevel()
@@ -2226,6 +2275,7 @@ void EditorUserInterface::onMouseMoved()
    bool showMoveCursor = (mItemHit || mVertexHit != NONE || mItemHit || mEdgeHit != NONE || 
                          (mouseOnDock() && findHitItemOnDock(mMousePos) != NONE));
 
+
    findSnapVertex();
 
    SDL_ShowCursor((showMoveCursor && !mShowingReferenceShip) ? SDL_ENABLE : SDL_ENABLE);
@@ -3172,6 +3222,10 @@ void EditorUserInterface::onKeyDown(KeyCode keyCode, char ascii)
       else                                // unshifted --> by 5
          changeBarrierWidth(-5);
    }
+else if(keyCode == KEY_SEMICOLON)
+{
+   runPlugin(getGame()->getSettings()->getFolderManager(), "plugin_arc.lua", Vector<string>());
+}
 
    else if(keyCode == KEY_E)              // E - Zoom In
          mIn = true;

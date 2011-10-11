@@ -28,46 +28,34 @@
 #include "config.h"     // For definition of FolderManager struct
 #include "game.h"
 #include "stringUtils.h"
+#include "luaUtil.h"
+
 
 namespace Zap
 {
 
-static F32 sGridSize;
-static LevelLoader *mCaller;
-
-
-string levelGenFile;     // Exists here so exception handler will know what file we were running
-
 
 // C++ Constructor
-LuaLevelGenerator::LuaLevelGenerator(const string &scriptName, const string &scriptDir, const Vector<string> *scriptArgs, F32 gridSize, GridDatabase *gridDatabase, 
-                                     LevelLoader *caller, OGLCONSOLE_Console console)
+LuaLevelGenerator::LuaLevelGenerator(const string &scriptName, const string &scriptDir, const Vector<string> &scriptArgs, F32 gridSize, 
+                                     GridDatabase *gridDatabase, LevelLoader *caller, OGLCONSOLE_Console console)
 {
-   if(!fileExists(scriptName))      // Files should be checked before we get here, so this should never happen
-   {
-      logError("Got bad input %s!", scriptName.c_str());
-      return;
-   }
+   TNLAssert(fileExists(scriptName), "Files should be checked before we get here -- something has gone wrong!");
 
-   mFilename = scriptName;
+   mScriptName = scriptName;
    mScriptArgs = scriptArgs;
-   mScriptDir = scriptDir;
+   setScriptingDir(scriptDir);
 
-   levelGenFile = mFilename;
    mConsole = console;
    mGridDatabase = gridDatabase;
 
-   lua_State *L = lua_open();    // Create a new Lua interpreter
-
-   if(!L)
-   {
-      logError("Could not create Lua interpreter to run %s.  Skipping...", mFilename.c_str());
-      return;
-   }
-   sGridSize = gridSize;
+   mGridSize = gridSize;
    mCaller = caller;
-   runScript(L, gridSize);
-   cleanupAndTerminate(L);
+}
+
+
+bool LuaLevelGenerator::runScript()
+{
+   return startLua(LEVELGEN) && loadScript() && runMain();
 }
 
 
@@ -81,11 +69,7 @@ static const char *argv[LevelLoader::MAX_LEVEL_LINE_ARGS];
 LuaLevelGenerator::LuaLevelGenerator(lua_State *L)
 {
    TNLAssert(false, "Why use this constructor?");
-   throw LuaException("Trying to initalize LuaLevelGenerator without proper arguments is not allowed");
-
-   // Initialize some primitive string handling stuff, used in addItem() below
-   /*for(U32 i = 0; i < LevelLoader::MaxArgc; i++)
-      argv[i] = argv_buffer[i];*/
+   throw LuaException("LuaLevelGenerator should never be constructed by a lua script!");
 }
 
 
@@ -95,13 +79,11 @@ LuaLevelGenerator::~LuaLevelGenerator()
    logprintf(LogConsumer::LogLuaObjectLifecycle, "deleted LuaLevelGenerator (%p)\n", this);
 }
 
-// modify basic level parameters like game length and teams.
+// TODO: Provide mechanism to modify basic level parameters like game length and teams.
 
 
 extern OGLCONSOLE_Console gConsole;
 
-// Some rudimentary error logging.  Perhaps, someday, will become a sort of in-game error console.
-// For now, though, pass all errors through here.
 void LuaLevelGenerator::logError(const char *format, ...)
 {
    va_list args;
@@ -109,11 +91,17 @@ void LuaLevelGenerator::logError(const char *format, ...)
    char buffer[2048];
 
    vsnprintf(buffer, sizeof(buffer), format, args);
-   logprintf(LogConsumer::LogError, "***LEVELGEN ERROR*** in %s ::: %s", levelGenFile.c_str(), buffer);
 
-   OGLCONSOLE_Output(gConsole, "%s\n", buffer);    // Print message to the console
+   logError(buffer, mScriptName.c_str());
 
    va_end(args);
+}
+
+
+void LuaLevelGenerator::logError(const char *msg, const char *filename)
+{
+   logprintf(LogConsumer::LogError, "***LEVELGEN ERROR*** in %s ::: %s", filename, msg);
+   OGLCONSOLE_Output(gConsole, "%s\n", msg);    // Print message to the console
 }
 
 
@@ -166,14 +154,6 @@ Point getPointFromTable(lua_State *L, int tableIndex, int key)
 }
 
 
-//string ftos(F32 i) // convert float to string
-//{
-//   char outString[100];
-//   dSprintf(outString, sizeof(outString), "%2.2f", i);
-//   return outString;
-//}
-
-
 S32 LuaLevelGenerator::addWall(lua_State *L)
 {
    static const char *methodName = "LevelGeneratorEditor:addWall()";
@@ -202,7 +182,7 @@ S32 LuaLevelGenerator::addWall(lua_State *L)
       logError(e.what());
    }
 
-   mCaller->parseLevelLine(line.c_str(), mGridDatabase, false, "Levelgen script: " + mFilename);
+   mCaller->parseLevelLine(line.c_str(), mGridDatabase, false, "Levelgen script: " + mScriptName);
 
    return 0;
 }
@@ -226,7 +206,7 @@ S32 LuaLevelGenerator::addItem(lua_State *L)
    for(S32 i = 0; i < argc; i++)      // argc was already bounds checked above
       argv[i] = getString(L, i + 1, methodName);
 
-   processLevelLoadLine(argc, 0, argv, mGridDatabase, false, "Levelgen script: " + mFilename);      // For now, all ids are 0!
+   processLevelLoadLine(argc, 0, argv, mGridDatabase, false, "Levelgen script: " + mScriptName);      // For now, all ids are 0!
 
    //clearStack();
 
@@ -249,7 +229,7 @@ S32 LuaLevelGenerator::addLevelLine(lua_State *L)
    checkArgCount(L, 1, methodName);
    const char *line = getString(L, 1, methodName);
 
-   mCaller->parseLevelLine(line, mGridDatabase, false, "Levelgen script: " + mFilename);
+   mCaller->parseLevelLine(line, mGridDatabase, false, "Levelgen script: " + mScriptName);
 
    //clearStack();
 
@@ -279,8 +259,8 @@ S32 LuaLevelGenerator::pointCanSeePoint(lua_State *L)
 
    checkArgCount(L, 2, methodName);
 
-   Point p1 = getPoint(L, 1, methodName) *= sGridSize;
-   Point p2 = getPoint(L, 2, methodName) *= sGridSize;
+   Point p1 = getPoint(L, 1, methodName) *= mGridSize;
+   Point p2 = getPoint(L, 2, methodName) *= mGridSize;
 
    return returnBool(L, mGridDatabase->pointCanSeePoint(p1, p2));
 
@@ -301,7 +281,7 @@ S32 LuaLevelGenerator::logprint(lua_State *L)
 
 S32 LuaLevelGenerator::getGridSize(lua_State *L)
 {
-   return returnFloat(L, sGridSize);
+   return returnFloat(L, mGridSize);
 }
 
 
@@ -311,96 +291,78 @@ S32 LuaLevelGenerator::getPlayerCount(lua_State *L)
 }
 
 
-// TODO: This is almost identical to the same-named function in robot.cpp, but each call their own logError function.  How can we combine?
-bool LuaLevelGenerator::loadLuaHelperFunctions(lua_State *L, const char *caller)
+///// Initialize levelgen specific stuff
+void LuaLevelGenerator::setPointerToThis()
 {
-   // Load our standard robot library  
-   // TODO: Read the file into memory, store that as a static string in the bot code, and then pass that to Lua rather than rereading this
-   // every time a bot is created.
-   string fname = joindir(mScriptDir, "lua_helper_functions.lua");
+   lua_pushnumber(L, mGridSize);
+   lua_setglobal(L, "_GRID_SIZE");
 
-   if(luaL_loadfile(L, fname.c_str()))
-   {
-      logError("Error loading lua helper functions %s: %s.  Can't run %s...", fname.c_str(), lua_tostring(L, -1), caller);
-      return false;
-   }
-
-   // Now run the loaded code
-   if(lua_pcall(L, 0, 0, 0))     // Passing 0 params, getting none back
-   {
-      logError("Error during initializing lua helper functions %s: %s.  Can't run %s...", fname.c_str(), lua_tostring(L, -1), caller);
-      return false;
-   }
-
-   return true;
+   Lunar<LuaLevelGenerator>::push(L, this);  
+   lua_setglobal(L, "levelgen");
 }
 
 
-bool LuaLevelGenerator::loadLevelGenHelperFunctions(lua_State *L)
+// Register our connector types with Lua
+void LuaLevelGenerator::registerClasses()
 {
-   string fname = joindir(mScriptDir, "levelgen_helper_functions.lua");
-
-   if(luaL_loadfile(L, fname.c_str()))
-   {
-      logError("Error loading levelgen helper functions %s.  Skipping...", fname.c_str());
-      return false;
-   }
-
-   // Now run the loaded code
-   if(lua_pcall(L, 0, 0, 0))     // Passing 0 params, getting none back
-   {
-      logError("Error during initializing levelgen helper functions: %s.  Skipping...", lua_tostring(L, -1));
-      return false;
-   }
-
-   return true;
-}
-
-
-void LuaLevelGenerator::runScript(lua_State *L, F32 gridSize)
-{
-   // Register this class Luna
    Lunar<LuaLevelGenerator>::Register(L);
    Lunar<LuaPoint>::Register(L);
    Lunar<LuaUtil>::Register(L);
 
-   lua_atpanic(L, luaPanicked);    // Register our panic function
-
-   LuaUtil::openLibs(L);
-   LuaUtil::setModulePath(L, mScriptDir);
-
-   lua_pushnumber(L, gridSize);
-   lua_setglobal(L, "_GRID_SIZE");
-
-   //lua_pushlightuserdata(L, (void *)this); // using this line needs helper functions "levelgen = LuaLevelGenerator(LevelGen)"
-   //lua_setglobal(L, "LevelGen");
-   Lunar<LuaLevelGenerator>::push(L, this); // Lets use this instead of having to use helper functions
-   lua_setglobal(L, "levelgen");
-
-   setLuaArgs(L, mFilename, mScriptArgs);    // Put our args in to the Lua table "args"
-                                             // MUST BE SET BEFORE LOADING LUA HELPER FNS (WHICH F$%^S WITH GLOBALS IN LUA)
-
-   if(!loadLuaHelperFunctions(L, "levelgen script")) 
-      return;
-
-   if(!loadLevelGenHelperFunctions(L)) 
-      return;
-
-
-   if(luaL_loadfile(L, mFilename.c_str()))
-   {
-      logError("Error loading levelgen script: %s.  Skipping...", lua_tostring(L, -1));
-      return;
-   }
-
-   // Now run the loaded code
-   if(lua_pcall(L, 0, 0, 0))     // Passing 0 params, getting none back
-   {
-      logError("Lua error encountered running levelgen script: %s.  Skipping...", lua_tostring(L, -1));
-      return;
-   }
 }
 
 
+/*
+
+////////////////////////////////////////
+////////////////////////////////////////
+
+// C++ Constructor
+LuaEditorPlugin::LuaEditorPlugin(const string &scriptName, const string &scriptDir, const Vector<string> *scriptArgs, F32 gridSize, 
+                                 GridDatabase *gridDatabase, LevelLoader *caller, OGLCONSOLE_Console console)
+                      : Parent(scriptName, scriptDir, scriptArgs, gridSize, gridDatabase, caller, console)
+{
+
+}
+
+
+const char LuaEditorPlugin::className[] = "LuaEditorPlugin";      // Class name as it appears to Lua scripts
+
+//// Used in addItem() below...
+//static const char *argv[LevelLoader::MAX_LEVEL_LINE_ARGS];
+
+
+// Lua Constructor
+LuaEditorPlugin::LuaEditorPlugin(lua_State *L)
+{
+   TNLAssert(false, "Why use this constructor?");
+   throw LuaException("Trying to initalize LuaLevelGenerator without proper arguments is not allowed");
+}
+
+
+// Destructor
+LuaEditorPlugin::~LuaEditorPlugin()
+{
+   // Do nothing
+}
+
+
+
+bool LuaEditorPlugin::runMain()
+{
+   try
+   {
+      lua_getglobal(L, "_main");       // _main calls main --> see lua_helper_functions.lua
+      if(lua_pcall(L, 0, 0, 0) != 0)
+         throw LuaException(lua_tostring(L, -1));
+   }
+   catch(LuaException &e)
+   {
+      logError("Plugin error running main(): %s.  Shutting plugin down.", e.what());
+      return false;
+   }
+   return true;
+}
+*/
 };
 

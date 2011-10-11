@@ -24,41 +24,25 @@
 //------------------------------------------------------------------------------------
 
 #include "robot.h"
-#include "item.h"
-
-#include "gameType.h"
-#include "projectile.h"
-#include "gameLoader.h"
-#include "gameConnection.h"
-#include "shipItems.h"
 #include "playerInfo.h"          // For RobotPlayerInfo constructor
-#include "gameWeapons.h"
-#include "gameObjectRender.h"
-#include "flagItem.h"
 #include "goalZone.h"
 #include "loadoutZone.h"
 #include "soccerGame.h"          // For lua object defs
 #include "huntersGame.h"         // For lua object defs
-#include "EngineeredItem.h"   // For lua object defs
+#include "EngineeredItem.h"      // For lua object defs
 #include "PickupItem.h"          // For lua object defs
 #include "teleporter.h"          // For lua object defs
 
 #include "../lua/luaprofiler-2.0.2/src/luaprofiler.h"      // For... the profiler!
-#include "config.h"
 #include "BotNavMeshZone.h"      // For BotNavMeshZone class definition
-#include "luaGameInfo.h"
 #include "luaUtil.h"
-#include "GeomUtils.h"
 #include "oglconsole.h"
-#include "game.h"
-#include "stringUtils.h"
+
 
 #ifndef ZAP_DEDICATED
-#include "sparkManager.h"
+
 #include "UI.h"
-#include "UIMenus.h"
-#include "UIGame.h"
-#include "SDL/SDL_opengl.h"
+
 #endif
 
 #include <math.h>
@@ -86,7 +70,7 @@ static EventManager eventManager;                // Singleton event manager, one
 // Constructor
 LuaRobot::LuaRobot(lua_State *L) : LuaShip((Robot *)lua_touserdata(L, 1))
 {
-   lua_atpanic(L, luaPanicked);                  // Register our panic function
+   //lua_atpanic(L, luaPanicked);                  // Register our panic function
    thisRobot = (Robot *)lua_touserdata(L, 1);    // Register our robot
    thisRobot->mLuaRobot = this;
 
@@ -94,108 +78,7 @@ LuaRobot::LuaRobot(lua_State *L) : LuaShip((Robot *)lua_touserdata(L, 1))
    for(S32 i = 0; i < EventManager::EventTypes; i++)
       subscriptions[i] = false;
 
-   // The following sets scads of global vars in the Lua instance that mimic the use of the enums we use everywhere
-
-   // Game Objects
-
-#define setEnumName(number, name) { lua_pushinteger(L, number); lua_setglobal(L, name); }
-
-   setEnumName(BarrierTypeNumber, "BarrierType");
-   setEnumName(PlayerShipTypeNumber, "ShipType");
-   setEnumName(LineTypeNumber, "LineType");
-   setEnumName(ResourceItemTypeNumber, "ResourceItem");
-   setEnumName(TextItemTypeNumber, "TextItemType");
-   setEnumName(LoadoutZoneTypeNumber, "LoadoutZoneType");
-   setEnumName(TestItemTypeNumber, "TestItem");
-   setEnumName(FlagTypeNumber, "FlagType");
-   setEnumName(BulletTypeNumber, "BulletType");
-   setEnumName(MineTypeNumber, "MineType");
-   setEnumName(NexusTypeNumber, "NexusType");
-   setEnumName(BotNavMeshZoneTypeNumber, "BotNavMeshZoneType");
-   setEnumName(RobotShipTypeNumber, "RobotType");
-   setEnumName(TeleportTypeNumber, "TeleportType");
-   setEnumName(GoalZoneTypeNumber, "GoalZoneType");
-   setEnumName(AsteroidTypeNumber, "AsteroidType");
-   setEnumName(RepairItemTypeNumber, "RepairItemType");
-   setEnumName(EnergyItemTypeNumber, "EnergyItemType");
-   setEnumName(SoccerBallItemTypeNumber, "SoccerBallItemType");
-   setEnumName(WormTypeNumber, "WormType");
-   setEnumName(TurretTypeNumber, "TurretType");
-   setEnumName(ForceFieldTypeNumber, "ForceFieldType");
-   setEnumName(ForceFieldProjectorTypeNumber, "ForceFieldProjectorType");
-   setEnumName(SpeedZoneTypeNumber, "SpeedZoneType");
-   setEnumName(PolyWallTypeNumber, "PolyWallType");
-   setEnumName(ShipSpawnTypeNumber, "ShipSpawnType");
-   setEnumName(FlagSpawnTypeNumber, "FlagSpawnType");
-   setEnumName(AsteroidSpawnTypeNumber, "AsteroidSpawnType");
-   setEnumName(WallItemTypeNumber, "WallItemType");
-   setEnumName(WallEdgeTypeNumber, "WallEdgeType");
-   setEnumName(WallSegmentTypeNumber, "WallSegmentType");
-   setEnumName(SlipZoneTypeNumber, "SlipZoneType");
-   setEnumName(SpyBugTypeNumber, "SpyBugType");
-
-
-   // Modules
-   setEnum(ModuleShield);
-   setEnum(ModuleBoost);
-   setEnum(ModuleSensor);
-   setEnum(ModuleRepair);
-   setEnum(ModuleEngineer);
-   setEnum(ModuleCloak);
-   setEnum(ModuleArmor);
-
-   // Weapons
-   setEnum(WeaponPhaser);
-   setEnum(WeaponBounce);
-   setEnum(WeaponTriple);
-   setEnum(WeaponBurst);
-   setEnum(WeaponMine);
-   setEnum(WeaponSpyBug);
-   setEnum(WeaponTurret);
-
-      // Game Types
-   setGTEnum(BitmatchGame);
-   setGTEnum(CTFGame);
-   setGTEnum(HTFGame);
-   setGTEnum(NexusGame);
-   setGTEnum(RabbitGame);
-   setGTEnum(RetrieveGame);
-   setGTEnum(SoccerGame);
-   setGTEnum(ZoneControlGame);
-
-   // Scoring Events
-   setGTEnum(KillEnemy);
-   setGTEnum(KillSelf);
-   setGTEnum(KillTeammate);
-   setGTEnum(KillEnemyTurret);
-   setGTEnum(KillOwnTurret);
-   setGTEnum(KilledByAsteroid);
-   setGTEnum(KilledByTurret);
-   setGTEnum(CaptureFlag);
-   setGTEnum(CaptureZone);
-   setGTEnum(UncaptureZone);
-   setGTEnum(HoldFlagInZone);
-   setGTEnum(RemoveFlagFromEnemyZone);
-   setGTEnum(RabbitHoldsFlag);
-   setGTEnum(RabbitKilled);
-   setGTEnum(RabbitKills);
-   setGTEnum(ReturnFlagsToNexus);
-   setGTEnum(ReturnFlagToZone);
-   setGTEnum(LostFlag);
-   setGTEnum(ReturnTeamFlag);
-   setGTEnum(ScoreGoalEnemyTeam);
-   setGTEnum(ScoreGoalHostileTeam);
-   setGTEnum(ScoreGoalOwnTeam);
-
-   // Event handler events
-   setEventEnum(ShipSpawnedEvent);
-   setEventEnum(ShipKilledEvent);
-   setEventEnum(MsgReceivedEvent);
-   setEventEnum(PlayerJoinedEvent);
-   setEventEnum(PlayerLeftEvent);
-
-   setEnum(EngineeredTurret);
-   setEnum(EngineeredForceField);
+   setEnums(L);      // Set scads of global vars in the Lua instance that mimic the use of the enums we use everywhere
 
    // A few misc constants -- in Lua, we reference the teams as first team == 1, so neutral will be 0 and hostile -1
    lua_pushinteger(L, 0); lua_setglobal(L, "NeutralTeamIndx");
@@ -291,6 +174,111 @@ Lunar<LuaRobot>::RegType LuaRobot::methods[] = {
 
    {0,0}    // End method list
 };
+
+
+#define setEnumName(number, name) { lua_pushinteger(L, number); lua_setglobal(L, name); }
+
+// Set scads of global vars in the Lua instance that mimic the use of the enums we use everywhere
+void LuaRobot::setEnums(lua_State *L)
+{
+   setEnumName(BarrierTypeNumber, "BarrierType");
+   setEnumName(PlayerShipTypeNumber, "ShipType");
+   setEnumName(LineTypeNumber, "LineType");
+   setEnumName(ResourceItemTypeNumber, "ResourceItem");
+   setEnumName(TextItemTypeNumber, "TextItemType");
+   setEnumName(LoadoutZoneTypeNumber, "LoadoutZoneType");
+   setEnumName(TestItemTypeNumber, "TestItem");
+   setEnumName(FlagTypeNumber, "FlagType");
+   setEnumName(BulletTypeNumber, "BulletType");
+   setEnumName(MineTypeNumber, "MineType");
+   setEnumName(NexusTypeNumber, "NexusType");
+   setEnumName(BotNavMeshZoneTypeNumber, "BotNavMeshZoneType");
+   setEnumName(RobotShipTypeNumber, "RobotType");
+   setEnumName(TeleportTypeNumber, "TeleportType");
+   setEnumName(GoalZoneTypeNumber, "GoalZoneType");
+   setEnumName(AsteroidTypeNumber, "AsteroidType");
+   setEnumName(RepairItemTypeNumber, "RepairItemType");
+   setEnumName(EnergyItemTypeNumber, "EnergyItemType");
+   setEnumName(SoccerBallItemTypeNumber, "SoccerBallItemType");
+   setEnumName(WormTypeNumber, "WormType");
+   setEnumName(TurretTypeNumber, "TurretType");
+   setEnumName(ForceFieldTypeNumber, "ForceFieldType");
+   setEnumName(ForceFieldProjectorTypeNumber, "ForceFieldProjectorType");
+   setEnumName(SpeedZoneTypeNumber, "SpeedZoneType");
+   setEnumName(PolyWallTypeNumber, "PolyWallType");
+   setEnumName(ShipSpawnTypeNumber, "ShipSpawnType");
+   setEnumName(FlagSpawnTypeNumber, "FlagSpawnType");
+   setEnumName(AsteroidSpawnTypeNumber, "AsteroidSpawnType");
+   setEnumName(WallItemTypeNumber, "WallItemType");
+   setEnumName(WallEdgeTypeNumber, "WallEdgeType");
+   setEnumName(WallSegmentTypeNumber, "WallSegmentType");
+   setEnumName(SlipZoneTypeNumber, "SlipZoneType");
+   setEnumName(SpyBugTypeNumber, "SpyBugType");
+
+   // Modules
+   setEnum(ModuleShield);
+   setEnum(ModuleBoost);
+   setEnum(ModuleSensor);
+   setEnum(ModuleRepair);
+   setEnum(ModuleEngineer);
+   setEnum(ModuleCloak);
+   setEnum(ModuleArmor);
+
+   // Weapons
+   setEnum(WeaponPhaser);
+   setEnum(WeaponBounce);
+   setEnum(WeaponTriple);
+   setEnum(WeaponBurst);
+   setEnum(WeaponMine);
+   setEnum(WeaponSpyBug);
+   setEnum(WeaponTurret);
+
+   // Game Types
+   setGTEnum(BitmatchGame);
+   setGTEnum(CTFGame);
+   setGTEnum(HTFGame);
+   setGTEnum(NexusGame);
+   setGTEnum(RabbitGame);
+   setGTEnum(RetrieveGame);
+   setGTEnum(SoccerGame);
+   setGTEnum(ZoneControlGame);
+
+   // Scoring Events
+   setGTEnum(KillEnemy);
+   setGTEnum(KillSelf);
+   setGTEnum(KillTeammate);
+   setGTEnum(KillEnemyTurret);
+   setGTEnum(KillOwnTurret);
+   setGTEnum(KilledByAsteroid);
+   setGTEnum(KilledByTurret);
+   setGTEnum(CaptureFlag);
+   setGTEnum(CaptureZone);
+   setGTEnum(UncaptureZone);
+   setGTEnum(HoldFlagInZone);
+   setGTEnum(RemoveFlagFromEnemyZone);
+   setGTEnum(RabbitHoldsFlag);
+   setGTEnum(RabbitKilled);
+   setGTEnum(RabbitKills);
+   setGTEnum(ReturnFlagsToNexus);
+   setGTEnum(ReturnFlagToZone);
+   setGTEnum(LostFlag);
+   setGTEnum(ReturnTeamFlag);
+   setGTEnum(ScoreGoalEnemyTeam);
+   setGTEnum(ScoreGoalHostileTeam);
+   setGTEnum(ScoreGoalOwnTeam);
+
+   // Event handler events
+   setEventEnum(ShipSpawnedEvent);
+   setEventEnum(ShipKilledEvent);
+   setEventEnum(MsgReceivedEvent);
+   setEventEnum(PlayerJoinedEvent);
+   setEventEnum(PlayerLeftEvent);
+
+   setEnum(EngineeredTurret);
+   setEnum(EngineeredForceField);
+}
+
+#undef setEnumName
 
 
 S32 LuaRobot::getClassID(lua_State *L)
@@ -717,7 +705,7 @@ S32 LuaRobot::globalMsg(lua_State *L)
 }
 
 
-// Send message to team (what happens when neutral/enemytoall robot does this???)
+// Send message to team (what happens when neutral/hostile robot does this???)
 S32 LuaRobot::teamMsg(lua_State *L)
 {
    static const char *methodName = "Robot:teamMsg()";
@@ -731,7 +719,7 @@ S32 LuaRobot::teamMsg(lua_State *L)
       gt->s2cDisplayChatMessage(true, thisRobot->getName(), message);
 
       // Fire our event handler
-      Robot::getEventManager().fireEvent(thisRobot->L, EventManager::MsgReceivedEvent, message, thisRobot->getPlayerInfo(), false);
+      Robot::getEventManager().fireEvent(thisRobot->getL(), EventManager::MsgReceivedEvent, message, thisRobot->getPlayerInfo(), false);
    }
 
    return 0;
@@ -1343,19 +1331,13 @@ TNL_IMPLEMENT_NETOBJECT(Robot);
 Vector<Robot *> Robot::robots;
 
 // Constructor, runs on client and server
-Robot::Robot(const StringTableEntry &robotName, const string &scriptDir, S32 team, Point pt, F32 mass) : Ship(robotName, false, team, pt, mass, true)
+Robot::Robot() : Ship("Robot", false, TEAM_NEUTRAL, Point(), 1, true), LuaScriptRunner()
 {
-   gameConnectionInitalized = false;
+   mHasSpawned = false;
    mObjectTypeNumber = RobotShipTypeNumber;
 
-   mScriptDir = scriptDir;
-
-   L = NULL;
    mCurrentZone = U16_MAX;
    flightPlanTo = U16_MAX;
-
-   // Need to provide some time on here to get timer to trigger robot to spawn.  It's timer driven.
-   // respawnTimer.reset(100, RobotRespawnDelay);
 
    mClientInfo = boost::shared_ptr<ClientInfo>(new LocalClientInfo(NULL, true));
 
@@ -1368,35 +1350,25 @@ Robot::Robot(const StringTableEntry &robotName, const string &scriptDir, S32 tea
       mModulePrimaryActive[i] = false;
       mModuleSecondaryActive[i] = false;
    }
-
-   isRunningScript = false;
-   wasRunningScript = false;
 }
 
 
 // Destructor, runs on client and server
 Robot::~Robot()
 {
-   if(gameConnectionInitalized)
-   {
-      GameConnection *gc = getOwner();
-
-      if(getGame()->getGameType())
-         getGame()->getGameType()->serverRemoveClient(mClientInfo.get());
-
-      setOwner(NULL);
-   }
-
-   // Close down our Lua interpreter
-   LuaObject::cleanupAndTerminate(L);
+   setOwner(NULL);
 
    if(isGhost())
    {
-      delete mPlayerInfo;     // If this is on the server, will be deleted below, after event is fired
+      delete mPlayerInfo;     // On the server, mPlayerInfo will be deleted below, after event is fired
       return;
    }
 
    // Server only from here on down
+
+   if(getGame()->getGameType())
+      getGame()->getGameType()->serverRemoveClient(mClientInfo.get());
+
 
    // Remove this robot from the list of all robots
    for(S32 i = 0; i < robots.size(); i++)
@@ -1411,13 +1383,12 @@ Robot::~Robot()
 
    delete mPlayerInfo;
 
-   logprintf(LogConsumer::LogLuaObjectLifecycle, "Robot terminated [%s] (%d)", mFilename.c_str(), robots.size());
+   logprintf(LogConsumer::LogLuaObjectLifecycle, "Robot terminated [%s] (%d)", mScriptName.c_str(), robots.size());
 }
 
 
-// Reset everything on the robot back to the factory settings
+// Reset everything on the robot back to the factory settings -- runs only when bot is spawning in GameType::spawnRobot()
 // Only runs on server!
-// return false if failed
 bool Robot::initialize(Point &pos)
 {
    try
@@ -1434,50 +1405,100 @@ bool Robot::initialize(Point &pos)
       // WarpPositionMask triggers the spinny spawning visual effect
       setMaskBits(RespawnMask | HealthMask | LoadoutMask | PositionMask | MoveMask | ModulePrimaryMask | ModuleSecondaryMask | WarpPositionMask);      // Send lots to the client
 
-      TNLAssert(!isGhost(), "Didn't expect ghost here...");
+      TNLAssert(!isGhost(), "Didn't expect ghost here... this is supposed to only run on the server!");
 
-      if(! runMain()) return false;      //try to run, can fail on script error.
-      eventManager.update();       // Ensure registrations made during bot initialization are ready to go
+      setPointerToThis();
 
+      if(!loadScript() || !runMain())     // Try to run, can fail on script error
+         return false;
+
+      eventManager.update();              // Ensure registrations made during bot initialization are ready to go
    }
    catch(LuaException &e)
    {
       logError("Robot error during spawn: %s.  Shutting robot down.", e.what());
-      isRunningScript = false;
+      return false;
    }
 
    return true;
 } 
 
 
-// Loop through all our bots, start their interpreters, and run their main() functions
+// Loop through all our bots and start their interpreters -- called from onLevelLoaded, also from 
 void Robot::startBots()
-{
+{   
    for(S32 i = 0; i < robots.size(); i++)
-   {
-      if(robots[i]->isRunningScript && !robots[i]->startLua())
-         robots[i]->isRunningScript = false;
-   }
-
-   //for(S32 i = 0; i < robots.size(); i++)
-   //   robots[i]->runMain();
-
-   //eventManager.update();       // Ensure registrations made during bot initialization are ready to go
+      if(!robots[i]->start())
+      {
+         robots.erase_fast(i);
+         i--;
+      }
 }
 
 
+// Server only
+bool Robot::start()
+{
+   if(!startLua())
+      return false;
+
+   setConnection();
+   mGame->addToClientList(mClientInfo);
+
+   return true;
+}
+
+
+void Robot::setPointerToThis()
+{
+   // Push a pointer to this Robot to the Lua stack, then set the global name of this pointer.  
+   // This is the name that we'll use to refer to this robot from our Lua code.  
+   // Note that all globals need to be set before running lua_helper_functions, which makes it more difficult to set globals
+   lua_pushlightuserdata(L, (void *)this);
+   lua_setglobal(L, "Robot");
+}
+
+
+// Loads script, runs getName
 bool Robot::startLua()
 {
-   if(!isRunningScript) 
-      return true;
+   if(!LuaScriptRunner::startLua(ROBOT) || !loadScript())
+      return false;
 
-   LuaObject::cleanupAndTerminate(L);
+   string name = runGetName();                              // Run bot's getName function
 
-   L = lua_open();    // Create a new Lua interpreter
+   mPlayerName = GameConnection::makeUnique(name).c_str();  // Make sure name is unique
+
+   return true;
+}
 
 
-   // Register our connector types with Lua
 
+// Run bot's getName function, return default name if fn isn't defined
+string Robot::runGetName()
+{
+   // Run the getName() function in the bot (will default to the one in robot_helper_functions if it's not overwritten by the bot)
+   lua_getglobal(L, "getName");
+
+   if(!lua_isfunction(L, -1) || lua_pcall(L, 0, 1, 0))     // Passing 0 params, getting 1 back
+   {
+      // This should really never happen -- can only occur if robot_helper_functions is corrupted, or if bot is wildly misbehaving
+      string name = "Nancy";
+      logError("Robot error retrieving name (%s).  Using \"%s\".", lua_tostring(L, -1), name.c_str());
+      return name;
+   }
+   else
+   {
+      string name = lua_tostring(L, -1);
+      lua_pop(L, 1);
+      return name;
+   }
+}
+
+
+// Register our connector types with Lua
+void Robot::registerClasses()
+{
    Lunar<LuaUtil>::Register(L);
 
    Lunar<LuaGameInfo>::Register(L);
@@ -1514,129 +1535,6 @@ bool Robot::startLua()
    Lunar<GoalZone>::Register(L);
    Lunar<LoadoutZone>::Register(L);
    Lunar<HuntersNexusObject>::Register(L);
-
-#ifdef USE_PROFILER
-   init_profiler(L);
-#endif
-
-   LuaUtil::openLibs(L);
-   LuaUtil::setModulePath(L, mScriptDir);
-
-   // Push a pointer to this Robot to the Lua stack,
-   // then set the global name of this pointer.  This is the name that we'll use to refer
-   // to this robot from our Lua code.  
-   // Note that all globals need to be set before running lua_helper_functions, which makes it more difficult to set globals
-   lua_pushlightuserdata(L, (void *)this);
-   lua_setglobal(L, "Robot");
-
-   LuaObject::setLuaArgs(L, mFilename, &mArgs);    // Put our args in to the Lua table "args"
-
-
-   if(!loadLuaHelperFunctions(L, "robot"))
-      return false;
-
-   string robotfname = joindir(mScriptDir, "robot_helper_functions.lua");
-
-   if(luaL_loadfile(L, robotfname.c_str()))
-   {
-      logError("Error loading robot helper functions %s.  Shutting robot down.", robotfname.c_str());
-      return false;
-   }
-
-   // Now run the loaded code
-   if(lua_pcall(L, 0, 0, 0))     // Passing 0 params, getting none back
-   {
-      logError("Error during initializing robot helper functions: %s.  Shutting robot down.", lua_tostring(L, -1));
-      return false;
-   }
-  
-   // Load the bot
-   if(luaL_loadfile(L, mFilename.c_str()))
-   {
-      logError("Error loading file: %s.  Shutting robot down.", lua_tostring(L, -1));
-      return false;
-   }
-
-   // Run the bot -- this loads all the functions into the global namespace
-   if(lua_pcall(L, 0, 0, 0))     // Passing 0 params, getting none back
-   {
-      logError("Robot error during initialization: %s.  Shutting robot down.", lua_tostring(L, -1));
-      return false;
-   }
-
-   string name;
-
-   // Run the getName() function in the bot (will default to the one in robot_helper_functions if it's not overwritten by the bot)
-   lua_getglobal(L, "getName");
-
-   if (!lua_isfunction(L, -1) || lua_pcall(L, 0, 1, 0))     // Passing 0 params, getting one back
-   {
-      name = "Nancy";
-      logError("Robot error retrieving name (%s).  Using \"%s\".", lua_tostring(L, -1), name.c_str());
-   }
-   else
-   {
-      name = lua_tostring(L, -1);
-      lua_pop(L, 1);
-   }
-
-   // Make sure name is unique
-   mPlayerName = GameConnection::makeUnique(name).c_str();
-   mIsAuthenticated = false;
-
-   // Note main() will be run later, after all bots have been loaded
-   return true;
-}
-
-
-// TODO: This is almost identical to the same-named function in luaLevelGenerator.cpp, but each call their own logError function.  How can we combine?
-bool Robot::loadLuaHelperFunctions(lua_State *L, const char *caller)
-{
-   if(!isRunningScript) 
-      return true;
-
-   // Load our standard robot library  TODO: Read the file into memory, store that as a static string in the bot code, and then pass that to Lua rather than rereading this
-   // every time a bot is created.
-   string fname = joindir(mScriptDir, "lua_helper_functions.lua");
-
-   if(luaL_loadfile(L, fname.c_str()))
-   {
-      logError("Error loading lua helper functions %s: %s.  Can't run %s...", fname.c_str(), lua_tostring(L, -1), caller);
-      return false;
-   }
-
-   // Now run the loaded code
-   if(lua_pcall(L, 0, 0, 0))     // Passing 0 params, getting none back
-   {
-      logError("Error during initializing lua helper functions %s: %s.  Can't run %s...", fname.c_str(), lua_tostring(L, -1), caller);
-      return false;
-   }
-
-   return true;
-}
-
-
-// Don't forget to update the eventManager after running a robot's main function!
-// return false if failed
-bool Robot::runMain()
-{
-   if(!isRunningScript) 
-      return true;
-
-   try
-   {
-      lua_getglobal(L, "_main");       // _main calls main --> see robot_helper_functions.lua
-      if(lua_pcall(L, 0, 0, 0) != 0)
-         throw LuaException(lua_tostring(L, -1));
-   }
-   catch(LuaException &e)
-   {
-      logError("Robot error running main(): %s.  Shutting robot down.", e.what());
-      //delete this;  //might cause memory errors.
-      isRunningScript = false;
-      return false;
-   }
-   return true;
 }
 
 
@@ -1647,7 +1545,8 @@ EventManager Robot::getEventManager()
 
 
 // This only runs the very first time the robot is added to the level
-// Runs on client and server     --> is this ever actually called on the client????
+// Note that level may not yet be ready, so the bot can't spawn yet
+// Runs on client and server 
 void Robot::onAddedToGame(Game *game)
 {
    Parent::onAddedToGame(game);
@@ -1657,10 +1556,10 @@ void Robot::onAddedToGame(Game *game)
 
    // Server only from here on out
 
-   hasExploded = true;     // Becase we start off "dead", but will respawn real soon now...
+   hasExploded = true;        // Becase we start off "dead", but will respawn real soon now...
    disableCollision();
 
-   //setScopeAlways();        // Make them always visible on cmdr map --> del
+
    robots.push_back(this);    // Add this robot to the list of all robots (can't do this in constructor or else it gets run on client side too...)
    eventManager.fireEvent(L, EventManager::PlayerJoinedEvent, getPlayerInfo());
 }
@@ -1668,9 +1567,11 @@ void Robot::onAddedToGame(Game *game)
 
 void Robot::kill()
 {
-   if(hasExploded) return;
+   if(hasExploded) 
+      return;
+
    hasExploded = true;
-   //respawnTimer.reset();
+
    setMaskBits(ExplosionMask);
    if(!isGhost() && getOwner())
       getLoadout(getOwner()->mOldLoadout);
@@ -1692,47 +1593,37 @@ bool Robot::processArguments(S32 argc, const char **argv, Game *game)
       mTeam = NO_TEAM;   
    
 
+   string scriptName;
+
    if(argc >= 2)
-      mFilename = argv[1];
+      scriptName = argv[1];
    else
-      mFilename = game->getSettings()->getIniSettings()->defaultRobotScript;
+      scriptName = game->getSettings()->getIniSettings()->defaultRobotScript;
 
-   if(mFilename != "")
+   FolderManager *folderManager = game->getSettings()->getFolderManager();
+
+   if(scriptName != "")
+      mScriptName = folderManager->findBotFile(scriptName);
+
+   if(mScriptName == "")     // Bot script could not be located
    {
-      wasRunningScript = true;
-      string fullFilename = mFilename;  // for printing filename when not found
-
-      FolderManager *folderManager = game->getSettings()->getFolderManager();
-
-      mFilename = folderManager->findBotFile(mFilename);
-      mScriptDir = folderManager->luaDir;                   // Probably superfluous, but seems good practice
-
-
-      if(mFilename == "")
-      {
-         logprintf("Could not find bot file %s", fullFilename.c_str());     // TODO: Better handling here
-         OGLCONSOLE_Print("Could not find bot file %s", fullFilename.c_str());
-         return true;  // We can run built-in robot, not fully working yet...
-      }
-      else
-         isRunningScript = true;
+      logprintf("Could not find bot file %s", scriptName.c_str());     // TODO: Better handling here
+      OGLCONSOLE_Print("Could not find bot file %s", scriptName.c_str());
+      return false;
    }
 
+   setScriptingDir(folderManager->luaDir);      // Where our helper scripts are stored
+
    // Collect our arguments to be passed into the args table in the robot (starting with the robot name)
-   // Need to make a copy or containerize argv[i] somehow,  because otherwise new data will get written
+   // Need to make a copy or containerize argv[i] somehow, because otherwise new data will get written
    // to the string location subsequently, and our vals will change from under us.  That's bad!
-
-   // We're using string here as a stupid way to get done what we need to do... perhaps there is a better way.
-
-   for(S32 i = 2; i < argc; i++)        // Does nothing if we have no args.
-      mArgs.push_back(string(argv[i]));
+   for(S32 i = 2; i < argc; i++)        // Does nothing if we have no args
+      mScriptArgs.push_back(string(argv[i]));
 
    return true;
 }
 
 
-// Some rudimentary robot error logging.  Perhaps, someday, will become a sort of in-game error console.
-// For now, though, pass all errors through here.
 void Robot::logError(const char *format, ...)
 {
    va_list args;
@@ -1740,11 +1631,19 @@ void Robot::logError(const char *format, ...)
    char buffer[2048];
 
    vsnprintf(buffer, sizeof(buffer), format, args);
-   logprintf(LogConsumer::LuaBotMessage, "***ROBOT ERROR*** in %s ::: %s", mFilename.c_str(), buffer);
-   OGLCONSOLE_Print("***ROBOT ERROR*** in %s ::: %s\n", mFilename.c_str(), buffer);
+
+   logError(buffer, mScriptName.c_str());
 
    va_end(args);
 }
+
+
+void Robot::logError(const char *msg, const char *filename)
+{
+   logprintf(LogConsumer::LogError, "***ROBOT ERROR*** in %s ::: %s", filename, msg);
+   OGLCONSOLE_Print("***ROBOT ERROR*** in %s ::: %s\n", filename, msg);
+}
+
 
 // Returns zone ID of current zone
 S32 Robot::getCurrentZone(ServerGame *game)
@@ -1809,11 +1708,11 @@ bool Robot::canSeePoint(Point point)
    Point crossVector(difference.y, -difference.x);  // Create a point whose vector from 0,0 is perpenticular to the original vector
    crossVector.normalize(mRadius);                  // reduce point so the vector has length of ship radius
 
-   // edge points of ship
+   // Edge points of ship
    Point shipEdge1 = getActualPos() + crossVector;
    Point shipEdge2 = getActualPos() - crossVector;
 
-   // edge points of point
+   // Edge points of point
    Point pointEdge1 = point + crossVector;
    Point pointEdge2 = point - crossVector;
 
@@ -1825,17 +1724,14 @@ bool Robot::canSeePoint(Point point)
 
    Vector<Point> otherPoints;
    Rect queryRect(thisPoints);
+
    fillVector.clear();
    findObjects((TestFunc)isCollideableType, fillVector, queryRect);
 
-   for(S32 i=0; i < fillVector.size(); i++)
-   {
-      if(fillVector[i]->getCollisionPoly(otherPoints))
-      {
-         if(polygonsIntersect(thisPoints, otherPoints))
-            return false;
-      }
-   }
+   for(S32 i = 0; i < fillVector.size(); i++)
+      if(fillVector[i]->getCollisionPoly(otherPoints) && polygonsIntersect(thisPoints, otherPoints))
+         return false;
+
    return true;
 }
 
@@ -1862,22 +1758,17 @@ void Robot::render(S32 layerIndex)
 
 void Robot::idle(GameObject::IdleCallPath path)
 {
-   U32 deltaT;
+   TNLAssert(path != GameObject::ServerIdleControlFromClient, "Should never idle with ServerIdleControlFromClient");
 
-   if(path == GameObject::ServerIdleMainLoop)      // Running on server
+   if(hasExploded)
+      return;
+
+   if(path == GameObject::ServerIdleMainLoop)                  // Running on server
    {
-      deltaT = mCurrentMove.time;
+      U32 deltaT = mCurrentMove.time;
 
-      TNLAssert(deltaT != 0, "Robot::idle Time is zero")   // Time should never be zero anymore
+      TNLAssert(deltaT != 0, "Robot::idle deltaT is zero")     // Time should never be zero anymore
 
-      // Check to see if we need to respawn this robot
-      if(hasExploded && isRunningScript)
-      {
-         if(!gameConnectionInitalized)  // After gameConnection is initalized, bot should spawn
-           spawn();
-
-         return;
-      }
 
       // Clear out current move.  It will get set just below with the lua call, but if that function
       // doesn't set the various move components, we want to make sure that they default to 0.
@@ -1885,68 +1776,47 @@ void Robot::idle(GameObject::IdleCallPath path)
       mCurrentMove.x = 0;
       mCurrentMove.y = 0;
 
-      if(isRunningScript)
+      for(S32 i = 0; i < ShipModuleCount; i++)
       {
-
-         for(S32 i = 0; i < ShipModuleCount; i++)
-         {
-            mCurrentMove.modulePrimary[i] = false;
-            mCurrentMove.moduleSecondary[i] = false;
-         }
-
-         if(!mIsPaused || mStepCount > 0)
-         {
-            if(mStepCount > 0)
-               mStepCount--;
-
-            try
-            {
-               lua_getglobal(L, "_onTick");   // _onTick calls onTick --> see robot_helper_functions.lua
-               Lunar<LuaRobot>::push(L, this->mLuaRobot);
-
-               lua_pushnumber(L, deltaT);    // Pass the time elapsed since we were last here
-
-               if (lua_pcall(L, 2, 0, 0) != 0)
-                  throw LuaException(lua_tostring(L, -1));
-            }
-            catch(LuaException &e)
-            {
-               logError("Robot error running _onTick(): %s.  Shutting robot down.", e.what());
-               //delete this;
-               isRunningScript = false;
-               return;
-            }
-         }
-      }
-      else     // isRunningScript == false
-      {
-         if(wasRunningScript)
-         {
-            if(QUIT_ON_SCRIPT_ERROR)
-            {
-               getGame()->getGameType()->s2cDisplayChatMessage(true, getName(), "!!! ROBOT ERROR !!! Shutting down.");
-               delete this;
-               return;
-            }
-            getGame()->getGameType()->s2cDisplayChatMessage(true, getName(), "!!! ROBOT ERROR !!!");
-            wasRunningScript = false;
-         }
-         // Robot does nothing without script.
-
+         mCurrentMove.modulePrimary[i] = false;
+         mCurrentMove.moduleSecondary[i] = false;
       }
 
-      Parent::idle(GameObject::ServerIdleControlFromClient);   // Let's say the script is the client
+      if(!mIsPaused || mStepCount > 0)
+      {
+         if(mStepCount > 0)
+            mStepCount--;
+         
+         try
+         {
+            lua_getglobal(L, "_onTick");   // _onTick calls onTick --> see robot_helper_functions.lua
+            Lunar<LuaRobot>::push(L, this->mLuaRobot);
+
+            lua_pushnumber(L, deltaT);    // Pass the time elapsed since we were last here
+
+            if (lua_pcall(L, 2, 0, 0) != 0)
+               throw LuaException(lua_tostring(L, -1));
+         }
+         catch(LuaException &e)
+         {
+            logError("Robot error running _onTick(): %s.  Shutting robot down.", e.what());
+
+            // Safer than "delete this" -- adds bot to delete list, where it will be deleted later (or at least outside this construct)
+            deleteObject();
+
+            return;
+         }
+      }
+
+      Parent::idle(GameObject::ServerIdleControlFromClient);   // Let's say the script is the client  ==> really not sure this is right
       return;
    }
 
-   TNLAssert(path != GameObject::ServerIdleControlFromClient, "Robot::idle, Should not have ServerIdleControlFromClient");
-
-   if(!hasExploded)
-      Parent::idle(path);     // All client paths can use this idle
+   Parent::idle(path);     // All client paths can use this idle
 }
 
 
-void Robot::spawn()
+void Robot::setConnection()
 {
    // Cannot be in onAddedToGame, as it will error while trying to add robots while level map is not ready
 
@@ -1962,11 +1832,14 @@ void Robot::spawn()
 
    mClientInfo->setName(getName());
    mClientInfo->setConnection(gc);
-
-   getGame()->getGameType()->serverAddClient(mClientInfo.get());    
-   getGame()->addClientInfoToList(mClientInfo);
    
-   gameConnectionInitalized = true;
+   mHasSpawned = true;
+}
+
+
+boost::shared_ptr<ClientInfo> Robot::getClientInfo()
+{
+   return mClientInfo;
 }
 
 
