@@ -595,8 +595,8 @@ void GameType::idle(GameObject::IdleCallPath path, U32 deltaT)
    for(S32 i = 0; i < mItemSpawnPoints.size(); i++)
       if(mItemSpawnPoints[i]->updateTimer(deltaT))
       {
-         mItemSpawnPoints[i]->spawn(mGame, mItemSpawnPoints[i]->getPos());   // Spawn item
-         mItemSpawnPoints[i]->resetTimer();                                      // Reset the spawn timer
+         mItemSpawnPoints[i]->spawn(mGame, mItemSpawnPoints[i]->getPos());    // Spawn item
+         mItemSpawnPoints[i]->resetTimer();                                   // Reset the spawn timer
       }
 
    //if(mTestTimer.update(deltaT))
@@ -1115,7 +1115,7 @@ void GameType::onLevelLoaded()
 
    mLevelHasLoadoutZone = (fillVector.size() > 0);
 
-   Robot::startBots();
+   Robot::startBots();           // Cycle through all our bots and start them up
 }
 
 
@@ -1162,7 +1162,7 @@ void GameType::spawnShip(ClientInfo *clientInfo)
 }
 
 
-// Note that we need to have spawn method here so we can override it for different game types, such as Nexus (hunters)
+// Note that we need to have spawn method here so we can override it for different game types
 void GameType::spawnRobot(Robot *robot)
 {
    SafePtr<Robot> robotPtr = robot;
@@ -1175,11 +1175,6 @@ void GameType::spawnRobot(Robot *robot)
          robotPtr->deleteObject();
       return;
    }
-
-   // Should be done in intialize
-   //robot->runMain();                      // Gentlemen, start your engines!
-   //robot->getEventManager().update();     // Ensure registrations made during bot initialization are ready to go
-
 
    // Should probably do this, but... not now.
    //if(isSpawnWithLoadoutGame())
@@ -2100,7 +2095,7 @@ GAMETYPE_RPC_S2C(GameType, s2cAddClient,
    GameConnection *localConn = clientGame->getConnectionToServer();     // This is the current, local game connection
 
    boost::shared_ptr<ClientInfo> clientInfo = boost::shared_ptr<ClientInfo>(new RemoteClientInfo(name, isRobot, isAdmin));  
-   mGame->addClientInfoToList(clientInfo);                              // Add ourselves to our list of other clients
+   mGame->addToClientList(clientInfo);
 
    if(isLocalClient)
    {
@@ -2126,19 +2121,22 @@ GAMETYPE_RPC_S2C(GameType, s2cAddClient,
 // Server only
 void GameType::serverRemoveClient(ClientInfo *clientInfo)
 {
-   // Blow up the ship...
-   GameObject *theControlObject = clientInfo->getConnection()->getControlObject();
-
-   if(theControlObject)
+   if(clientInfo->getConnection())
    {
-      Ship *ship = dynamic_cast<Ship *>(theControlObject);
-      if(ship)
-         ship->kill();
+      // Blow up the ship...
+      GameObject *theControlObject = clientInfo->getConnection()->getControlObject();
+
+      if(theControlObject)
+      {
+         Ship *ship = dynamic_cast<Ship *>(theControlObject);
+         if(ship)
+            ship->kill();
+      }
    }
 
    s2cRemoveClient(clientInfo->getName());            // Tell other clients that this one has departed
 
-   getGame()->removeClientInfoFromList(clientInfo);   
+   getGame()->removeFromClientList(clientInfo);   
 
    // Note that we do not need to delete clientConnection... TNL handles that, and the destructor gets runs shortly after we get here
 }
@@ -2177,7 +2175,7 @@ GAMETYPE_RPC_S2C(GameType, s2cRemoveClient, (StringTableEntry name), (name))
    if(!clientGame) 
       return;
 
-   clientGame->removeClientInfoFromList(name);
+   clientGame->removeFromClientList(name);
 
    clientGame->displayMessage(Color(0.6f, 0.6f, 0.8f), "%s left the game.", name.getString());
    SoundSystem::playSoundEffect(SFXPlayerLeft, 1);
@@ -2589,7 +2587,6 @@ void GameType::processServerCommand(ClientInfo *clientInfo, const char *cmd, Vec
       else
       {
          Robot *robot = new Robot();
-         robot->addToGame(mGame, mGame->getGameObjDatabase());
 
          S32 args_count = 0;
          const char *args_char[LevelLoader::MAX_LEVEL_LINE_ARGS];  // Convert to a format processArgs will allow
@@ -2601,11 +2598,25 @@ void GameType::processServerCommand(ClientInfo *clientInfo, const char *cmd, Vec
             args_count++;
          }
          
-         robot->processArguments(args_count, args_char, mGame);
+         if(!robot->processArguments(args_count, args_char, mGame))
+         {
+            delete robot;
+            conn->s2cDisplayErrorMessage("!!! Could not start robot; please see server logs");
+            return;
+         }
+
+         robot->addToGame(mGame, mGame->getGameObjDatabase());
+
+         if(!robot->start())
+         {
+            delete robot;
+            conn->s2cDisplayErrorMessage("!!! Could not start robot; please see server logs");
+            return;
+         }
+
          
-         if(robot->isRunningScript && !robot->startLua())
-            robot->isRunningScript = false;
-         
+         serverAddClient(robot->getClientInfo().get()); 
+        
          StringTableEntry msg = StringTableEntry("Robot added by %e0");
          Vector<StringTableEntry> e;
          e.push_back(clientInfo->getName());
