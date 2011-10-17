@@ -46,6 +46,8 @@ class MenuUserInterface : public UserInterface
    typedef UserInterface Parent;
 
 private:
+   Vector<boost::shared_ptr<MenuItem> > mMenuItems;
+
    S32 getYStart();     // Get vert pos of first menu item
    S32 getOffset(); 
    Timer mScrollTimer;
@@ -60,6 +62,8 @@ private:
    virtual void renderExtras() { /* Do nothing */ }      // For drawing something extra on a menu
    void advanceItem();                                   // What happens when we move on to the next menu item?
 
+   virtual void initialize();
+
 protected:
    S32 currOffset;
 
@@ -69,11 +73,21 @@ protected:
    virtual bool processMenuSpecificKeys(InputCode inputCode, char ascii);
    virtual bool processKeys(InputCode inputCode, char ascii);
 
+   void sortMenuItems();
+   void clearMenuItems();
+   S32 getMenuItemCount();
+   MenuItem *getLastMenuItem();
+
 public:
-   MenuUserInterface(ClientGame *game);      // Constructor
+   // Constructor
+   MenuUserInterface(ClientGame *game);      
+   MenuUserInterface(ClientGame *game, const string &title);
+
+   void addMenuItem(MenuItem *menuItem);
+   void addWrappedMenuItem(boost::shared_ptr<MenuItem> menuItem);
+   MenuItem *getMenuItem(S32 index);
 
    bool itemSelectedWithMouse;
-   Vector<boost::shared_ptr<MenuItem> > menuItems;
 
    static const S32 MOUSE_SCROLL_INTERVAL = 100;
 
@@ -86,6 +100,8 @@ public:
    void idle(U32 timeDelta); 
 
    S32 selectedIndex;
+
+   void getMenuResponses(Vector<string> &responses);    // Fill responses with values from menu
 
    void render();    // Draw the basic menu
    void onKeyDown(InputCode inputCode, char ascii);
@@ -100,7 +116,10 @@ public:
    virtual void onEscape();
 };
 
-//////////
+
+////////////////////////////////////////
+////////////////////////////////////////
+
 // <--- DO NOT SUBCLASS MainMenuUserInterface!! (unless you override onActivate) ---> //
 class MainMenuUserInterface : public MenuUserInterface
 {
@@ -325,8 +344,6 @@ class PlayerMenuUserInterface
    typedef MenuUserInterface Parent;
 
 public:
-
-
    PlayerMenuUserInterface(ClientGame *game);        // Constructor
 
    void render();
@@ -362,6 +379,7 @@ public:
 
 };
 
-#endif
-#endif
+#endif      // #ifndef ZAP_DEDICATED
+
+#endif      // #ifndef _UIMENUS_H_
 

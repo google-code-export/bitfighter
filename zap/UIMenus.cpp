@@ -74,6 +74,20 @@ extern void shutdownBitfighter();
 // Constructor
 MenuUserInterface::MenuUserInterface(ClientGame *game) : UserInterface(game)
 {
+   initialize();
+}
+
+
+MenuUserInterface::MenuUserInterface(ClientGame *game, const string &title) : UserInterface(game)
+{
+   initialize();
+
+   mMenuTitle = title;
+}
+
+
+void MenuUserInterface::initialize()
+{
    setMenuID(GenericUI);
    mMenuTitle = "Menu:";
    mMenuSubTitle = "";
@@ -100,6 +114,51 @@ void MenuUserInterface::onReactivate()
 }
 
 
+void MenuUserInterface::clearMenuItems()
+{
+   mMenuItems.clear();
+}
+
+
+void MenuUserInterface::sortMenuItems()
+{
+   mMenuItems.sort(menuItemValueSort);
+}
+
+
+void MenuUserInterface::addMenuItem(MenuItem *menuItem)
+{
+   menuItem->setMenu(this);
+   mMenuItems.push_back(boost::shared_ptr<MenuItem>(menuItem));
+}
+
+
+// For those times when you really need to add a pre-packaged menu item... normally, you won't need to do this
+void MenuUserInterface::addWrappedMenuItem(boost::shared_ptr<MenuItem> menuItem)
+{
+   menuItem->setMenu(this);
+   mMenuItems.push_back(menuItem);
+}
+
+
+S32 MenuUserInterface::getMenuItemCount()
+{
+   return mMenuItems.size();
+}
+
+
+MenuItem *MenuUserInterface::getLastMenuItem()
+{
+   return mMenuItems.last().get();
+}
+
+
+MenuItem *MenuUserInterface::getMenuItem(S32 index)
+{
+   return mMenuItems[index].get();
+}
+
+
 void MenuUserInterface::idle(U32 timeDelta)
 {
    // Controls rate of scrolling long menus with mouse
@@ -118,7 +177,7 @@ void MenuUserInterface::idle(U32 timeDelta)
 S32 MenuUserInterface::getOffset()
 {
    S32 offset = 0;
-   S32 count = menuItems.size();
+   S32 count = mMenuItems.size();
 
    if(count > MAX_MENU_SIZE)     // Do some sort of scrolling
    {
@@ -133,8 +192,8 @@ S32 MenuUserInterface::getOffset()
 
       if(offset < 0)
          offset = 0;
-      else if(offset + MAX_MENU_SIZE >= menuItems.size())
-         offset = menuItems.size() - MAX_MENU_SIZE;
+      else if(offset + MAX_MENU_SIZE >= mMenuItems.size())
+         offset = mMenuItems.size() - MAX_MENU_SIZE;
    }
    currOffset = offset;
 
@@ -150,7 +209,7 @@ S32 MenuUserInterface::getYStart()
    if(getMenuID() == GameParamsUI)  // If we're on the GameParams menu, start at a constant position
       return 70;
    else                             // Otherwise, attpempt to center the menu vertically
-      return (gScreenInfo.getGameCanvasHeight() - min(menuItems.size(), MAX_MENU_SIZE) * (getTextSize() + getGap())) / 2 + vertOff;
+      return (gScreenInfo.getGameCanvasHeight() - min(mMenuItems.size(), MAX_MENU_SIZE) * (getTextSize() + getGap())) / 2 + vertOff;
 }
 
 
@@ -286,7 +345,7 @@ void MenuUserInterface::render()
    if(mRenderInstructions)
       renderMenuInstructions(getGame()->getSettings());
 
-   S32 count = menuItems.size();
+   S32 count = mMenuItems.size();
 
    if(count > MAX_MENU_SIZE)     // Need some sort of scrolling?
       count = MAX_MENU_SIZE;
@@ -294,7 +353,8 @@ void MenuUserInterface::render()
    S32 yStart = getYStart();
    S32 offset = getOffset();
 
-   S32 adjfact = 0;              // Just because it looks good  (was 2, which looks crappy on gameParams menu.  0 seems to look ok everywhere.
+   // Just because it looks good (was 2, which looks crappy on gameParams menu.  0 seems to look ok everywhere.
+   S32 adjfact = 0;    
    S32 shrinkfact = 1;
 
    for(S32 i = 0; i < count; i++)
@@ -305,18 +365,18 @@ void MenuUserInterface::render()
          drawMenuItemHighlight(0,           y - getGap() / 2 + adjfact + shrinkfact, 
                                canvasWidth, y + getTextSize() + getGap() / 2 + adjfact - shrinkfact);
 
-      menuItems[i+offset]->render(y, getTextSize(), selectedIndex == i+offset);
+      mMenuItems[i+offset]->render(y, getTextSize(), selectedIndex == i+offset);
    }
 
    // Render an indicator that there are scrollable items above and/or below
-   if(menuItems.size() > MAX_MENU_SIZE)
+   if(mMenuItems.size() > MAX_MENU_SIZE)
    {
       glColor(Colors::blue);
 
-      if(offset > 0)                                  // There are items above
+      if(offset > 0)                                     // There are items above
          renderArrowAbove(yStart, ARROW_HEIGHT);
 
-      if(offset < menuItems.size() - MAX_MENU_SIZE)    // There are items below
+      if(offset < mMenuItems.size() - MAX_MENU_SIZE)     // There are items below
          renderArrowBelow(yStart + (getTextSize() + getGap()) * MAX_MENU_SIZE, ARROW_HEIGHT);
    }
 
@@ -326,12 +386,20 @@ void MenuUserInterface::render()
    S32 ypos = canvasHeight - vertMargin - 50;
 
    // Render a special instruction line (should this be a method of CounterMenuItemType?
-   UserInterface::drawCenteredString(ypos, helpFontSize, menuItems[selectedIndex]->getSpecialEditingInstructions() );
+   UserInterface::drawCenteredString(ypos, helpFontSize, mMenuItems[selectedIndex]->getSpecialEditingInstructions() );
 
    ypos -= helpFontSize + 5;
-   drawCenteredString(ypos, helpFontSize, menuItems[selectedIndex]->getHelp());
+   drawCenteredString(ypos, helpFontSize, mMenuItems[selectedIndex]->getHelp());
 
    renderExtras();  // Draw something unique on a menu
+}
+
+
+// Fill responses with values from each menu item in turn
+void MenuUserInterface::getMenuResponses(Vector<string> &responses)
+{
+   for(S32 i = 0; i < mMenuItems.size(); i++)
+      responses.push_back(mMenuItems[i]->getValue());
 }
 
 
@@ -354,7 +422,7 @@ void MenuUserInterface::onMouseMoved()
 
 void MenuUserInterface::processMouse()
 {
-   if(menuItems.size() > MAX_MENU_SIZE)   // We have a scrolling situation here...
+   if(mMenuItems.size() > MAX_MENU_SIZE)   // We have a scrolling situation here...
    {
       if(selectedIndex < currOffset)      // Scroll up
       {
@@ -383,10 +451,10 @@ void MenuUserInterface::processMouse()
       selectedIndex = 0;
       currOffset = 0;
    }
-   else if(selectedIndex >= menuItems.size())         // Scrolled off bottom of list
+   else if(selectedIndex >= mMenuItems.size())         // Scrolled off bottom of list
    {
-      selectedIndex = menuItems.size() - 1;
-      currOffset = max(menuItems.size() - MAX_MENU_SIZE, 0);
+      selectedIndex = mMenuItems.size() - 1;
+      currOffset = max(mMenuItems.size() - MAX_MENU_SIZE, 0);
    }
 }
 
@@ -410,11 +478,8 @@ void MenuUserInterface::onKeyDown(InputCode inputCode, char ascii)
          getUIManager()->getHostMenuUserInterface()->clearLevelLoadDisplay();
          getGame()->closeConnectionToGameServer();
 
-         if(gServerGame)
-         {
-            delete gServerGame;
-            gServerGame = NULL;
-         }
+         delete gServerGame;
+         gServerGame = NULL;
 
       }
       return;
@@ -425,7 +490,7 @@ void MenuUserInterface::onKeyDown(InputCode inputCode, char ascii)
    if(!ui->mFirstTime)
       ui->showAnimation = false;    // Stop animations if a key is pressed
 
-   menuItems[selectedIndex]->handleKey(inputCode, ascii) || processMenuSpecificKeys(inputCode, ascii) || processKeys(inputCode, ascii);
+   mMenuItems[selectedIndex]->handleKey(inputCode, ascii) || processMenuSpecificKeys(inputCode, ascii) || processKeys(inputCode, ascii);
 
    // Finally, since the user has indicated they want to use keyboard/controller input, hide the cursor
    if(inputCode != MOUSE_LEFT && inputCode != MOUSE_MIDDLE && inputCode != MOUSE_RIGHT && inputCode != KEY_ESCAPE)
@@ -445,13 +510,13 @@ bool MenuUserInterface::processMenuSpecificKeys(InputCode inputCode, char ascii)
 {
    // First check for some shortcut keys
 
-   for(S32 i = 0; i < menuItems.size(); i++)
+   for(S32 i = 0; i < mMenuItems.size(); i++)
    {
-      if(inputCode == menuItems[i]->key1 || inputCode == menuItems[i]->key2)
+      if(inputCode == mMenuItems[i]->key1 || inputCode == mMenuItems[i]->key2)
       {
          selectedIndex = i;
 
-         menuItems[i]->activatedWithShortcutKey();
+         mMenuItems[i]->activatedWithShortcutKey();
          return true;
       }
    }
@@ -467,7 +532,7 @@ bool MenuUserInterface::processKeys(InputCode inputCode, char ascii)
 
    if(inputCode == KEY_LEFT || inputCode == KEY_RIGHT || inputCode == MOUSE_LEFT || inputCode == MOUSE_RIGHT)
    {
-      menuItems[selectedIndex]->handleKey(inputCode, ascii);
+      mMenuItems[selectedIndex]->handleKey(inputCode, ascii);
       playBoop();
    }
 
@@ -483,13 +548,13 @@ bool MenuUserInterface::processKeys(InputCode inputCode, char ascii)
          S32 yStart = getYStart();
          const Point *mousePos = gScreenInfo.getMousePos();
 
-         if(mousePos->y < yStart || mousePos->y > yStart + (menuItems.size() + 1) * (getTextSize() + getGap()))
+         if(mousePos->y < yStart || mousePos->y > yStart + (mMenuItems.size() + 1) * (getTextSize() + getGap()))
             return true;
       }
 
-      menuItems[selectedIndex]->handleKey(inputCode, ascii);
+      mMenuItems[selectedIndex]->handleKey(inputCode, ascii);
 
-      if(menuItems[selectedIndex]->enterAdvancesItem())
+      if(mMenuItems[selectedIndex]->enterAdvancesItem())
          advanceItem();
    }
 
@@ -505,13 +570,13 @@ bool MenuUserInterface::processKeys(InputCode inputCode, char ascii)
 
       if(selectedIndex < 0)                        // Scrolling off the top
       {
-         if((menuItems.size() > MAX_MENU_SIZE) && mRepeatMode)        // Allow wrapping on long menus only when not in repeat mode
+         if((mMenuItems.size() > MAX_MENU_SIZE) && mRepeatMode)        // Allow wrapping on long menus only when not in repeat mode
          {
             selectedIndex = 0;               // No wrap --> (first item)
             return true;                     // (leave before playBoop)
          }
          else                                      // Always wrap on shorter menus
-            selectedIndex = menuItems.size() - 1;  // Wrap --> (select last item)
+            selectedIndex = mMenuItems.size() - 1;  // Wrap --> (select last item)
       }
       playBoop();
    }
@@ -539,12 +604,12 @@ void MenuUserInterface::advanceItem()
    selectedIndex++;
    itemSelectedWithMouse = false;
 
-   if(selectedIndex >= menuItems.size())     // Scrolling off the bottom
+   if(selectedIndex >= mMenuItems.size())     // Scrolling off the bottom
    {
-      if((menuItems.size() > MAX_MENU_SIZE) && mRepeatMode)     // Allow wrapping on long menus only when not in repeat mode
+      if((mMenuItems.size() > MAX_MENU_SIZE) && mRepeatMode)     // Allow wrapping on long menus only when not in repeat mode
       {
-         selectedIndex = menuItems.size() - 1;                  // No wrap --> (last item)
-         return;                                                // (leave before playBoop)
+         selectedIndex = getMenuItemCount() - 1;                 // No wrap --> (last item)
+         return;                                                 // (leave before playBoop)
       }
       else                     // Always wrap on shorter menus
          selectedIndex = 0;    // Wrap --> (first item)
@@ -559,8 +624,12 @@ void MenuUserInterface::onEscape()
 }
 
 
+////////////////////////////////////////
+////////////////////////////////////////
+
+
 //////////
-// MenuUserInterface callbacks
+// MainMenuUserInterface callbacks
 //////////
 
 static void joinSelectedCallback(ClientGame *game, U32 unused)
@@ -589,10 +658,12 @@ static void editorSelectedCallback(ClientGame *game, U32 unused)
    game->getUIManager()->getEditorUserInterface()->activate();
 }
 
+
 static void creditsSelectedCallback(ClientGame *game, U32 unused)
 {
    game->getUIManager()->getCreditsUserInterface()->activate();
 }
+
 
 static void quitSelectedCallback(ClientGame *game, U32 unused)
 {
@@ -615,13 +686,13 @@ MainMenuUserInterface::MainMenuUserInterface(ClientGame *game) : Parent(game)
    mNeedToUpgrade = false;           // Assume we're up-to-date until we hear from the master
    mShowedUpgradeAlert = false;      // So we don't show the upgrade message more than once
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(game, 0, "JOIN LAN/INTERNET GAME", joinSelectedCallback,    "", KEY_J)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(game, 0, "HOST GAME",              hostSelectedCallback,    "", KEY_H)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(game, 0, "INSTRUCTIONS",           helpSelectedCallback,    "", KEY_I, keyHELP)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(game, 0, "OPTIONS",                optionsSelectedCallback, "", KEY_O)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(game, 0, "LEVEL EDITOR",           editorSelectedCallback,  "", KEY_L, KEY_E)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(game, 0, "CREDITS",                creditsSelectedCallback, "", KEY_C)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(game, 0, "QUIT",                   quitSelectedCallback,    "", KEY_Q)));
+   addMenuItem(new MenuItem(0, "JOIN LAN/INTERNET GAME", joinSelectedCallback,    "", KEY_J));
+   addMenuItem(new MenuItem(0, "HOST GAME",              hostSelectedCallback,    "", KEY_H));
+   addMenuItem(new MenuItem(0, "INSTRUCTIONS",           helpSelectedCallback,    "", KEY_I, keyHELP));
+   addMenuItem(new MenuItem(0, "OPTIONS",                optionsSelectedCallback, "", KEY_O));
+   addMenuItem(new MenuItem(0, "LEVEL EDITOR",           editorSelectedCallback,  "", KEY_L, KEY_E));
+   addMenuItem(new MenuItem(0, "CREDITS",                creditsSelectedCallback, "", KEY_C));
+   addMenuItem(new MenuItem(0, "QUIT",                   quitSelectedCallback,    "", KEY_Q));
 }
 
 
@@ -868,7 +939,8 @@ static void setInputModeCallback(ClientGame *game, U32 val)
 
    if(sticks != Joystick::DetectedJoystickNameList.size())
    {
-      ToggleMenuItem *menuItem = dynamic_cast<ToggleMenuItem *>(game->getUIManager()->getOptionsMenuUserInterface()->menuItems[INPUT_MODE_MENU_ITEM_INDEX].get());
+      ToggleMenuItem *menuItem = dynamic_cast<ToggleMenuItem *>(game->getUIManager()->getOptionsMenuUserInterface()->
+                                                                getMenuItem(INPUT_MODE_MENU_ITEM_INDEX));
 
       if(menuItem)
          addStickOptions(&menuItem->mOptions);
@@ -899,21 +971,21 @@ static void setVoiceEchoCallback(ClientGame *game, U32 val)
 
 //////////
 
-MenuItem *getWindowModeMenuItem(ClientGame *game)
+MenuItem *getWindowModeMenuItem(U32 displayMode)
 {
    Vector<string> opts;   
    opts.push_back("WINDOWED");
    opts.push_back("FULLSCREEN STRETCHED");
    opts.push_back("FULLSCREEN");
 
-   return new ToggleMenuItem(game, "DISPLAY MODE:", opts, (U32)game->getSettings()->getIniSettings()->displayMode, true, 
+   return new ToggleMenuItem("DISPLAY MODE:", opts, displayMode, true, 
                              setFullscreenCallback, "Set the game mode to windowed or fullscreen", KEY_G);
 }
 
 
 void OptionsMenuUserInterface::setupMenus()
 {
-   menuItems.clear();
+   clearMenuItems();
    
    Vector<string> opts;
    opts.push_back("ABSOLUTE");
@@ -923,10 +995,10 @@ void OptionsMenuUserInterface::setupMenus()
 
    bool relative = settings->getIniSettings()->controlsRelative;
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new ToggleMenuItem(getGame(), "CONTROLS:", opts, relative ? 1 : 0, true, 
-                                                   setControlsCallback, "Set controls to absolute or relative mode",    KEY_C)));
+   addMenuItem(new ToggleMenuItem("CONTROLS:", opts, relative ? 1 : 0, true, 
+                                  setControlsCallback, "Set controls to absolute or relative mode", KEY_C));
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(getWindowModeMenuItem(getGame())));
+   addMenuItem(getWindowModeMenuItem((U32)settings->getIniSettings()->displayMode));
 
    Joystick::initJoystick();   // Refresh joystick list
 
@@ -934,16 +1006,15 @@ void OptionsMenuUserInterface::setupMenus()
 
    InputMode inputMode = settings->getIniSettings()->inputMode;
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new ToggleMenuItem(getGame(),
-                                                                      "PRIMARY INPUT:", 
-                                                                      opts, 
-                                                                      (U32)inputMode,
-                                                                      true, 
-                                                                      setInputModeCallback, 
-                                                                      "Specify whether you want to play with your keyboard or joystick", 
-                                                                      KEY_P, KEY_I)));
+   addMenuItem(new ToggleMenuItem("PRIMARY INPUT:", 
+                                  opts, 
+                                  (U32)inputMode,
+                                  true, 
+                                  setInputModeCallback, 
+                                  "Specify whether you want to play with your keyboard or joystick", 
+                                  KEY_P, KEY_I));
 
-   INPUT_MODE_MENU_ITEM_INDEX = menuItems.size() - 1;
+   INPUT_MODE_MENU_ITEM_INDEX = getMenuItemCount() - 1;
 
    opts.clear();
    for(S32 i = 0; i < ControllerTypeCount; i++)
@@ -954,24 +1025,24 @@ void OptionsMenuUserInterface::setupMenus()
    // Simple bounds check -- could be GenericController, UnknownController, or NoController
    U32 selectedOption = joystickType < ControllerTypeCount ? joystickType : 0;
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new ToggleMenuItem(getGame(), "JOYSTICK:", opts, selectedOption, true, 
-                                                                      setControllerCallback, "Choose which joystick to use in joystick mode", KEY_J)));
+   addMenuItem(new ToggleMenuItem("JOYSTICK:", opts, selectedOption, true, 
+                                  setControllerCallback, "Choose which joystick to use in joystick mode", KEY_J));
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), menuItems.size(), "DEFINE KEYS / BUTTONS", defineKeysCallback, 
-                                                                "Remap keyboard or joystick controls", KEY_D, KEY_K)));
+   addMenuItem(new MenuItem(getMenuItemCount(), "DEFINE KEYS / BUTTONS", defineKeysCallback, 
+                            "Remap keyboard or joystick controls", KEY_D, KEY_K));
 
    opts.clear();
    for(S32 i = 0; i <= 10; i++)
       opts.push_back(getVolMsg( F32(i) / 10 ));
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new ToggleMenuItem(getGame(), "SFX VOLUME:",        opts, U32((settings->getIniSettings()->sfxVolLevel + 0.05) * 10.0), false, 
-                       setSFXVolumeCallback,   "Set sound effects volume", KEY_S)));
+   addMenuItem(new ToggleMenuItem("SFX VOLUME:",        opts, U32((settings->getIniSettings()->sfxVolLevel + 0.05) * 10.0), false, 
+                                  setSFXVolumeCallback,   "Set sound effects volume", KEY_S));
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new ToggleMenuItem(getGame(), "MUSIC VOLUME:",      opts, U32((settings->getIniSettings()->musicVolLevel + 0.05) * 10.0), false,
-                       setMusicVolumeCallback, "Set music volume", KEY_M)));
+   addMenuItem(new ToggleMenuItem("MUSIC VOLUME:",      opts, U32((settings->getIniSettings()->musicVolLevel + 0.05) * 10.0), false,
+                                  setMusicVolumeCallback, "Set music volume", KEY_M));
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new ToggleMenuItem(getGame(), "VOICE CHAT VOLUME:", opts, U32((settings->getIniSettings()->voiceChatVolLevel + 0.05) * 10.0), false, 
-                       setVoiceVolumeCallback, "Set voice chat volume",    KEY_V)));
+   addMenuItem(new ToggleMenuItem("VOICE CHAT VOLUME:", opts, U32((settings->getIniSettings()->voiceChatVolLevel + 0.05) * 10.0), false, 
+                                  setVoiceVolumeCallback, "Set voice chat volume",    KEY_V));
 
    // No music yet, so keep this out to keep menus from getting too long.  Uncomment when we have music.
    //menuItems.push_back(new MenuItem("MUSIC VOLUME:", getVolMsg(settings->getIniSettings()->musicVolLevel), 6, KEY_M, KEY_UNKNOWN));
@@ -979,8 +1050,8 @@ void OptionsMenuUserInterface::setupMenus()
    opts.clear();
    opts.push_back("DISABLED");
    opts.push_back("ENABLED");
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new ToggleMenuItem(getGame(), "VOICE ECHO:", opts, settings->getIniSettings()->echoVoice ? 1 : 0, true, 
-                                                   setVoiceEchoCallback, "Toggle whether you hear your voice on voice chat",  KEY_E)));
+   addMenuItem(new ToggleMenuItem("VOICE ECHO:", opts, settings->getIniSettings()->echoVoice ? 1 : 0, true, 
+                                  setVoiceEchoCallback, "Toggle whether you hear your voice on voice chat",  KEY_E));
 }
 
 
@@ -1071,8 +1142,8 @@ static void nameAndPasswordAcceptCallback(ClientGame *clientGame, U32 unused)
 
    clientGame->resetMasterConnectTimer();
    
-   clientGame->updatePlayerNameAndPassword(ui->menuItems[1]->getValueForWritingToLevelFile(), 
-                                           ui->menuItems[2]->getValueForWritingToLevelFile());
+   clientGame->updatePlayerNameAndPassword(ui->getMenuItem(1)->getValueForWritingToLevelFile(), 
+                                           ui->getMenuItem(2)->getValueForWritingToLevelFile());
 
    clientGame->setReadyToConnectToMaster(true);
    seedRandomNumberGenerator(clientGame->getClientInfo()->getName().getString());
@@ -1084,17 +1155,15 @@ static void nameAndPasswordAcceptCallback(ClientGame *clientGame, U32 unused)
 
 void NameEntryUserInterface::setupMenu()
 {
-   menuItems.clear();
+   clearMenuItems();
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "OK", nameAndPasswordAcceptCallback, "")));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem(getGame(), "NICKNAME:",
-         getGame()->getSettings()->getIniSettings()->lastName, getGame()->getSettings()->getDefaultName(),
-         "", MAX_PLAYER_NAME_LENGTH)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem(getGame(), "PASSWORD:", getGame()->getLoginPassword(), 
-                                                                        "", "", MAX_PLAYER_PASSWORD_LENGTH)));
+   addMenuItem(new MenuItem(0, "OK", nameAndPasswordAcceptCallback, ""));
+   addMenuItem(new TextEntryMenuItem("NICKNAME:", getGame()->getSettings()->getIniSettings()->lastName, 
+                                    getGame()->getSettings()->getDefaultName(), "", MAX_PLAYER_NAME_LENGTH));
+   addMenuItem(new TextEntryMenuItem("PASSWORD:", getGame()->getLoginPassword(), "", "", MAX_PLAYER_PASSWORD_LENGTH));
    
-   menuItems[1]->setFilter(LineEditor::noQuoteFilter);      // quotes are incompatible with PHPBB3 logins
-   menuItems[2]->setSecret(true);
+   getMenuItem(1)->setFilter(LineEditor::noQuoteFilter);      // quotes are incompatible with PHPBB3 logins
+   getMenuItem(2)->setSecret(true);
 }
 
 
@@ -1179,31 +1248,32 @@ static void startHostingCallback(ClientGame *game, U32 unused)
 
 void HostMenuUserInterface::setupMenus()
 {
-   menuItems.clear();
+   clearMenuItems();
 
    GameSettings *settings = getGame()->getSettings();
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "START HOSTING", startHostingCallback, "", KEY_H)));
+   addMenuItem(new MenuItem(0, "START HOSTING", startHostingCallback, "", KEY_H));
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem(getGame(), "SERVER NAME:", settings->getHostName(), "<Bitfighter Host>", "", QueryServersUserInterface::MaxServerNameLen,  KEY_N)));
+   addMenuItem(new TextEntryMenuItem("SERVER NAME:", settings->getHostName(), 
+                                     "<Bitfighter Host>", "", QueryServersUserInterface::MaxServerNameLen,  KEY_N));
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem(getGame(), "DESCRIPTION:", settings->getHostDescr(), "<Empty>",                    
-                                                                        "", QueryServersUserInterface::MaxServerDescrLen, KEY_D)));
+   addMenuItem(new TextEntryMenuItem("DESCRIPTION:", settings->getHostDescr(),                    
+                                     "<Empty>", "", QueryServersUserInterface::MaxServerDescrLen, KEY_D));
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem(getGame(), "LEVEL CHANGE PASSWORD:", settings->getLevelChangePassword(), 
-                                                                        "<Anyone can change levels>", "", MAX_PASSWORD_LENGTH, KEY_L)));
+   addMenuItem(new TextEntryMenuItem("LEVEL CHANGE PASSWORD:", settings->getLevelChangePassword(), 
+                                     "<Anyone can change levels>", "", MAX_PASSWORD_LENGTH, KEY_L));
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem(getGame(), "ADMIN PASSWORD:", settings->getAdminPassword(),       
-                                                                        "<No remote admin access>", "", MAX_PASSWORD_LENGTH, KEY_A)));
+   addMenuItem(new TextEntryMenuItem("ADMIN PASSWORD:", settings->getAdminPassword(),       
+                                     "<No remote admin access>", "", MAX_PASSWORD_LENGTH, KEY_A));
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem(getGame(), "CONNECTION PASSWORD:", settings->getServerPassword(),      
-                                                                        "<Anyone can connect>", "", MAX_PASSWORD_LENGTH, KEY_C)));
+   addMenuItem(new TextEntryMenuItem("CONNECTION PASSWORD:", settings->getServerPassword(), "<Anyone can connect>", "",      
+                                     MAX_PASSWORD_LENGTH, KEY_C));
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new YesNoMenuItem(getGame(), "ALLOW MAP DOWNLOADS:", settings->getIniSettings()->allowGetMap, NULL, "", KEY_M)));
+   addMenuItem(new YesNoMenuItem("ALLOW MAP DOWNLOADS:", settings->getIniSettings()->allowGetMap, "", KEY_M));
 
-   //menuItems.push_back(boost::shared_ptr<MenuItem>(new CounterMenuItem("MAXIMUM PLAYERS:",   settings->getIniSettings()->maxplayers, 1, 2, MAX_PLAYERS, "", "", "", KEY_P)));
-   //menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem("PORT:",             itos(DEFAULT_GAME_PORT),  "Use default of " + itos(DEFAULT_GAME_PORT), 
-   //                                         "", 10, KEY_P)));
+   //addMenuItem(new CounterMenuItem("MAXIMUM PLAYERS:",   settings->getIniSettings()->maxplayers, 1, 2, MAX_PLAYERS, "", "", "", KEY_P));
+   //addMenuItem(new TextEntryMenuItem("PORT:",             itos(DEFAULT_GAME_PORT),  "Use default of " + itos(DEFAULT_GAME_PORT), 
+   //                                         "", 10, KEY_P));
 }
 
 
@@ -1221,15 +1291,15 @@ void HostMenuUserInterface::saveSettings()
 {
    GameSettings *settings = getGame()->getSettings();
 
-   settings->setHostName (menuItems[OPT_NAME]->getValue(), true);
-   settings->setHostDescr(menuItems[OPT_DESCR]->getValue(), true);
+   settings->setHostName (getMenuItem(OPT_NAME)->getValue(), true);
+   settings->setHostDescr(getMenuItem(OPT_DESCR)->getValue(), true);
 
-   settings->setAdminPassword(menuItems[OPT_ADMIN_PASS]->getValue(), true);
-   settings->setLevelChangePassword(menuItems[OPT_LVL_PASS]->getValue(), true);
-   settings->setServerPassword(menuItems[OPT_PASS]->getValue(), true);
+   settings->setAdminPassword(getMenuItem(OPT_ADMIN_PASS)->getValue(), true);
+   settings->setLevelChangePassword(getMenuItem(OPT_LVL_PASS)->getValue(), true);
+   settings->setServerPassword(getMenuItem(OPT_PASS)->getValue(), true);
 
-   settings->getIniSettings()->allowGetMap = (menuItems[OPT_GETMAP]->getValue() == "yes");
-   //settings->getIniSettings()->maxplayers = menuItems[OPT_MAX_PLAYERS]->getIntValue();
+   settings->getIniSettings()->allowGetMap = (getMenuItem(OPT_GETMAP)->getValue() == "yes");
+   //settings->getIniSettings()->maxplayers = getMenuItem(OPT_MAX_PLAYERS)->getIntValue();
 
    saveSettingsToINI(&gINI, getGame()->getSettings());
 }
@@ -1391,12 +1461,12 @@ static void kickPlayerCallback(ClientGame *game, U32 unused)
 
 void GameMenuUserInterface::buildMenu()
 {
-   menuItems.clear();
+   clearMenuItems();
 
    lastInputMode = getGame()->getSettings()->getIniSettings()->inputMode;      // Save here so we can see if we need to display alert msg if input mode changes
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "OPTIONS",      optionsSelectedCallback, "", KEY_O)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "INSTRUCTIONS", helpSelectedCallback,    "", KEY_I, keyHELP)));
+   addMenuItem(new MenuItem(0, "OPTIONS",      optionsSelectedCallback, "", KEY_O));
+   addMenuItem(new MenuItem(0, "INSTRUCTIONS", helpSelectedCallback,    "", KEY_I, keyHELP));
 
    GameType *gameType = getGame()->getGameType();
 
@@ -1404,7 +1474,7 @@ void GameMenuUserInterface::buildMenu()
    if(gameType)
    {
       mGameType = gameType;
-      gameType->addClientGameMenuOptions(getGame(), menuItems);
+      gameType->addClientGameMenuOptions(getGame(), this);
    }
 
    GameConnection *gc = (getGame())->getConnectionToServer();
@@ -1413,12 +1483,12 @@ void GameMenuUserInterface::buildMenu()
    {
       if(gc->getClientInfo()->isLevelChanger())
       {
-         menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "PLAY DIFFERENT LEVEL", chooseNewLevelCallback, "", KEY_L, KEY_P)));
-         menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "ADD TIME (2 MINS)",    addTwoMinsCallback,     "", KEY_T, KEY_2)));
-         menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "RESTART LEVEL",        restartGameCallback,    "", KEY_R)));
+         addMenuItem(new MenuItem(0, "PLAY DIFFERENT LEVEL", chooseNewLevelCallback, "", KEY_L, KEY_P));
+         addMenuItem(new MenuItem(0, "ADD TIME (2 MINS)",    addTwoMinsCallback,     "", KEY_T, KEY_2));
+         addMenuItem(new MenuItem(0, "RESTART LEVEL",        restartGameCallback,    "", KEY_R));
       }
       else        // Not level changer
-         menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "ENTER LEVEL CHANGE PASSWORD", levelChangePWCallback, "", KEY_L, KEY_P)));
+         addMenuItem(new MenuItem(0, "ENTER LEVEL CHANGE PASSWORD", levelChangePWCallback, "", KEY_L, KEY_P));
 
       if(gc->getClientInfo()->isAdmin())
       {
@@ -1426,19 +1496,19 @@ void GameMenuUserInterface::buildMenu()
          if(gameType)
          {
             mGameType = gameType;
-            gameType->addAdminGameMenuOptions(menuItems);
+            gameType->addAdminGameMenuOptions(this);
          }
 
-         menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "KICK A PLAYER", kickPlayerCallback, "", KEY_K)));
+         addMenuItem(new MenuItem(0, "KICK A PLAYER", kickPlayerCallback, "", KEY_K));
       }
       else     // Not admin
-         menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "ENTER ADMIN PASSWORD", adminPWCallback, "", KEY_A, KEY_E)));
+         addMenuItem(new MenuItem(0, "ENTER ADMIN PASSWORD", adminPWCallback, "", KEY_A, KEY_E));
    }
 
    if(getUIManager()->cameFrom(EditorUI))    // Came from editor
-      menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "RETURN TO EDITOR", endGameCallback, "", KEY_Q, KEY_R)));
+      addMenuItem(new MenuItem(0, "RETURN TO EDITOR", endGameCallback, "", KEY_Q, KEY_R));
    else
-      menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "QUIT GAME",        endGameCallback, "", KEY_Q)));
+      addMenuItem(new MenuItem(0, "QUIT GAME",        endGameCallback, "", KEY_Q));
 }
 
 
@@ -1500,33 +1570,31 @@ void LevelMenuUserInterface::onActivate()
    if(!gc || !gc->mLevelInfos.size())
       return;
 
-   menuItems.clear();
+   clearMenuItems();
 
    char c[] = "A";   // Shortcut key
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, ALL_LEVELS, selectLevelTypeCallback, "", stringToInputCode(c))));
+   addMenuItem(new MenuItem(0, ALL_LEVELS, selectLevelTypeCallback, "", stringToInputCode(c)));
 
    // Cycle through all levels, looking for unique type strings
    for(S32 i = 0; i < gc->mLevelInfos.size(); i++)
    {
       S32 j;
-      for(j = 0; j < menuItems.size(); j++)
-         if(gc->mLevelInfos[i].levelName == "" || !stricmp(gc->mLevelInfos[i].levelType.getString(), menuItems[j]->getPrompt().c_str()) )     
+      for(j = 0; j < getMenuItemCount(); j++)
+         if(gc->mLevelInfos[i].levelName == "" || !stricmp(gc->mLevelInfos[i].levelType.getString(), getMenuItem(j)->getPrompt().c_str()) )     
          {
             break;                  // Skip over levels with blank names or duplicate entries
          }
-      if(j == menuItems.size())     // Must be a new type
+      if(j == getMenuItemCount())     // Must be a new type
       {
          strncpy(c, gc->mLevelInfos[i].levelType.getString(), 1);
-         menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), i + 1, gc->mLevelInfos[i].levelType.getString(), 
-                                                                      selectLevelTypeCallback, "", stringToInputCode(c))));
+         addMenuItem(new MenuItem(i + 1, gc->mLevelInfos[i].levelType.getString(), selectLevelTypeCallback, "", stringToInputCode(c)));
       }
    }
 
-   menuItems.sort(menuItemValueSort);
+   sortMenuItems();
 
    if((gc->mSendableFlags & 1) && !gc->isLocalConnection())   // local connection is useless, already have all maps..
-      menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), UPLOAD_LEVELS_MENUID, UPLOAD_LEVELS, 
-                                                                   selectLevelTypeCallback, "", stringToInputCode(c))));
+      addMenuItem(new MenuItem(UPLOAD_LEVELS_MENUID, UPLOAD_LEVELS, selectLevelTypeCallback, "", stringToInputCode(c)));
 }
 
 
@@ -1586,7 +1654,7 @@ void LevelMenuSelectUserInterface::onActivate()
    if(!gc || !gc->mLevelInfos.size())
       return;
 
-   menuItems.clear();
+   clearMenuItems();
 
    mLevels.clear();
 
@@ -1601,8 +1669,7 @@ void LevelMenuSelectUserInterface::onActivate()
       for(S32 i = 0; i < mLevels.size(); i++)
       {
          c[0] = mLevels[i].c_str()[0];
-         menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(game, i | UPLOAD_LEVELS_BIT, mLevels[i].c_str(), 
-                                                                      processLevelSelectionCallback, "", stringToInputCode(c))));
+         addMenuItem(new MenuItem(i | UPLOAD_LEVELS_BIT, mLevels[i].c_str(), processLevelSelectionCallback, "", stringToInputCode(c)));
       }
    }
  
@@ -1614,12 +1681,11 @@ void LevelMenuSelectUserInterface::onActivate()
          !strcmp(category.c_str(), ALL_LEVELS) )
       {
          c[0] = gc->mLevelInfos[i].levelName.getString()[0];
-         menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(game, i, gc->mLevelInfos[i].levelName.getString(), 
-                                                                      processLevelSelectionCallback, "", stringToInputCode(c))));
+         addMenuItem(new MenuItem(i, gc->mLevelInfos[i].levelName.getString(), processLevelSelectionCallback, "", stringToInputCode(c)));
       }
    }
 
-   menuItems.sort(menuItemValueSort);
+   sortMenuItems();
    currOffset = 0;
 
    if(itemSelectedWithMouse)
@@ -1635,14 +1701,14 @@ void LevelMenuSelectUserInterface::onActivate()
 bool LevelMenuSelectUserInterface::processMenuSpecificKeys(InputCode inputCode, char ascii)
 {
    // First check for some shortcut keys
-   for(S32 i = 0; i < menuItems.size(); i++)
+   for(S32 i = 0; i < getMenuItemCount(); i++)
    {
       // Lets us advance to next level with same starting letter  
       S32 indx = selectedIndex + i + 1;
-      if(indx >= menuItems.size())
-         indx -= menuItems.size();
+      if(indx >= getMenuItemCount())
+         indx -= getMenuItemCount();
 
-      if(inputCode == menuItems[indx]->key1 || inputCode == menuItems[indx]->key2)
+      if(inputCode == getMenuItem(indx)->key1 || inputCode == getMenuItem(indx)->key2)
       {
          selectedIndex = indx;
          playBoop();
@@ -1679,9 +1745,11 @@ static void playerSelectedCallback(ClientGame *game, U32 index)
 
 void PlayerMenuUserInterface::playerSelected(U32 index)
 {
-   // Find selected player, and put that value into index; compensates for sorting
-   for(S32 i = 0; i < menuItems.size(); i++)
-      if(menuItems[i]->getIndex() == (S32)index)
+   // When we created the menu, names were not sorted, and item indices were assigned in "natural order".  Then
+   // the menu items were sorted by name, and now the indices are now jumbled.  This bit here tries to get the
+   // new, actual list index of an item given its original index.
+   for(S32 i = 0; i < getMenuItemCount(); i++)
+      if(getMenuItem(i)->getIndex() == (S32)index)
       {
          index = i;
          break;
@@ -1694,13 +1762,11 @@ void PlayerMenuUserInterface::playerSelected(U32 index)
       TeamMenuUserInterface *ui = getUIManager()->getTeamMenuUserInterface();
 
       ui->activate();     // Show menu to let player select a new team
-      ui->nameToChange = menuItems[index]->getPrompt();
+      ui->nameToChange = getMenuItem(index)->getPrompt();
    }
    else if(gc)    // action == Kick
-   {
-      StringTableEntry e(menuItems[index]->getPrompt().c_str());
-      gc->c2sAdminPlayerAction(e, action, -1);
-   }
+      gc->c2sAdminPlayerAction(getMenuItem(index)->getPrompt(), action, -1);
+
 
    if(action != ChangeTeam)                              // Unless we need to move on to the change team screen...
       getUIManager()->reactivateMenu(getUIManager()->getGameUserInterface());     // ...it's back to the game!
@@ -1710,7 +1776,7 @@ void PlayerMenuUserInterface::playerSelected(U32 index)
 // By putting the menu building code in render, menus can be dynamically updated
 void PlayerMenuUserInterface::render()
 {
-   menuItems.clear();
+   clearMenuItems();
 
    GameConnection *conn = getGame()->getConnectionToServer();
    if(!conn)
@@ -1726,13 +1792,15 @@ void PlayerMenuUserInterface::render()
       // Will be used to show admin/player/robot prefix on menu
       PlayerType pt = clientInfo->isRobot() ? PlayerTypeRobot : (clientInfo->isAdmin() ? PlayerTypeAdmin : PlayerTypePlayer);    
 
-      PlayerMenuItem *newItem = new PlayerMenuItem(getGame(), i, clientInfo->getName().getString(), playerSelectedCallback, stringToInputCode(c), pt);
+      PlayerMenuItem *newItem = new PlayerMenuItem(i, clientInfo->getName().getString(), playerSelectedCallback, 
+                                                   stringToInputCode(c), pt);
+      newItem->setUnselectedColor(getGame()->getTeamColor(clientInfo->getTeamIndex()));
 
-      menuItems.push_back(boost::shared_ptr<MenuItem>(newItem));
-      menuItems.last()->setUnselectedColor(getGame()->getTeamColor(clientInfo->getTeamIndex()));
+      addMenuItem(newItem);
+
    }
 
-   menuItems.sort(menuItemValueSort);
+   sortMenuItems();
 
    if(action == Kick)
       mMenuTitle = "CHOOSE PLAYER TO KICK:";
@@ -1791,7 +1859,7 @@ void TeamMenuUserInterface::processSelection(U32 index)
 // By reconstructing our menu at render time, changes to teams caused by others will be reflected immediately
 void TeamMenuUserInterface::render()
 {
-   menuItems.clear();
+   clearMenuItems();
 
    getGame()->countTeamPlayers();    // Make sure numPlayers is correctly populated
 
@@ -1803,7 +1871,7 @@ void TeamMenuUserInterface::render()
 
       bool isCurrent = (i == getGame()->getTeamIndex(nameToChange.c_str()));
       
-      menuItems.push_back(boost::shared_ptr<MenuItem>(new TeamMenuItem(getGame(), i, team, processTeamSelectionCallback, stringToInputCode(c), isCurrent)));
+      addMenuItem(new TeamMenuItem(i, team, processTeamSelectionCallback, stringToInputCode(c), isCurrent));
    }
 
    string name = "";

@@ -145,24 +145,22 @@ void GameParamUserInterface::updateMenuItems()
    if(gameTypes.size() == 0)     // Should only be run once, as these gameTypes will not change during the session
       buildGameTypeList();
 
-   menuItems.clear();
+   clearMenuItems();
 
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new ToggleMenuItem(getGame(),
-                                                                      "Game Type:",       
-                                                                      gameTypes,
-                                                                      getGameTypeIndex(gameType->getClassName()),
-                                                                      true,
-                                                                      changeGameTypeCallback,
-                                                                      gameType->getInstructionString())));
+   addMenuItem(new ToggleMenuItem("Game Type:",       
+                                  gameTypes,
+                                  getGameTypeIndex(gameType->getClassName()),
+                                  true,
+                                  changeGameTypeCallback,
+                                  gameType->getInstructionString()));
 
 
    string fn = stripExtension(getUIManager()->getEditorUserInterface()->getLevelFileName());
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new EditableMenuItem(getGame(),
-                                                                        "Filename:",                         // name
-                                                                        fn,                                  // val
-                                                                        "",                                  // empty val
-                                                                        "File where this level is stored",   // help
-                                                                        MAX_FILE_NAME_LEN)));
+   addMenuItem(new TextEntryMenuItem("Filename:",                         // name
+                                     fn,                                  // val
+                                     "",                                  // empty val
+                                     "File where this level is stored",   // help
+                                     MAX_FILE_NAME_LEN));
    const char **keys = gameType->getGameParameterMenuKeys();
 
    S32 i = 0;
@@ -176,13 +174,13 @@ void GameParamUserInterface::updateMenuItems()
          menuItem = iter->second;
       else                 // Item not found
       {
-         menuItem = gameType->getMenuItem(getGame(), keys[i]);
-         TNLAssert(menuItem.get(), "Failed to make a new menu item!");
+         menuItem = gameType->getMenuItem(keys[i]);
+         TNLAssert(menuItem, "Failed to make a new menu item!");
 
          mMenuItemMap.insert(pair<const char *, boost::shared_ptr<MenuItem> >(keys[i], menuItem));
       }
 
-      menuItems.push_back(menuItem);
+      addWrappedMenuItem(menuItem);
 
       i++;
    }
@@ -192,9 +190,9 @@ void GameParamUserInterface::updateMenuItems()
 // Runs as we're exiting the menu
 void GameParamUserInterface::onEscape()
 {
-   S32 gameTypeIndex = dynamic_cast<ToggleMenuItem *>(menuItems[0].get())->getValueIndex();
+   S32 gameTypeIndex = dynamic_cast<ToggleMenuItem *>(getMenuItem(0))->getValueIndex();
 
-   getUIManager()->getEditorUserInterface()->setLevelFileName(menuItems[1]->getValue());  
+   getUIManager()->getEditorUserInterface()->setLevelFileName(getMenuItem(1)->getValue());  
 
    GameType *gameType = getGame()->getGameType();
 
