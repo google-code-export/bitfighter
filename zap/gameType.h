@@ -57,6 +57,7 @@ class Robot;
 class AsteroidSpawn;
 class Team;
 class SpyBug;
+class MenuUserInterface;
 
 struct WallRec
 {
@@ -71,6 +72,7 @@ public:
 
 class GameType : public NetObject
 {
+   typedef NetObject Parent;
 
 private:
    Game *mGame;
@@ -306,7 +308,7 @@ public:
 
 #ifndef ZAP_DEDICATED
    virtual const char **getGameParameterMenuKeys();
-   virtual boost::shared_ptr<MenuItem> getMenuItem(ClientGame *game, const char *key);
+   virtual boost::shared_ptr<MenuItem> getMenuItem(const char *key);
    virtual bool saveMenuItem(const MenuItem *menuItem, const char *key);
 #endif
 
@@ -451,10 +453,10 @@ public:
 
 #ifndef ZAP_DEDICATED
    // Handle additional game-specific menu options for the client and the admin
-   virtual void addClientGameMenuOptions(ClientGame *game, Vector<boost::shared_ptr<MenuItem> > &menuOptions);
+   virtual void addClientGameMenuOptions(ClientGame *game, MenuUserInterface *menu);
    //virtual void processClientGameMenuOption(U32 index);                        // Param used only to hold team, at the moment
 
-   virtual void addAdminGameMenuOptions(Vector<boost::shared_ptr<MenuItem> > &menuOptions);
+   virtual void addAdminGameMenuOptions(MenuUserInterface *menu);
 #endif
 
    TNL_DECLARE_RPC(c2sAddTime, (U32 time));                                    // Admin is adding time to the game

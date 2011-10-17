@@ -1,4 +1,3 @@
-
 //-----------------------------------------------------------------------------------
 //
 // Bitfighter - A multiplayer vector graphics space game
@@ -24,30 +23,74 @@
 //
 //------------------------------------------------------------------------------------
 
-
 #include "UIMenuItems.h"
+#include "UIMenus.h"
 #include "UI.h"
-#include "ScreenInfo.h"
+#include "ScreenInfo.h"    // For gScreenInfo stuff
 
 #include "SDL/SDL_opengl.h"
+
 
 namespace Zap
 {
 
 // Constructor
-MenuItem::MenuItem(ClientGame *game, S32 index, const string &prompt, void (*callback)(ClientGame *, U32), const string &help, InputCode k1, InputCode k2)
+MenuItem::MenuItem()
 {
-   mGame = game;
-   mPrompt = prompt;
-   key1 = k1;
-   key2 = k2;
+   initialize();
+}
+
+
+// Constructor
+MenuItem::MenuItem(const string &displayVal)
+{
+   initialize();
+
+   mDisplayVal = displayVal;
+}
+
+
+// Constructor
+MenuItem::MenuItem(const string &displayVal, void (*callback)(ClientGame *, U32), const char *help, InputCode k1, InputCode k2)
+{
+   initialize();
+
+   mDisplayVal = displayVal;
    mCallback = callback;
    mHelp = help;
+   key1 = k1;
+   key2 = k2;
+}
+
+
+// Constructor
+MenuItem::MenuItem(S32 index, const string &displayVal, void (*callback)(ClientGame *, U32), 
+                   const string &help, InputCode k1, InputCode k2)
+{
+   initialize();
+
+   mDisplayVal = displayVal;
+   mCallback = callback;
+   mHelp = help.c_str();
+   key1 = k1;
+   key2 = k2;
    mIndex = (U32)index;
+}
+
+
+void MenuItem::initialize()
+{
+   mDisplayVal = "";
+   key1 = KEY_UNKNOWN;
+   key2 = KEY_UNKNOWN;
+   mCallback = NULL;
+   mHelp = "";
+   mIndex = -1;
+
    mEnterAdvancesItem = false;
    mSelectedColor = Colors::yellow;
    mUnselectedColor = Colors::white;
-   mPromptAppendage = " >";
+   mDisplayValAppendage = " >";
 }
 
 
@@ -56,6 +99,18 @@ MenuItem::~MenuItem()
 { 
    // Do nothing
 } 
+
+
+MenuUserInterface *MenuItem::getMenu()  
+{ 
+   return mMenu; 
+}
+
+
+void MenuItem::setMenu(MenuUserInterface *menu) 
+{ 
+   mMenu = menu; 
+}
 
 
 // Shouldn't need to be overridden -- all redering routines should include xpos
@@ -74,13 +129,13 @@ const Color *MenuItem::getColor(bool isSelected)
 void MenuItem::render(S32 xpos, S32 ypos, S32 textsize, bool isSelected)
 {
    glColor(*getColor(isSelected));
-   UserInterface::drawCenteredStringf(xpos, ypos, textsize, "%s%s", getPrompt().c_str(), mPromptAppendage);
+   UserInterface::drawCenteredStringf(xpos, ypos, textsize, "%s%s", getPrompt().c_str(), mDisplayValAppendage);
 }
 
 
 S32 MenuItem::getWidth(S32 textsize)
 {
-   return UserInterface::getStringWidthf(textsize, "%s%s", getPrompt().c_str(), mPromptAppendage);
+   return UserInterface::getStringWidthf(textsize, "%s%s", getPrompt().c_str(), mDisplayValAppendage);
 }
 
 
@@ -90,7 +145,7 @@ bool MenuItem::handleKey(InputCode inputCode, char ascii)
    {
       UserInterface::playBoop();
       if(mCallback)
-         mCallback(mGame, mIndex);
+         mCallback(getMenu()->getGame(), mIndex);
 
       return true;
    }
@@ -106,47 +161,56 @@ bool MenuItem::handleKey(InputCode inputCode, char ascii)
 ////////////////////////////////////
 
 // Constructor
-ValueMenuItem::ValueMenuItem(ClientGame *game, S32 index, const string &value, void (*callback)(ClientGame *, U32), 
+ValueMenuItem::ValueMenuItem()
+{
+   initialize();
+}
+
+
+// Constructor
+ValueMenuItem::ValueMenuItem(const string &displayValue, void (*callback)(ClientGame *, U32), 
                              const string &help, InputCode k1, InputCode k2) :
-      Parent(game, index, value, callback, help, k1, k2)
+      Parent(-1, displayValue, callback, help, k1, k2)
+{
+
+   initialize();
+}
+
+
+void ValueMenuItem::initialize()
 {
    mSelectedValueColor = Colors::cyan;
    mUnselectedValueColor = Colors::cyan;
 }
 
 
-////////////////////////////////////
-////////////////////////////////////
-
-ToggleMenuItem::ToggleMenuItem(ClientGame *game, string title, Vector<string> options, U32 currOption, bool wrap, void (*callback)(ClientGame *, U32), string help, InputCode k1, InputCode k2) :
-      ValueMenuItem(game, -1, title, callback, help, k1, k2)
+S32 clamp(S32 val, S32 min, S32 max)
 {
-   mValue = "";
-   mIndex = currOption;
-   mOptions = options;
-   mWrap = wrap;
-   mEnterAdvancesItem = true;
+   if(val < min) return min;
+   if(val > max) return max;
+   return val;
 }
 
 
-const char ToggleMenuItem::className[] = "ToggleMenuItem";      // Class name as it appears to Lua scripts
+////////////////////////////////////
+////////////////////////////////////
 
-// Lua Constructor
-//ToggleMenuItem::ToggleMenuItem(lua_State *L) : ValueMenuItem(gClientGame, -1, NULL, NULL, "", KEY_NONE)
-//{
-//   TNLAssert(false, "Don't use this yet!!");
-   //static const char *methodName = "ToggleMenuItem constructor";
+ToggleMenuItem::ToggleMenuItem()
+{
+   // Do nothing
+}
 
-   //checkArgCount(L, 2, methodName);
-   //string value =  getValue(L, 1, methodName);      // Text
-   //F32 y =  getFloat(L, 2, methodName);      // Callback (?)
-   //string help =  getFloat(L, 2, methodName);      // Help
-   //F32 key1 =  getFloat(L, 2, methodName);      // Key 1
-   //F32 key2 =  getFloat(L, 2, methodName);      // Key 2
 
-   //mPoint = ValueMenuItem(game, index, text, callback, help, key1, key2);
-//}
-
+ToggleMenuItem::ToggleMenuItem(string title, Vector<string> options, U32 currOption, bool wrap, 
+                               void (*callback)(ClientGame *, U32), string help, InputCode k1, InputCode k2) :
+      ValueMenuItem(title, callback, help, k1, k2)
+{
+   //mValue = "";
+   mOptions = options;
+   mIndex = clamp(currOption, 0, mOptions.size() - 1);
+   mWrap = wrap;
+   mEnterAdvancesItem = true;
+}
 
 
 string ToggleMenuItem::getOptionText()
@@ -177,7 +241,7 @@ bool ToggleMenuItem::handleKey(InputCode inputCode, char ascii)
       mIndex = (mIndex == (U32)mOptions.size() - 1) ? nextValAfterWrap : mIndex + 1;
 
       if(mCallback)
-         mCallback(getGame(), mIndex);
+         mCallback(getMenu()->getGame(), mIndex);
 
       UserInterface::playBoop();
       return true;
@@ -188,7 +252,7 @@ bool ToggleMenuItem::handleKey(InputCode inputCode, char ascii)
       mIndex = (mIndex == 0) ? nextValAfterWrap : mIndex - 1;
       
       if(mCallback)
-         mCallback(getGame(), mIndex);
+         mCallback(getMenu()->getGame(), mIndex);
 
       UserInterface::playBoop();
       return true;
@@ -199,7 +263,7 @@ bool ToggleMenuItem::handleKey(InputCode inputCode, char ascii)
       mIndex = (mIndex == (U32)mOptions.size() - 1) ? nextValAfterWrap : mIndex + 1;
 
       if(mCallback)
-         mCallback(getGame(), mIndex);
+         mCallback(getMenu()->getGame(), mIndex);
 
       UserInterface::playBoop();
       return true;
@@ -214,7 +278,7 @@ bool ToggleMenuItem::handleKey(InputCode inputCode, char ascii)
             mIndex = index;
             
             if(mCallback)
-               mCallback(getGame(), mIndex);
+               mCallback(getMenu()->getGame(), mIndex);
 
             UserInterface::playBoop();
             return true;
@@ -225,15 +289,65 @@ bool ToggleMenuItem::handleKey(InputCode inputCode, char ascii)
 }
 
 
-////////////////////////////////////
-////////////////////////////////////
+//////////
+// Lua interface
+const char ToggleMenuItem::className[] = "ToggleMenuItem";      // Class name as it appears to Lua scripts
 
-
-YesNoMenuItem::YesNoMenuItem(ClientGame *game, string title, bool currOption, void (*callback)(ClientGame *, U32), string help, InputCode k1, InputCode k2) :
-      ToggleMenuItem(game, title, Vector<string>(), currOption, true, callback, help, k1, k2)
+// Lua Constructor
+ToggleMenuItem::ToggleMenuItem(lua_State *L)
 {
-   mValue = "";
-   mIndex = currOption;
+   const char *methodName = "ToggleMenuItem constructor";
+
+   // Required items -- will throw if they are missing or misspecified
+   mDisplayVal = getString(L, 1, methodName);
+   getStringVectorFromTable(L, 2, methodName, mOptions);    // Fills mOptions with elements in a table 
+
+   // Optional (but recommended) items
+   mIndex = clamp(getInt(L, 3, methodName, 1) - 1, 0,  mOptions.size() - 1);   // First - 1 for compatibility with Lua's 1-based array index
+   mWrap = getBool(L, 4, methodName, false);
+   mHelp = getString(L, 4, methodName, "");
+}
+
+
+// Define the methods we will expose to Lua
+Lunar<ToggleMenuItem>::RegType ToggleMenuItem::methods[] =
+{
+   {0,0}    // End method list
+};
+
+
+void ToggleMenuItem::push(lua_State *L) 
+{  
+   Lunar<ToggleMenuItem>::push(L, this); 
+}
+
+
+////////////////////////////////////
+////////////////////////////////////
+
+// Constructors
+YesNoMenuItem::YesNoMenuItem(string title, bool currOption, string help, InputCode k1, InputCode k2) :
+      ToggleMenuItem(title, Vector<string>(), currOption, true)
+{
+   initialize();
+
+   setIndex(currOption);
+}
+
+
+//YesNoMenuItem::YesNoMenuItem(string title, bool currOption, void (*callback)(ClientGame *, U32), string help, 
+//                             InputCode k1, InputCode k2) :
+//      ToggleMenuItem(title, Vector<string>(), currOption, true, callback)
+//{
+//   initialize();
+//
+//   setIndex(currOption);
+//}
+
+
+void YesNoMenuItem::initialize()
+{
+   //mValue = "";
    mEnterAdvancesItem = true;
 
    mOptions.push_back("No");     // 0
@@ -241,21 +355,79 @@ YesNoMenuItem::YesNoMenuItem(ClientGame *game, string title, bool currOption, vo
 }
 
 
+void YesNoMenuItem::setIndex(S32 index)
+{
+   mIndex = clamp(index, 0, 1);
+}
+
+
+//////////
+// Lua interface
+const char YesNoMenuItem::className[] = "YesNoMenuItem";      // Class name as it appears to Lua scripts
+
+// Lua Constructor
+YesNoMenuItem::YesNoMenuItem(lua_State *L)
+{
+   initialize();
+
+   const char *methodName = "YesNoMenuItem constructor";
+
+   // Required items -- will throw if they are missing or misspecified
+   mDisplayVal = getString(L, 1, methodName);
+
+   // Optional (but recommended) items
+   setIndex(getInt(L, 2, methodName, 1) - 1);                // - 1 for compatibility with Lua's 1-based array index
+   mHelp = getString(L, 3, methodName, "");
+}
+
+
+// Define the methods we will expose to Lua
+Lunar<YesNoMenuItem>::RegType YesNoMenuItem::methods[] =
+{
+   {0,0}    // End method list
+};
+
+
+void YesNoMenuItem::push(lua_State *L) 
+{  
+   Lunar<YesNoMenuItem>::push(L, this); 
+}
+
+
 ////////////////////////////////////
 ////////////////////////////////////
 
-CounterMenuItem::CounterMenuItem(ClientGame *game, const string &title, S32 value, S32 step, S32 minVal, S32 maxVal, const string &units, 
+CounterMenuItem::CounterMenuItem(const string &title, S32 value, S32 step, S32 minVal, S32 maxVal, const string &units, 
                                  const string &minMsg, const string &help, InputCode k1, InputCode k2) :
-   Parent(game, -1, title, NULL, help, k1, k2)
+   Parent(title, NULL, help, k1, k2)
 {
-   mValue = value;
+   initialize();
+
    mStep = step;
    mMinValue = minVal;
    mMaxValue = maxVal;
    mUnits = units;
    mMinMsg = minMsg;   
 
+   setIntValue(value);     // Needs to be done after mMinValue and mMaxValue are set
+}
+
+
+void CounterMenuItem::initialize()
+{
    mEnterAdvancesItem = true;
+}
+
+
+void CounterMenuItem::setValue(const string &val)
+{
+   setIntValue(atoi(val.c_str()));
+}
+
+
+void CounterMenuItem::setIntValue(S32 val)
+{
+   mValue = clamp(val, mMinValue, mMaxValue);
 }
 
 
@@ -311,28 +483,63 @@ bool CounterMenuItem::handleKey(InputCode inputCode, char ascii)
 
 void CounterMenuItem::increment(S32 fact) 
 { 
-   mValue += mStep * fact; 
-
-   if(mValue > mMaxValue) 
-      mValue = mMaxValue; 
+   setIntValue(mValue + mStep * fact);
 }
 
 
 void CounterMenuItem::decrement(S32 fact) 
 { 
-   mValue -= mStep * fact; 
+   setIntValue(mValue - mStep * fact);
+}
 
-   if(mValue < mMinValue) 
-      mValue = mMinValue; 
+
+//////////
+// Lua interface
+const char CounterMenuItem::className[] = "CounterMenuItem";      // Class name as it appears to Lua scripts
+
+// Lua Constructor
+CounterMenuItem::CounterMenuItem(lua_State *L)
+{
+   const char *methodName = "CounterMenuItem constructor";
+
+   initialize();
+
+   // Required items -- will throw if they are missing or misspecified
+   mDisplayVal = getString(L, 1, methodName);
+   // mValue =  getInt(L, 2, methodName);  ==> set this later, after we've determined mMinValue and mMaxValue
+
+   // Optional (but recommended) items
+   mStep =     getInt(L, 3, methodName, 1);   
+   mMinValue = getInt(L, 4, methodName, 0);   
+   mMaxValue = getInt(L, 5, methodName, 100);   
+   mUnits =    getString(L, 6, methodName, "");
+   mMinMsg =   getString(L, 7, methodName, "");
+   mHelp =     getString(L, 8, methodName, "");
+
+   // Second required item
+   setIntValue(getInt(L, 2, methodName));  
+}
+
+
+// Define the methods we will expose to Lua
+Lunar<CounterMenuItem>::RegType CounterMenuItem::methods[] =
+{
+   {0,0}    // End method list
+};
+
+
+void CounterMenuItem::push(lua_State *L) 
+{  
+   Lunar<CounterMenuItem>::push(L, this); 
 }
 
 
 ////////////////////////////////////
 ////////////////////////////////////
 
-TimeCounterMenuItem::TimeCounterMenuItem(ClientGame *game, const string &title, S32 value, S32 maxVal, const string &zeroMsg, const string &help,
+TimeCounterMenuItem::TimeCounterMenuItem(const string &title, S32 value, S32 maxVal, const string &zeroMsg, const string &help,
                     S32 step, InputCode k1, InputCode k2) :
-   CounterMenuItem(game, title, value, step, 0, maxVal, "", zeroMsg, help, k1, k2)
+   CounterMenuItem(title, value, step, 0, maxVal, "", zeroMsg, help, k1, k2)
 {
    // Do nothing
 }
@@ -341,9 +548,9 @@ TimeCounterMenuItem::TimeCounterMenuItem(ClientGame *game, const string &title, 
 ////////////////////////////////////
 ////////////////////////////////////
 
-TimeCounterMenuItemSeconds::TimeCounterMenuItemSeconds(ClientGame *game, const string &title, S32 value, S32 maxVal, const string &zeroMsg, 
+TimeCounterMenuItemSeconds::TimeCounterMenuItemSeconds(const string &title, S32 value, S32 maxVal, const string &zeroMsg, 
                                                        const string &help, InputCode k1, InputCode k2) :
-   TimeCounterMenuItem(game, title, value, maxVal, zeroMsg, help, 1, k1, k2)
+   TimeCounterMenuItem(title, value, maxVal, zeroMsg, help, 1, k1, k2)
 {
    // Do nothing
 }
@@ -352,8 +559,8 @@ TimeCounterMenuItemSeconds::TimeCounterMenuItemSeconds(ClientGame *game, const s
 ////////////////////////////////////
 ////////////////////////////////////
 
-PlayerMenuItem::PlayerMenuItem(ClientGame *game, S32 index, const char *text, void (*callback)(ClientGame *, U32), InputCode k1, PlayerType type) :
-      MenuItem(game, index, text, callback, "", k1, KEY_UNKNOWN)
+PlayerMenuItem::PlayerMenuItem(S32 index, const char *text, void (*callback)(ClientGame *, U32), InputCode k1, PlayerType type) :
+      MenuItem(index, text, callback, "", k1, KEY_UNKNOWN)
 {
    mType = type;
 }
@@ -391,8 +598,8 @@ S32 PlayerMenuItem::getWidth(S32 textsize)
 ////////////////////////////////////
 ////////////////////////////////////
 
-TeamMenuItem::TeamMenuItem(ClientGame *game, S32 index, AbstractTeam *team, void (*callback)(ClientGame *, U32), InputCode inputCode, bool isCurrent) :
-               MenuItem(game, index, team->getName().getString(), callback, "", inputCode, KEY_UNKNOWN)
+TeamMenuItem::TeamMenuItem(S32 index, AbstractTeam *team, void (*callback)(ClientGame *, U32), InputCode inputCode, bool isCurrent) :
+               MenuItem(index, team->getName().getString(), callback, "", inputCode, KEY_UNKNOWN)
 {
    mTeam = team;
    mIsCurrent = isCurrent;
@@ -429,23 +636,29 @@ S32 TeamMenuItem::getWidth(S32 textsize)
 ////////////////////////////////////
 ////////////////////////////////////
 
-EditableMenuItem::EditableMenuItem(ClientGame *game, string title, string val, string emptyVal, string help, U32 maxLen, InputCode k1, InputCode k2) :
-         ValueMenuItem(game, -1, title, NULL, help, k1, k2),
+TextEntryMenuItem::TextEntryMenuItem(string title, string val, string emptyVal, string help, U32 maxLen, InputCode k1, InputCode k2) :
+         ValueMenuItem(title, NULL, help, k1, k2),
          mLineEditor(LineEditor(maxLen, val))
 {
+   initialize();
    mEmptyVal = emptyVal;
+}
+
+
+void TextEntryMenuItem::initialize()
+{
    mEnterAdvancesItem = true;
    mTextEditedCallback = NULL;
 }
 
 
-string EditableMenuItem::getOptionText()
+string TextEntryMenuItem::getOptionText()
 {
    return mLineEditor.getString() != "" ? mLineEditor.getDisplayString() : mEmptyVal;
 }
 
 
-void EditableMenuItem::render(S32 xpos, S32 ypos, S32 textsize, bool isSelected)
+void TextEntryMenuItem::render(S32 xpos, S32 ypos, S32 textsize, bool isSelected)
 {
    Color textColor;     
    if(mLineEditor.getString() == "" && mEmptyVal != "")
@@ -464,13 +677,13 @@ void EditableMenuItem::render(S32 xpos, S32 ypos, S32 textsize, bool isSelected)
 }
 
 
-S32 EditableMenuItem::getWidth(S32 textsize)
+S32 TextEntryMenuItem::getWidth(S32 textsize)
 {
    return UserInterface::getStringPairWidth(textsize, getPrompt().c_str(), getOptionText().c_str());
 }
 
 
-bool EditableMenuItem::handleKey(InputCode inputCode, char ascii) 
+bool TextEntryMenuItem::handleKey(InputCode inputCode, char ascii) 
 { 
    if(inputCode == KEY_DELETE || inputCode == KEY_BACKSPACE)
    {
@@ -495,11 +708,46 @@ bool EditableMenuItem::handleKey(InputCode inputCode, char ascii)
 }
 
 
+//////////
+// Lua interface
+const char TextEntryMenuItem::className[] = "TextEntryMenuItem";      // Class name as it appears to Lua scripts
+
+// Lua Constructor
+TextEntryMenuItem::TextEntryMenuItem(lua_State *L)
+{
+   initialize();
+
+   const char *methodName = "TextEntryMenuItem constructor";
+
+   // Required items -- will throw if they are missing or misspecified
+   mDisplayVal = getString(L, 1, methodName);
+
+   // Optional (but recommended) items
+   mLineEditor.setString(getString(L, 2, methodName, ""));
+   mEmptyVal = getString(L, 3, methodName, "");
+   mLineEditor.mMaxLen = getInt(L, 4, methodName, 32);
+   mHelp = getString(L, 5, methodName, "");
+}
+
+
+// Define the methods we will expose to Lua
+Lunar<TextEntryMenuItem>::RegType TextEntryMenuItem::methods[] =
+{
+   {0,0}    // End method list
+};
+
+
+void TextEntryMenuItem::push(lua_State *L) 
+{  
+   Lunar<TextEntryMenuItem>::push(L, this); 
+}
+
+
 ////////////////////////////////////
 ////////////////////////////////////
 
-MaskedEditableMenuItem::MaskedEditableMenuItem(ClientGame *game, string title, string val, string emptyVal, string help, U32 maxLen, InputCode k1, InputCode k2) :
-   EditableMenuItem(game, title, val, emptyVal, help, maxLen, k1, k2)
+MaskedTextEntryMenuItem::MaskedTextEntryMenuItem(string title, string val, string emptyVal, string help, U32 maxLen, InputCode k1, InputCode k2) :
+   TextEntryMenuItem(title, val, emptyVal, help, maxLen, k1, k2)
 {
    mLineEditor.setSecret(true);
 }

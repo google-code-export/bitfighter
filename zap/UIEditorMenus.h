@@ -42,17 +42,22 @@ class QuickMenuUI : public MenuUserInterface
    typedef MenuUserInterface Parent;
 
 private:
-   virtual string getTitle() = 0;
+   virtual string getTitle() { return mMenuTitle; }
    S32 getMenuWidth();     
    Point mMenuLocation;
 
 public:
-   QuickMenuUI(ClientGame *game) : Parent(game) { /* Do nothing */ }    // Constructor
+   // Constructors
+   QuickMenuUI(ClientGame *game)                      : Parent(game)        { /* Do nothing */ }    
+   QuickMenuUI(ClientGame *game, const string &title) : Parent(game, title) { /* Do nothing */ }
+
    void render();
 
    virtual void onEscape();
 
+   void addSaveAndQuitMenuItem();
    void setMenuLocation(const Point &location);
+   virtual void doneEditing() = 0;
 };
 
 
@@ -77,10 +82,8 @@ public:
    void onEscape();
 
    virtual void startEditingAttrs(EditorObject *object);
-   virtual void doneEditingAttrs();
+   virtual void doneEditing();
    virtual void doneEditingAttrs(EditorObject *object);
-
-   void addSaveAndQuitMenuItem();
 };
 
 
@@ -92,8 +95,9 @@ class PluginMenuUI : public QuickMenuUI
    typedef QuickMenuUI Parent;
 
 public:
-   PluginMenuUI(ClientGame *game) : Parent(game) { /* Do nothing */ }    // Constructor
-   string getTitle() { return "Hello dolly!"; }
+   PluginMenuUI(ClientGame *game, const string &title) : Parent(game, title) { /* Do nothing */ }    // Constructor
+
+   virtual void doneEditing();
 };
 
 

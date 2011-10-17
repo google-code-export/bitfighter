@@ -49,7 +49,6 @@ private:
    F32 mGridSize;
 
 public:
-   LuaLevelGenerator() { TNLAssert(false, "Who wants this???"); }
    LuaLevelGenerator(const string &scriptName, const string &scriptDir, const Vector<string> &scriptArgs, F32 gridsize, GridDatabase *gridDatabase, 
                      LevelLoader *caller, OGLCONSOLE_Console console);   // C++ constructor
 
@@ -62,7 +61,7 @@ public:
    bool loadScript();
    bool runScript();            
 
-   string runGetArgs();
+   bool runGetArgs(string &menuTitle, Vector<MenuItem *> &menuItems);
 
    void logError(const char *format, ...);
    void logError(const char *msg, const char *filename);
@@ -87,28 +86,7 @@ public:
    // Implement LevelLoader abstract method
    void processLevelLoadLine(int argc, U32 id, const char **argv, GridDatabase *database, bool inEditor, const string &levelFileName);
 };
-/*
 
-class LuaEditorPlugin : public LuaLevelGenerator
-{
-   typedef LuaLevelGenerator Parent;
-
-public:
-   LuaEditorPlugin() { TNLAssert(false, "Who wants this???"); }
-   LuaEditorPlugin(const string &scriptName, const string &scriptDir, const Vector<string> *scriptArgs, F32 gridsize, GridDatabase *gridDatabase, 
-                     LevelLoader *caller, OGLCONSOLE_Console console);   // C++ constructor
-
-   LuaEditorPlugin(lua_State *L);      // Lua constructor
-   virtual ~LuaEditorPlugin();         // Destructor
-
-   static const char className[];
-
-   void getMenus();
-
-   void runScript();    
-   bool runMain();
-};
-*/
 
 };
 

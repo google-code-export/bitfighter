@@ -653,37 +653,70 @@ void EditorUserInterface::runScript(const FolderManager *folderManager, const st
 }
 
 
+static void showError(const ClientGame *game)
+{
+   Vector<StringTableEntry> messages;
+   messages.push_back("This plugin encountered an error configuring its options menu.");
+   messages.push_back("It is likely that it has been misconfigured.");
+   messages.push_back("");
+   messages.push_back("See the Bitfighter logfile for details.");
+
+   game->displayMessageBox("Problem With Plugin", "Press any key to return to the editor", messages);
+}
+
+
 void EditorUserInterface::runPlugin(const FolderManager *folderManager, const string &scriptName, const Vector<string> &args)
 {
    string fullName = folderManager->findLevelGenScript("mazegen");     // Find full name of levelgen script
 
-   LuaLevelGenerator levelGen(fullName, folderManager->luaDir, args, getGame()->getGridSize(), mLoadTarget, getGame(), gConsole);
+   LuaLevelGenerator *levelGen = new LuaLevelGenerator(fullName, folderManager->luaDir, args, getGame()->getGridSize(), 
+                                                       mLoadTarget, getGame(), gConsole);
 
-   if(!levelGen.loadScript())    // Loads the script and runs it to get everything loaded into memory.  Does not run main().
+   mPluginRunner = boost::shared_ptr<LuaLevelGenerator>(levelGen);
+
+
+   if(!mPluginRunner->loadScript())       // Loads the script and runs it to get everything loaded into memory.  Does not run main().
+   {
+      showError(getGame());
+      mPluginRunner.reset();              // Clean up, clean up, everybody clean up!
       return;
+   }
 
+   string title;
    Vector<MenuItem *> menuItems;
-   //string args = levelGen.runGetArgs();
-   //levelGen.runGetArgs(menuItems);         // Fills menuItems
 
-   // For now...
-   CounterMenuItem *menuItem = new CounterMenuItem(getGame(), "Run count:", 3, 1, 0, 3, "iterations", "Disabled", "Times to run the maze");
-   menuItems.push_back(menuItem);
+   if(!levelGen->runGetArgs(title, menuItems))         // Fills menuItems
+   {
+      showError(getGame());
+      mPluginRunner.reset();
+      return;
+   }
 
-   //displayMenu;
-   PluginMenuUI *menu = new PluginMenuUI(getGame());
+   if(menuItems.size() == 0)                    // No menu items?  Let's run the script directly!
+   {
+      onPluginMenuClosed(Vector<string>());     // We'll use whatever args we already have
+      return;
+   }
+
+   // Build a menu from the menuItems returned by the plugin
+   PluginMenuUI *menu = new PluginMenuUI(getGame(), title);
 
    for(S32 i = 0; i < menuItems.size(); i++)
-      menu->menuItems.push_back(boost::shared_ptr<MenuItem>(&menuItem[i]));
+      menu->addMenuItem(menuItems[i]);
+
+   menu->addSaveAndQuitMenuItem();
 
    menu->activate();
-
-
-
-   //plugin.run(args);
-
 }
 
+
+void EditorUserInterface::onPluginMenuClosed(const Vector<string> &args)
+{
+   TNLAssert(mPluginRunner, "NULL PluginRunner!");
+   
+   mPluginRunner->runMain(args);
+   mPluginRunner.reset();
+}
 
 
 void EditorUserInterface::validateLevel()
@@ -3720,7 +3753,7 @@ void EditorUserInterface::testLevelStart()
    string tmpFileName = mEditFileName;
    mEditFileName = "editor.tmp";
 
-   SDL_ShowCursor(SDL_DISABLE);    // Turn off cursor
+   SDL_ShowCursor(SDL_DISABLE);        // Turn off cursor
    bool nts = mNeedToSave;             // Save these parameters because they are normally reset when a level is saved.
    S32 auul = mAllUndoneUndoLevel;     // Since we're only saving a temp copy, we really shouldn't reset them...
 
@@ -3761,7 +3794,7 @@ void EditorMenuUserInterface::onActivate()
 }
 
 
-extern MenuItem *getWindowModeMenuItem(ClientGame *game);
+extern MenuItem *getWindowModeMenuItem(U32 displayMode);
 
 //////////
 // Editor menu callbacks
@@ -3834,15 +3867,15 @@ void quitEditorCallback(ClientGame *game, U32 unused)
 
 void EditorMenuUserInterface::setupMenus()
 {
-   menuItems.clear();
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "RETURN TO EDITOR", reactivatePrevUICallback,    "", KEY_R)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(getWindowModeMenuItem(getGame())));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "TEST LEVEL",       testLevelCallback,           "", KEY_T)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "SAVE LEVEL",       returnToEditorCallback,      "", KEY_S)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "INSTRUCTIONS",     activateHelpCallback,        "", KEY_I, keyHELP)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "LEVEL PARAMETERS", activateLevelParamsCallback, "", KEY_L, KEY_F3)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "MANAGE TEAMS",     activateTeamDefCallback,     "", KEY_M, KEY_F2)));
-   menuItems.push_back(boost::shared_ptr<MenuItem>(new MenuItem(getGame(), 0, "QUIT",             quitEditorCallback,          "", KEY_Q, KEY_UNKNOWN)));
+   clearMenuItems();
+   addMenuItem(new MenuItem(0, "RETURN TO EDITOR", reactivatePrevUICallback,    "", KEY_R));
+   addMenuItem(getWindowModeMenuItem((U32)getGame()->getSettings()->getIniSettings()->displayMode));
+   addMenuItem(new MenuItem(0, "TEST LEVEL",       testLevelCallback,           "", KEY_T));
+   addMenuItem(new MenuItem(0, "SAVE LEVEL",       returnToEditorCallback,      "", KEY_S));
+   addMenuItem(new MenuItem(0, "INSTRUCTIONS",     activateHelpCallback,        "", KEY_I, keyHELP));
+   addMenuItem(new MenuItem(0, "LEVEL PARAMETERS", activateLevelParamsCallback, "", KEY_L, KEY_F3));
+   addMenuItem(new MenuItem(0, "MANAGE TEAMS",     activateTeamDefCallback,     "", KEY_M, KEY_F2));
+   addMenuItem(new MenuItem(0, "QUIT",             quitEditorCallback,          "", KEY_Q, KEY_UNKNOWN));
 }
 
 
