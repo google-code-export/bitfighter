@@ -160,8 +160,6 @@ public:
 
    //////
    // Vertex management functions
-   void renderPolylineCenterline(F32 alpha);    // Draw barrier centerlines; wraps renderPolyline()  ==> lineItem, barrierMaker only
-
    virtual void onGeomChanging();                        // Item geom is interactively changing
    virtual void onGeomChanged();                         // Item changed geometry (or moved), do any internal updating that might be required
 
@@ -223,7 +221,7 @@ public:
    //////////////
 
    //TODO: Get rid of this altogether
-   void renderInEditor(F32 currentScale, const Point &currentOffset, S32 snapIndex, bool isScriptItem, bool showingReferenceShip, ShowMode showMode);
+   void renderInEditor(F32 currentScale, S32 snapIndex, bool isScriptItem, bool showingReferenceShip, ShowMode showMode);
 
 };
 

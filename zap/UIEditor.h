@@ -106,6 +106,9 @@ enum VertexRenderStyles
 static const Color *HIGHLIGHT_COLOR = &Colors::white;
 static const Color *SELECT_COLOR = &Colors::yellow;
 
+
+static const S32 NO_NUMBER = -1;    
+
 ////////////////////////////////////////
 ////////////////////////////////////////
 
@@ -192,6 +195,8 @@ private:
    void renderDock(F32 width);
    void renderTextEntryOverlay();
    void renderReferenceShip();
+   void renderSaveMessage();
+   void renderWarnings();
 
    bool mCreatingPoly;
    bool mCreatingPolyline;
@@ -218,11 +223,12 @@ private:
    bool anyItemsSelected();           // Are any items selected?
    bool anythingSelected();           // Are any items/vertices selected?
 
-   void findHitItemAndEdge();                         // Sets mItemHit and mEdgeHit
-   bool checkForVertexHit(EditorObject *object);      // Helper function
-   bool checkForEdgeHit(EditorObject *object);        // Helper function
-   bool checkForWallHit(const Point &mouse, DatabaseObject *wallSegment);
-   bool checkForInteriorHit(EditorObject *object);    // Helper function
+   // Sets mItemHit and mEdgeHit -- findHitItemAndEdge calls one or more of the associated helper functions below
+   void findHitItemAndEdge();                         
+   bool checkForVertexHit(EditorObject *object);     
+   bool checkForEdgeHit(const Point &point, EditorObject *object);        
+   bool checkForWallHit(const Point &point, DatabaseObject *wallSegment);
+   bool checkForPolygonHit(const Point &point, EditorObject *object);    
 
    S32 findHitItemOnDock(Point canvasPos);
 
@@ -359,6 +365,7 @@ public:
    bool getSnapToWallCorners();     // Returns true if wall corners are active snap targets
 
    static void renderSnapTarget(const Point &target);
+
 
    S32 getItemSelectedCount();      // How many are objects are selcted?
 

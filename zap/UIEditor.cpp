@@ -268,69 +268,18 @@ void EditorUserInterface::clearDatabase(GridDatabase *database)
 }
 
 
-static const S32 NO_NUMBER = -1;
-
-// Draw a vertex of a selected editor item  -- still used for snapping vertex
-void renderVertex(VertexRenderStyles style, const Point &v, S32 number, F32 alpha, S32 size)
-{
-   bool hollow = style == HighlightedVertex || style == SelectedVertex || style == SelectedItemVertex || style == SnappingVertex;
-
-   // Fill the box with a dark gray to make the number easier to read
-   if(hollow && number != NO_NUMBER)
-   {
-      glColor3f(.25, .25, .25);
-      drawFilledSquare(v, size);
-   }
-      
-   if(style == HighlightedVertex)
-      glColor(*HIGHLIGHT_COLOR, alpha);
-   else if(style == SelectedVertex)
-      glColor(*SELECT_COLOR, alpha);
-   else if(style == SnappingVertex)
-      glColor(Colors::magenta, alpha);
-   else
-      glColor(Colors::red, alpha);
-
-   drawSquare(v, (F32)size, !hollow);
-
-   if(number != NO_NUMBER)     // Draw vertex numbers
-   {
-      glColor(Colors::white, alpha);
-      UserInterface::drawStringf(v.x - UserInterface::getStringWidthf(6, "%d", number) / 2, v.y - 3, 6, "%d", number);
-   }
-}
-
-
-void renderVertex(VertexRenderStyles style, const Point &v, S32 number, F32 alpha)
-{
-   renderVertex(style, v, number, alpha, WallItem::VERTEX_SIZE);
-}
-
-
-void renderVertex(VertexRenderStyles style, const Point &v, S32 number)
-{
-   renderVertex(style, v, number, 1);
-}
-
-
 // Replaces the need to do a convertLevelToCanvasCoord on every point before rendering
 void EditorUserInterface::setLevelToCanvasCoordConversion()
 {
-   F32 scale =  getCurrentScale();
-   Point offset = getCurrentOffset();
-
-   glTranslate(offset);
-   glScale(scale);
+   glTranslate(getCurrentOffset());
+   glScale(getCurrentScale());
 } 
 
 
 // Draws a line connecting points in mVerts
 void EditorUserInterface::renderPolyline(const Vector<Point> *verts)
 {
-   glPushMatrix();
-      setLevelToCanvasCoordConversion();
-      renderPointVector(verts, GL_LINE_STRIP);
-   glPopMatrix();
+   renderPointVector(verts, GL_LINE_STRIP);
 }
 
 
@@ -1539,7 +1488,6 @@ const char *getModeMessage(ShowMode mode)
 }
 
 
-// TODO: Need to render things in geometric order
 void EditorUserInterface::render()
 {
    mouseIgnore = false; // Needed to avoid freezing effect from too many mouseMoved events without a render in between (sam)
@@ -1558,16 +1506,25 @@ void EditorUserInterface::render()
    //                                  mLevelGenItems[i]->getWidth() / getGridSize() / 2, GL_POLYGON);
    //glPopMatrix();
 
-   const Vector<EditorObject *> *levelGenObjList = mLevelGenDatabase.getObjectList();
-   for(S32 i = 0; i < levelGenObjList->size(); i++)
-      levelGenObjList->get(i)->renderInEditor(mCurrentScale, mCurrentOffset, mSnapVertexIndex, true, mPreviewMode, mShowMode);
-   
-   // Render polyWall item fill just before rendering regular walls.  This will create the effect of all walls merging together.  
-   // PolyWall outlines are already part of the wallSegmentManager, so will be rendered along with those of regular walls.
-   const Vector<EditorObject *> *objList = getObjectList();
+   bool disableBlending = false;
 
-   glPushMatrix();  
+   if(!glIsEnabled(GL_BLEND))
+   {
+      glEnable(GL_BLEND);        // Enable transparency
+      disableBlending = true;
+   }
+
+   glPushMatrix();
       setLevelToCanvasCoordConversion();
+
+      const Vector<EditorObject *> *levelGenObjList = mLevelGenDatabase.getObjectList();
+      for(S32 i = 0; i < levelGenObjList->size(); i++)
+         levelGenObjList->get(i)->renderInEditor(mCurrentScale, mSnapVertexIndex, true, mPreviewMode, mShowMode);
+   
+      // Render polyWall item fill just before rendering regular walls.  This will create the effect of all walls merging together.  
+      // PolyWall outlines are already part of the wallSegmentManager, so will be rendered along with those of regular walls.
+      const Vector<EditorObject *> *objList = getObjectList();
+
       for(S32 i = 0; i < objList->size(); i++)
       {
          EditorObject *obj = objList->get(i);
@@ -1577,7 +1534,7 @@ void EditorUserInterface::render()
             wall->renderFill();
          }
       }
-   
+  
       getGame()->getWallSegmentManager()->renderWalls(getGame()->getSettings(),
                      mDraggingObjects, mPreviewMode, getSnapToWallCorners(), getRenderingAlpha(false/*isScriptItem*/));
 
@@ -1597,101 +1554,100 @@ void EditorUserInterface::render()
       }
 #endif
 
-   glPopMatrix();
-
-
-   // == Normal items ==
-   // Draw map items (teleporters, etc.) that are not being dragged, and won't have any text labels  (below the dock)
-   // Don't render polywalls, as we've alrady drawn those.
-   for(S32 i = 0; i < objList->size(); i++)
-   {
-      EditorObject *obj = objList->get(i);
-
-      if(obj->getObjectTypeNumber() != PolyWallTypeNumber)
-         if(!(mDraggingObjects && obj->isSelected()))
-            obj->renderInEditor(mCurrentScale, mCurrentOffset, mSnapVertexIndex, false, mPreviewMode, mShowMode);
-   }
-
-
-   // == Selected items ==
-   // Draw map items (teleporters, etc.) that are are selected and/or lit up, so label is readable (still below the dock)
-   // Do this as a separate operation to ensure that these are drawn on top of those drawn above.
-   for(S32 i = 0; i < objList->size(); i++)
-   {
-      EditorObject *obj = objList->get(i);
-      if(obj->isSelected() || obj->isLitUp())
-         obj->renderInEditor(mCurrentScale, mCurrentOffset, mSnapVertexIndex, false, mPreviewMode, mShowMode);
-   }
-
-
-   fillRendered = false;
-   F32 width = NONE;
-
-   if(mCreatingPoly || mCreatingPolyline)    // Draw geomPolyLine features under construction
-   {
-      mNewItem->addVert(snapPoint(convertCanvasToLevelCoord(mMousePos)));
-      glLineWidth(gLineWidth3);
-
-      if(mCreatingPoly) // Wall
-         glColor(*SELECT_COLOR);
-      else              // LineItem
-         glColor(getTeamColor(mNewItem->getTeam()));
-
-      renderPolyline(mNewItem->getOutline());
-
-      glLineWidth(gDefaultLineWidth);
-
-      for(S32 j = mNewItem->getVertCount() - 1; j >= 0; j--)      // Go in reverse order so that placed vertices are drawn atop unplaced ones
+      // == Normal items ==
+      // Draw map items (teleporters, etc.) that are not being dragged, and won't have any text labels  (below the dock)
+      // Don't render polywalls, as we've alrady drawn those.
+      for(S32 i = 0; i < objList->size(); i++)
       {
-         Point v = convertLevelToCanvasCoord(mNewItem->getVert(j));
+         EditorObject *obj = objList->get(i);
 
-         // Draw vertices
-         if(j == mNewItem->getVertCount() - 1)           // This is our most current vertex
-            renderVertex(HighlightedVertex, v, NO_NUMBER);
-         else
-            renderVertex(SelectedItemVertex, v, j);
+         if(obj->getObjectTypeNumber() != PolyWallTypeNumber)
+            if(!(mDraggingObjects && obj->isSelected()))
+               obj->renderInEditor(mCurrentScale, mSnapVertexIndex, false, mPreviewMode, mShowMode);
       }
-      mNewItem->deleteVert(mNewItem->getVertCount() - 1);
-   }
 
-   // Since we're not constructing a barrier, if there are any barriers or lineItems selected, 
-   // get the width for display at bottom of dock
-   else  
-   {
-      fillVector.clear();
-      getGame()->getEditorDatabase()->findObjects((TestFunc)isLineItemType, fillVector);
-
-      for(S32 i = 0; i < fillVector.size(); i++)
+      // == Selected items ==
+      // Draw map items (teleporters, etc.) that are are selected and/or lit up, so label is readable (still below the dock)
+      // Do this as a separate operation to ensure that these are drawn on top of those drawn above.
+      for(S32 i = 0; i < objList->size(); i++)
       {
-         LineItem *obj = dynamic_cast<LineItem *>(fillVector[i]);   // Walls are a subclass of LineItem, so this will work for both
-			TNLAssert(obj, "LineItem NULL?");
-         if(obj && (obj->isSelected() || (obj->isLitUp() && obj->isVertexLitUp(NONE))))
+         EditorObject *obj = objList->get(i);
+         if(obj->isSelected() || obj->isLitUp())
+            obj->renderInEditor(mCurrentScale, mSnapVertexIndex, false, mPreviewMode, mShowMode);
+      }
+
+      fillRendered = false;
+      F32 width = NONE;
+
+      // Draw geomPolyLine features under construction
+      if(mCreatingPoly || mCreatingPolyline)    
+      {
+         mNewItem->addVert(snapPoint(convertCanvasToLevelCoord(mMousePos)));
+         glLineWidth(gLineWidth3);
+
+         if(mCreatingPoly) // Wall
+            glColor(*SELECT_COLOR);
+         else              // LineItem
+            glColor(getTeamColor(mNewItem->getTeam()));
+
+         renderPolyline(mNewItem->getOutline());
+
+         glLineWidth(gDefaultLineWidth);
+
+         for(S32 j = mNewItem->getVertCount() - 1; j >= 0; j--)      // Go in reverse order so that placed vertices are drawn atop unplaced ones
          {
-            width = (F32)obj->getWidth();
-            break;
+            Point v = mNewItem->getVert(j);
+            
+            // Draw vertices
+            if(j == mNewItem->getVertCount() - 1)           // This is our most current vertex
+               renderVertex(HighlightedVertex, v, NO_NUMBER, mCurrentScale);
+            else
+               renderVertex(SelectedItemVertex, v, j, mCurrentScale);
+         }
+         mNewItem->deleteVert(mNewItem->getVertCount() - 1); 
+
+      }
+
+      // Since we're not constructing a barrier, if there are any barriers or lineItems selected, 
+      // get the width for display at bottom of dock
+      else  
+      {
+         fillVector.clear();
+         getGame()->getEditorDatabase()->findObjects((TestFunc)isLineItemType, fillVector);
+
+         for(S32 i = 0; i < fillVector.size(); i++)
+         {
+            LineItem *obj = dynamic_cast<LineItem *>(fillVector[i]);   // Walls are a subclass of LineItem, so this will work for both
+
+            if(obj && (obj->isSelected() || (obj->isLitUp() && obj->isVertexLitUp(NONE))))
+            {
+               width = (F32)obj->getWidth();
+               break;
+            }
          }
       }
-   }
+
+      // Draw map items (teleporters, etc.) that are being dragged  (above the dock).  But don't draw walls here, or
+      // we'll lose our wall centernlines.
+      if(mDraggingObjects)
+         for(S32 i = 0; i < objList->size(); i++)
+         {
+            EditorObject *obj = objList->get(i);
+            if(obj->isSelected() && !isWallType(obj->getObjectTypeNumber()))    // Object is selected and is not a wall
+               obj->renderInEditor(mCurrentScale, mSnapVertexIndex, false, mPreviewMode, mShowMode);
+         }
+
+      // Render our snap vertex as a hollow magenta box
+      if(!mPreviewMode && mSnapObject && mSnapObject->isSelected() && mSnapVertexIndex != NONE)      
+         renderVertex(SnappingVertex, mSnapObject->getVert(mSnapVertexIndex), NO_NUMBER, mCurrentScale/*, alpha*/);  
+
+    glPopMatrix(); 
+
 
    if(mPreviewMode)
       renderReferenceShip();
    else
       renderDock(width);
-
-   // Draw map items (teleporters, etc.) that are being dragged  (above the dock).  But don't draw walls here, or
-   // we'll lose our wall centernlines.
-   if(mDraggingObjects)
-      for(S32 i = 0; i < objList->size(); i++)
-      {
-         EditorObject *obj = objList->get(i);
-         if(obj->isSelected() && !isWallType(obj->getObjectTypeNumber()))    // Object is selected and is not a wall
-            obj->renderInEditor(mCurrentScale, mCurrentOffset, mSnapVertexIndex, false, mPreviewMode, mShowMode);
-      }
-
-   // Render our snap vertex as a hollow magenta box
-   if(!mPreviewMode && mSnapObject && mSnapObject->isSelected() && mSnapVertexIndex != NONE)      
-      renderVertex(SnappingVertex, mSnapObject->getVert(mSnapVertexIndex) * mCurrentScale + mCurrentOffset, NO_NUMBER/*, alpha*/);  
-
 
    if(mDragSelecting)      // Draw box for selecting items
    {
@@ -1705,6 +1661,19 @@ void EditorUserInterface::render()
       glEnd();
    }
 
+
+   // Render dock items
+   if(!mPreviewMode)
+      for(S32 i = 0; i < mDockItems.size(); i++)
+      {
+         mDockItems[i]->renderInEditor(mCurrentScale, mSnapVertexIndex, false, false, mShowMode);
+         mDockItems[i]->setLitUp(false);
+      }
+
+   if(disableBlending)
+      glDisable(GL_BLEND);
+
+
    // Render messages at bottom of screen
    if(mouseOnDock())    // On the dock?  If so, render help string if hovering over item
    {
@@ -1716,7 +1685,7 @@ void EditorUserInterface::render()
 
          const char *helpString = mDockItems[hoverItem]->getEditorHelpString();
 
-         glColor3f(.1f, 1, .1f);
+         glColor(Colors::green);
 
          // Center string between left side of screen and edge of dock
          S32 x = (S32)(gScreenInfo.getGameCanvasWidth() - horizMargin - DOCK_WIDTH - getStringWidth(15, helpString)) / 2;
@@ -1724,14 +1693,21 @@ void EditorUserInterface::render()
       }
    }
 
-   // Render dock items
-   if(!mPreviewMode)
-      for(S32 i = 0; i < mDockItems.size(); i++)
-      {
-         mDockItems[i]->renderInEditor(mCurrentScale, mCurrentOffset, mSnapVertexIndex, false, false, mShowMode);
-         mDockItems[i]->setLitUp(false);
-      }
+   renderSaveMessage();
+   renderWarnings();
 
+
+   glColor(Colors::cyan);
+   drawCenteredString(vertMargin, 14, getModeMessage(mShowMode));
+
+   renderTextEntryOverlay();
+
+   renderConsole();  // Rendered last, so it's always on top
+}
+
+
+void EditorUserInterface::renderSaveMessage()
+{
    if(mSaveMsgTimer.getCurrent())
    {
       F32 alpha = 1.0;
@@ -1752,7 +1728,11 @@ void EditorUserInterface::render()
       if(disableBlending)
          glDisable(GL_BLEND);
    }
+}
 
+
+void EditorUserInterface::renderWarnings()
+{
    if(mWarnMsgTimer.getCurrent())
    {
       F32 alpha = 1.0;
@@ -1775,7 +1755,6 @@ void EditorUserInterface::render()
          glDisable(GL_BLEND);
    }
 
-
    if(mLevelErrorMsgs.size() || mLevelWarnings.size())
    {
       S32 ypos = vertMargin + 50;
@@ -1796,13 +1775,6 @@ void EditorUserInterface::render()
          ypos += 25;
       }
    }
-
-   glColor(Colors::cyan);
-   drawCenteredString(vertMargin, 14, getModeMessage(mShowMode));
-
-   renderTextEntryOverlay();
-
-   renderConsole();  // Rendered last, so it's always on top
 }
 
 
@@ -2136,8 +2108,10 @@ void EditorUserInterface::findHitItemAndEdge()
    EditorObjectDatabase *editorDb = getGame()->getEditorDatabase();
    editorDb->findObjects((TestFunc)isAnyObjectType, fillVector, cursorRect);
 
+   Point mouse = convertCanvasToLevelCoord(mMousePos);      // Figure out where the mouse is in level coords
+
    // Do this in two passes -- the first we only consider selected items, the second pass will consider all targets.
-   // This will give priority to hitting vertices of selected items
+   // This will give priority to hitting vertices of selected items.
    for(S32 firstPass = 1; firstPass >= 0; firstPass--)     // firstPass will be true the first time through, false the second time
       for(S32 i = fillVector.size() - 1; i >= 0; i--)      // Go in reverse order to prioritize items drawn on top
       {
@@ -2152,7 +2126,7 @@ void EditorUserInterface::findHitItemAndEdge()
          if(mShowMode == ShowWallsOnly && !(isWallType(obj->getObjectTypeNumber())))   // Only select walls in CTRL-A mode
             continue;                                                                  // ...so if it's not a wall, proceed to next item
 
-         if(checkForVertexHit(obj) || checkForEdgeHit(obj)) 
+         if(checkForVertexHit(obj) || checkForEdgeHit(mouse, obj)) 
             return;                 
       }
 
@@ -2161,8 +2135,6 @@ void EditorUserInterface::findHitItemAndEdge()
    fillVector2.clear();
 
    wallDb->findObjects((TestFunc)isAnyObjectType, fillVector2, cursorRect);
-
-   Point mouse = convertCanvasToLevelCoord(mMousePos);
 
    for(S32 i = 0; i < fillVector2.size(); i++)
       if(checkForWallHit(mouse, fillVector2[i]))
@@ -2174,11 +2146,13 @@ void EditorUserInterface::findHitItemAndEdge()
    // If we're still here, it means we didn't find anything yet.  Make one more pass, and see if we're in any polys.
    // This time we'll loop forward, though I don't think it really matters.
    for(S32 i = 0; i < fillVector.size(); i++)
-     if(checkForInteriorHit(dynamic_cast<EditorObject *>(fillVector[i])))
+     if(checkForPolygonHit(mouse, dynamic_cast<EditorObject *>(fillVector[i])))
         return;
 }
 
 
+// Vertex is weird because we don't always do thing in level coordinates -- some of our hit computation is based on
+// absolute screen coordinates; some things, like wall vertices, are the same size at every zoom scale.  
 bool EditorUserInterface::checkForVertexHit(EditorObject *object)
 {
    F32 radius = object->getEditorRadius(mCurrentScale);
@@ -2200,29 +2174,32 @@ bool EditorUserInterface::checkForVertexHit(EditorObject *object)
 }
 
 
-bool EditorUserInterface::checkForEdgeHit(EditorObject *object)
+bool EditorUserInterface::checkForEdgeHit(const Point &point, EditorObject *object)
 {
    // Points have no edges, and walls are checked via another mechanism
    if(object->getGeomType() == geomPoint || isWallType(object->getObjectTypeNumber()))  
       return false;
 
    // Make a copy of the items vertices that we can add to in the case of a loop
+   // Note that it would be more efficient to find a way that doesn't involve this copy...
    Vector<Point> verts = *object->getOutline();    
 
    if(object->getGeomType() == geomPolygon)   // Add first point to the end to create last side on poly
       verts.push_back(verts.first());
 
-   Point p1 = convertLevelToCanvasCoord(object->getVert(0));
+   Point *p1, *p2;
    Point closest;
+
+   p1 = &object->getVert(0);
          
    for(S32 j = 0; j < verts.size() - 1; j++)
    {
-      Point p2 = convertLevelToCanvasCoord(verts[j+1]);
+      p2 = &verts[j+1];
             
-      if(findNormalPoint(mMousePos, p1, p2, closest))
+      if(findNormalPoint(point, *p1, *p2, closest))
       {
-         F32 distance = (mMousePos - closest).len();
-         if(distance < EDGE_HIT_RADIUS) 
+         F32 distance = (point - closest).len();
+         if(distance < EDGE_HIT_RADIUS / mCurrentScale) 
          {
             mItemHit = object;
             mEdgeHit = j;
@@ -2230,47 +2207,44 @@ bool EditorUserInterface::checkForEdgeHit(EditorObject *object)
             return true;
          }
       }
-      p1.set(p2);
+      p1 = p2;
    }
 
    return false;
 }
 
 
-bool EditorUserInterface::checkForWallHit(const Point &mouse, DatabaseObject *object)
+bool EditorUserInterface::checkForWallHit(const Point &point, DatabaseObject *object)
 {
    WallSegment *wallSegment = dynamic_cast<WallSegment *>(object);
    TNLAssert(wallSegment, "Expected a WallSegment!");
 
-   Vector<Point> *points = &wallSegment->triangulatedFillPoints;
-
-   for(S32 i = 0; i < points->size(); i += 3)     // Using traingulated fill may be a little clumsy, but it should be fast!
+   if(triangulatedFillContains(&wallSegment->triangulatedFillPoints, point))
    {
-      if(pointInTriangle(mouse, points->get(i), points->get(i + 1), points->get(i + 2)))
+      // Now that we've found a segment that our mouse is over, we need to find the wall object that it belongs to.  Chances are good
+      // that it will be one of the objects sitting in fillVector.
+      for(S32 i = 0; i < fillVector.size(); i++)
       {
-         // Now that we've found a segment that our mouse is over, we need to find the wall object that it belongs to.  Chances are good
-         // that it will be one of the objects sitting in fillVector.
-         for(S32 i = 0; i < fillVector.size(); i++)
+         if(isWallType(fillVector[i]->getObjectTypeNumber()))
          {
-            if(isWallType(fillVector[i]->getObjectTypeNumber()))
-            {
-               EditorObject *eobj = dynamic_cast<EditorObject *>(fillVector[i]);
+            EditorObject *eobj = dynamic_cast<EditorObject *>(fillVector[i]);
 
-               if(eobj->getSerialNumber() == wallSegment->getOwner())
-               {
-                  mItemHit = eobj;
-                  return true;
-               }
+            if(eobj->getSerialNumber() == wallSegment->getOwner())
+            {
+               mItemHit = eobj;
+               return true;
             }
          }
+      }
 
-         TNLAssert(false, "Should have found a wall.  Either the extents are wrong again, or the walls and their segments are out of sync.");
+      TNLAssert(false, "Should have found a wall.  Either the extents are wrong again, or the walls and their segments are out of sync.");
 
       /*   This code does a less efficient but more thorough job finding a wall that matches the segment we hit... if the above assert
            keeps going off, and we can't fix it, this code here should take care of the problem.  But using it is an admission of failure.
+           Another alternative is just to ignore the assertion and not worry -- user will probably never notice the problem anyway.
 
          EditorObjectDatabase *editorDb = getGame()->getEditorDatabase();
-   const Vector<EditorObject *> *fff = editorDb->getObjectList();
+         const Vector<EditorObject *> *fff = editorDb->getObjectList();
 
 
          logprintf("Failed to find wall %d -- looking deeper", hhh);
@@ -2288,25 +2262,15 @@ bool EditorUserInterface::checkForWallHit(const Point &mouse, DatabaseObject *ob
             }
          }
          logprintf("Not found!  %d",hhh); */
-      }
    }
 
-      
    return false;
 }
 
 
-bool EditorUserInterface::checkForInteriorHit(EditorObject *object)
+bool EditorUserInterface::checkForPolygonHit(const Point &point, EditorObject *object)
 {
-   if(object->getGeomType() != geomPolygon)
-      return false;
-
-   Vector<Point> verts;
-
-   for(S32 j = 0; j < object->getVertCount(); j++)
-      verts.push_back(convertLevelToCanvasCoord(object->getVert(j)));
-
-   if(PolygonContains2(verts.address(), verts.size(), mMousePos))
+   if(object->getGeomType() == geomPolygon && triangulatedFillContains(object->getFill(), point))
    {
       mItemHit = object;
       return true;
