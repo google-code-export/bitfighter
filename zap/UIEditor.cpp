@@ -998,7 +998,7 @@ void EditorUserInterface::onActivate()
    loadLevel();
    setCurrentTeam(0);
 
-   mSnapDisabled = false;      // Hold [space] to temporarily disable snapping
+   mSnapContext = FULL_SNAPPING;      // Hold [space/shift+space] to temporarily disable snapping
 
    // Reset display parameters...
    mDragSelecting = false;
@@ -1074,7 +1074,7 @@ void EditorUserInterface::onDisplayModeChange()
 
 Point EditorUserInterface::snapPointToLevelGrid(Point const &p)
 {
-   if(mSnapDisabled)
+   if(mSnapContext != FULL_SNAPPING)
       return p;
 
    // First, find a snap point based on our grid
@@ -1102,7 +1102,7 @@ Point EditorUserInterface::snapPoint(Point const &p, bool snapWhileOnDock)
          if(objList->get(i)->isSelected())
             objList->get(i)->setSnapped(false);
    
-      // Turrets & forcefields: Snap to a wall edge as first (and only) choice
+      // Turrets & forcefields: Snap to a wall edge as first (and only) choice, regardless of whether snapping is on or off
       if(isEngineeredType(mSnapObject->getObjectTypeNumber()))
       {
          EngineeredItem *engrObj = dynamic_cast<EngineeredItem *>(mSnapObject);
@@ -1111,41 +1111,42 @@ Point EditorUserInterface::snapPoint(Point const &p, bool snapWhileOnDock)
       }
    }
 
-   F32 maxSnapDist = 2 / (mCurrentScale * mCurrentScale);
-   F32 minDist = maxSnapDist;
+   F32 minDist = 255 / mCurrentScale;    // 255 just seems to work well, not related to gridsize; only has an impact when grid is off
 
-   // Where will we be snapping things?
-   bool snapToWallCorners = getSnapToWallCorners();
-   bool snapToLevelGrid = !mSnapDisabled;
-
-   if(snapToLevelGrid)     // Lowest priority
+   if(mSnapContext == FULL_SNAPPING)     // Only snap to grid when full snapping is enabled; lowest priority snaps go first
    {
       snapPoint = snapPointToLevelGrid(p);
       minDist = snapPoint.distSquared(p);
    }
 
-   // Now look for other things we might want to snap to
-   for(S32 i = 0; i < objList->size(); i++)
+   if(mSnapContext != NO_SNAPPING)
    {
-      EditorObject *obj = objList->get(i);
-      // Don't snap to selected items or items with selected verts
-      if(obj->isSelected() || obj->anyVertsSelected())    
-         continue;
+      // Where will we be snapping things?
+      bool snapToWallCorners = getSnapToWallCorners();
 
-      for(S32 j = 0; j < obj->getVertCount(); j++)
+      // Now look for other things we might want to snap to
+      for(S32 i = 0; i < objList->size(); i++)
       {
-         F32 dist = obj->getVert(j).distSquared(p);
-         if(dist < minDist)
+         EditorObject *obj = objList->get(i);
+         // Don't snap to selected items or items with selected verts (keeps us from snapping to ourselves, which is usually trouble)
+         if(obj->isSelected() || obj->anyVertsSelected())    
+            continue;
+
+         for(S32 j = 0; j < obj->getVertCount(); j++)
          {
-            minDist = dist;
-            snapPoint.set(obj->getVert(j));
+            F32 dist = obj->getVert(j).distSquared(p);
+            if(dist < minDist)
+            {
+               minDist = dist;
+               snapPoint.set(obj->getVert(j));
+            }
          }
       }
-   }
 
-   // Search for a corner to snap to - by using wall edges, we'll also look for intersections between segments
-   if(snapToWallCorners)
-      checkCornersForSnap(p, wallSegmentManager->mWallEdges, minDist, snapPoint);
+      // Search for a corner to snap to - by using wall edges, we'll also look for intersections between segments
+      if(snapToWallCorners)
+         checkCornersForSnap(p, wallSegmentManager->mWallEdges, minDist, snapPoint);
+   }
 
    return snapPoint;
 }
@@ -1153,7 +1154,7 @@ Point EditorUserInterface::snapPoint(Point const &p, bool snapWhileOnDock)
 
 bool EditorUserInterface::getSnapToWallCorners()
 {
-   return !mSnapDisabled && mDraggingObjects && !(isWallType(mSnapObject->getObjectTypeNumber()));
+   return mSnapContext != NO_SNAPPING && mDraggingObjects && !(isWallType(mSnapObject->getObjectTypeNumber()));
 }
 
 
@@ -1265,8 +1266,8 @@ void EditorUserInterface::renderGrid()
    if(mPreviewMode)     // No grid in preview mode
       return;   
 
-   F32 colorFact = mSnapDisabled ? .5f : 1;
-   
+   F32 colorFact = (mSnapContext == FULL_SNAPPING) ? 1 : 0.5;
+
    // Minor grid lines
    for(S32 i = 1; i >= 0; i--)
    {
@@ -1908,12 +1909,12 @@ const Color *EditorUserInterface::getTeamColor(S32 team)
 
 void EditorUserInterface::renderSnapTarget(const Point &target)
 {
-   glLineWidth(gLineWidth1);
+   //glLineWidth(gLineWidth1);
 
-   glColor(Colors::magenta);
-   drawCircle(target, 5);
+   //glColor(Colors::magenta);
+   //drawFilledSquare(target, 2);
 
-   glLineWidth(gDefaultLineWidth);
+   //glLineWidth(gDefaultLineWidth);
 }
 
 
@@ -2553,7 +2554,6 @@ void EditorUserInterface::onMouseDragged()
    }
 
    mDraggingObjects = true;
-
 
 
    Point delta;
@@ -3519,46 +3519,48 @@ void EditorUserInterface::onKeyDown(InputCode inputCode, char ascii)
       playBoop();
       getUIManager()->getGameParamUserInterface()->activate();
    }
-   else if(inputString == "F2")        // Team Editor Menu
+   else if(inputString == "F2")               // Team Editor Menu
    {
       getUIManager()->getTeamDefUserInterface()->activate();
       playBoop();
    }
-   else if(inputString == "T")               // Teleporter
+   else if(inputString == "T")                // Teleporter
       insertNewItem(TeleportTypeNumber);
-   else if(inputString == "P")               // Speed Zone
+   else if(inputString == "P")                // Speed Zone
       insertNewItem(SpeedZoneTypeNumber);
-   else if(inputString == "G")               // Spawn
+   else if(inputString == "G")                // Spawn
       insertNewItem(ShipSpawnTypeNumber);
-   else if(inputString == "Ctrl+B")          // Spy Bug
+   else if(inputString == "Ctrl+B")           // Spy Bug
       insertNewItem(SpyBugTypeNumber);
-   else if(inputString == "B")               // Repair
+   else if(inputString == "B")                // Repair
       insertNewItem(RepairItemTypeNumber);
-   else if(inputString == "Y")               // Turret
+   else if(inputString == "Y")                // Turret
       insertNewItem(TurretTypeNumber);
-   else if(inputString == "M")               // Mine
+   else if(inputString == "M")                // Mine
       insertNewItem(MineTypeNumber);
-   else if(inputString == "F")               // Force Field
+   else if(inputString == "F")                // Force Field
       insertNewItem(ForceFieldProjectorTypeNumber);
    else if(inputString == "Backspace" || inputString == "Del")
       deleteSelection(false);
-   else if(inputCode == keyHELP)             // Turn on help screen
+   else if(inputCode == keyHELP)              // Turn on help screen
    {
       getGame()->getUIManager()->getEditorInstructionsUserInterface()->activate();
       playBoop();
    }
-   else if(inputCode == keyOUTGAMECHAT)     // Turn on Global Chat overlay
+   else if(inputCode == keyOUTGAMECHAT)      // Turn on Global Chat overlay
       getGame()->getUIManager()->getChatUserInterface()->activate();
-   else if(inputCode == keyDIAG)            // Turn on diagnostic overlay
+   else if(inputCode == keyDIAG)             // Turn on diagnostic overlay
       getGame()->getUIManager()->getDiagnosticUserInterface()->activate();
    else if(inputCode == KEY_ESCAPE)          // Activate the menu
    {
       playBoop();
       getGame()->getUIManager()->getEditorMenuUserInterface()->activate();
    }
-   else if(inputString == "Space")
-      mSnapDisabled = true;
-   else if(inputString == "Tab")
+   else if(inputString == "Space")           // No snapping to grid, but still to other things
+      mSnapContext = NO_GRID_SNAPPING;
+   else if(inputString == "Shift+Space")     // Completely disable snapping
+      mSnapContext = NO_SNAPPING;
+   else if(inputString == "Tab")             // Turn on preview mode
       mPreviewMode = true;
 }
 
@@ -3684,7 +3686,7 @@ void EditorUserInterface::onKeyUp(InputCode inputCode)
          mOut = false;
          break;
       case KEY_SPACE:
-         mSnapDisabled = false;
+         mSnapContext = FULL_SNAPPING;
          break;
       case KEY_TAB:
          mPreviewMode = false;
@@ -3883,6 +3885,7 @@ void EditorUserInterface::setSaveMessage(string msg, bool savedOK)
    mSaveMsgTimer = saveMsgDisplayTime;
    mSaveMsgColor = (savedOK ? Colors::green : Colors::red);
 }
+
 
 void EditorUserInterface::setWarnMessage(string msg1, string msg2)
 {
