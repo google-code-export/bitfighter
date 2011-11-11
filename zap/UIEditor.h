@@ -141,7 +141,13 @@ private:
 
    S32 mCurrentTeam;
 
-   bool mSnapDisabled;
+   enum SnapContext {
+      FULL_SNAPPING,
+      NO_GRID_SNAPPING,
+      NO_SNAPPING
+   };
+
+   SnapContext mSnapContext;
 
    ShowMode mShowMode;
 
@@ -192,7 +198,6 @@ private:
 
    bool mScrollWithMouse;           // Make use of scrolling using middle mouse position
    Point mScrollWithMouseLocation;
-
    bool showMinorGridLines();
    void renderGrid();               // Draw background snap grid
    void renderDock(F32 width);
