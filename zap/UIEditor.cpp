@@ -27,6 +27,8 @@
 #include "UIEditorMenus.h"    // For access to menu methods such as setObject
 #include "EditorObject.h"
 
+#include "Cursors.h"         // For various editor cursor
+
 #include "UINameEntry.h"
 #include "UIEditorInstructions.h"
 #include "UIChat.h"
@@ -1011,6 +1013,8 @@ void EditorUserInterface::onActivate()
    mPreviewMode = false;
    entryMode = EntryNone;
 
+   SDL_SetCursor(Cursor::getDefault());
+
    mItemToLightUp = NULL;    
 
    mSaveMsgTimer = 0;
@@ -1033,6 +1037,7 @@ void EditorUserInterface::onDeactivate()
 void EditorUserInterface::onReactivate()     // Run when user re-enters the editor after testing, among other things
 {
    mDraggingObjects = false;  
+   SDL_SetCursor(Cursor::getDefault());
 
    if(mWasTesting)
    {
@@ -2496,12 +2501,12 @@ void EditorUserInterface::onMouseMoved()
    if(mItemToLightUp)
       mItemToLightUp->setLitUp(true);
 
-   bool showMoveCursor = (mItemHit || mVertexHit != NONE || mEdgeHit != NONE || mDockItemHit);
+   //bool showMoveCursor = (mItemHit || mVertexHit != NONE || mEdgeHit != NONE || mDockItemHit);
 
 
    findSnapVertex();
-
-   SDL_ShowCursor((showMoveCursor && !mPreviewMode) ? SDL_ENABLE : SDL_ENABLE);     // ???
+   SDL_ShowCursor(SDL_ENABLE);
+   //SDL_ShowCursor((showMoveCursor && !mPreviewMode) ? SDL_ENABLE : SDL_ENABLE);     // ???
 }
 
 
@@ -2557,6 +2562,7 @@ void EditorUserInterface::onMouseDragged()
    }
 
    mDraggingObjects = true;
+   SDL_SetCursor(Cursor::getSpray());
 
 
    Point delta;
@@ -3335,10 +3341,12 @@ void EditorUserInterface::onKeyDown(InputCode inputCode, char ascii)
       {
          clearSelection();
          mDraggingDockItem = mDockItemHit;
+         SDL_SetCursor(Cursor::getSpray());
       }
       else                 // Mouse is not on dock
       {
          mDraggingDockItem = NULL;
+         SDL_SetCursor(Cursor::getDefault());
 
          // rules for mouse down:
          // if the click has no shift- modifier, then
@@ -3752,6 +3760,7 @@ void EditorUserInterface::onKeyUp(InputCode inputCode)
 void EditorUserInterface::onFinishedDragging()
 {
    mDraggingObjects = false;
+   SDL_SetCursor(Cursor::getDefault());
 
    // Dragged item off the dock, then back on  ==> nothing changed; restore to unmoved state, which was stored on undo stack
    if(mouseOnDock() && mDraggingDockItem != NULL)
