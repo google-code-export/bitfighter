@@ -28,9 +28,9 @@
 
 #include "tnlTypes.h"
 #include "Point.h"
-#include "SDL/SDL_opengl.h"
-#include "SDL/SDL_mouse.h"
 
+
+struct SDL_Cursor;
 
 namespace Zap 
 {
@@ -51,6 +51,7 @@ public:
    static void init();                    // Initialize all cursors
    static SDL_Cursor *getSpray();
    static SDL_Cursor *getDefault();
+   static SDL_Cursor *getTransparent();
 };
 
 }

@@ -1709,6 +1709,13 @@ void writeSkipList(CIniFile *ini, const Vector<string> *levelSkipList)
 //////////////////////////////////
 
 // Constructor
+FolderManager::FolderManager()
+{
+   // Do nothing
+}
+
+
+// Constructor
 FolderManager::FolderManager(const string &levelDir, const string &robotDir,     const string &sfxDir, const string &musicDir, 
                              const string &cacheDir, const string &iniDir,       const string &logDir, const string &screenshotDir, 
                              const string &luaDir,   const string &rootDataDir)
@@ -1823,52 +1830,6 @@ string FolderManager::resolveLevelDir(const string &levelDir)
 
    return "";
 }
-
-
-#ifdef false
-// WARNING: May not still work...
-static void testLevelDirResolution(FolderManager *configDirs)
-{
-   // These need to exist!
-   // c:\temp\leveldir
-   // c:\temp\leveldir2\levels\leveldir
-   // For last test to work, need to run from folder that has no levels subdir
-
-   /* 
-   cd \temp
-   mkdir leveldir
-   mkdir leveldir2
-   cd leveldir2
-   mkdir levels
-   cd levels
-   mkdir leveldir
-   */
-   
-   // rootDataDir, levelDir, iniLevelDir
-   resolveLevelDir("c:/temp", "leveldir", "c:/ini/level/dir/");       // rootDataDir/levelDir
-   TNLAssertV(configDirs->levelDir == "c:/temp/leveldir", ("Bad leveldir: %s", configDirs->levelDir.c_str()));
-
-   resolveLevelDir("c:/temp/leveldir2", "leveldir", "c:/ini/level/dir/");       // rootDataDir/levels/levelDir
-   TNLAssertV(configDirs->levelDir == "c:/temp/leveldir2/levels/leveldir", ("Bad leveldir: %s", configDirs->levelDir.c_str()));
-
-   resolveLevelDir("c:/temp/leveldir2", "c:/temp/leveldir", "c:/ini/level/dir/");       // levelDir
-   TNLAssertV(configDirs->levelDir == "c:/temp/leveldir", ("Bad leveldir: %s", configDirs->levelDir.c_str()));
-
-   resolveLevelDir("c:/temp/leveldir2", "nosuchfolder", "c:/ini/level/dir/");       // rootDataDir/levels
-   TNLAssertV(configDirs->levelDir == "c:/temp/leveldir2/levels", ("Bad leveldir: %s", configDirs->levelDir.c_str()));
-
-   resolveLevelDir("c:/temp/nosuchfolder", "leveldir", "c:/temp/");       // iniLevelDir/levelDir
-   TNLAssertV(configDirs->levelDir == "c:/temp/leveldir", ("Bad leveldir: %s", configDirs->levelDir.c_str()));
-
-   resolveLevelDir("c:/temp/nosuchfolder", "nosuchfolder", "c:/temp");       // iniLevelDir
-   TNLAssertV(configDirs->levelDir == "c:/temp", ("Bad leveldir: %s", configDirs->levelDir.c_str()));
-
-   resolveLevelDir("c:/temp/nosuchfolder", "nosuchfolder", "c:/does/not/exist");       // total failure
-   TNLAssertV(configDirs->levelDir == 0, "", ("Bad leveldir: %s", configDirs->levelDir.c_str()));
-
-   printf("passed leveldir resolution tests!\n");
-}
-#endif
 
 
 // Figuring out where the levels are stored is so complex, it needs its own function!
@@ -2002,6 +1963,32 @@ string FolderManager::findBotFile(const string &filename) const
 ////////////////////////////////////////
 ////////////////////////////////////////
 
+CmdLineSettings::CmdLineSettings()
+{
+   init();
+}
+
+
+void CmdLineSettings::init()
+{
+   dedicatedMode = false;
+
+   loss = 0;
+   lag = 0;
+   stutter = 0;
+   forceUpdate = false;
+   maxPlayers = -1;
+   displayMode = DISPLAY_MODE_UNKNOWN;
+   winWidth = -1;
+   xpos = -9999;
+   ypos = -9999;
+};
+
+
+////////////////////////////////////////
+////////////////////////////////////////
+
+
 // Returns display-friendly mode designator like "Keyboard" or "Joystick 1"
 string IniSettings::getInputMode()
 {
@@ -2011,47 +1998,6 @@ string IniSettings::getInputMode()
    else
 #endif
       return "Keyboard";
-}
-
-
-////////////////////////////////////////
-////////////////////////////////////////
-
-// Cmd Line processing callbacks
-
-
-static void paramRootDataDir(GameSettings *settings, const Vector<string> &words)
-{
-   //settings->getCmdLineSettings()->dirs.rootDataDir = words[0];
-
-   FolderManager *folderManager = settings->getFolderManager();
-   folderManager->rootDataDir = words[0];             // Also sock it away here
-}
-
-
-extern void transferResource(GameSettings *settings, const string &addr, const string &pw, const string &fileName, const string &resourceType, bool sending);
-
-static void paramGetRes(GameSettings *settings, const Vector<string> &words)
-{
-   transferResource(settings, words[0], words[1], words[2], words[3], false);
-}
-
-static void paramSendRes(GameSettings *settings, const Vector<string> &words)
-{
-   transferResource(settings, words[0], words[1], words[2], words[3], true);
-}
-
-
-
-
-static void paramHelp(GameSettings *settings, const Vector<string> &words);    // Forward declare this one here; it is defined down below
-
-
-static void paramUseStick(GameSettings *settings, const Vector<string> &words)
-{
-#ifndef ZAP_DEDICATED
-   Joystick::UseJoystickNumber = stoi(words[0]) - 1;  // zero-indexed     //  TODO: should be part of settings
-#endif
 }
 
 
