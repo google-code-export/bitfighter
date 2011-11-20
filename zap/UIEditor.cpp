@@ -1271,7 +1271,7 @@ void EditorUserInterface::renderGrid()
    if(mPreviewMode)     // No grid in preview mode
       return;   
 
-   F32 colorFact = (mSnapContext == FULL_SNAPPING) ? 1 : 0.5;
+   F32 colorFact = (mSnapContext == FULL_SNAPPING) ? 1 : 0.5f;
 
    // Minor grid lines
    for(S32 i = 1; i >= 0; i--)
@@ -1572,7 +1572,7 @@ void EditorUserInterface::render()
          EditorObject *editorObj = dynamic_cast<EditorObject *>(fillVector[i]);
 
          if(i != 0 && editorObj->getTeam() != prevTeam)
-            glTranslatef(0, 0, 0.05);
+            glTranslatef(0, 0, 0.05f);
          prevTeam = editorObj->getTeam();
 
          Point pos = editorObj->getVert(0);
@@ -2505,8 +2505,7 @@ void EditorUserInterface::onMouseMoved()
 
 
    findSnapVertex();
-   SDL_ShowCursor(SDL_ENABLE);
-   //SDL_ShowCursor((showMoveCursor && !mPreviewMode) ? SDL_ENABLE : SDL_ENABLE);     // ???
+   SDL_SetCursor(Cursor::getDefault());
 }
 
 
@@ -3196,9 +3195,9 @@ void EditorUserInterface::onKeyDown(InputCode inputCode, char ascii)
    // Mouse wheel zooms in and out
 
    else if(inputCode == MOUSE_WHEEL_UP)
-      zoom(0.2);
+      zoom(0.2f);
    else if(inputCode == MOUSE_WHEEL_DOWN)
-      zoom(-0.2);
+      zoom(-0.2f);
    else if(inputCode == MOUSE_MIDDLE)     // Click wheel to drag
    {
       mScrollWithMouseLocation = mMousePos;
@@ -3484,7 +3483,7 @@ void EditorUserInterface::onKeyDown(InputCode inputCode, char ascii)
          mShowMode = (ShowMode) 0;        // First mode
 
       if(mShowMode == ShowWallsOnly && !mDraggingObjects)
-         SDL_ShowCursor(SDL_ENABLE);
+         SDL_SetCursor(Cursor::getDefault());
 
       populateDock();   // Different modes have different items
 
@@ -4033,7 +4032,7 @@ void EditorUserInterface::testLevelStart()
    string tmpFileName = mEditFileName;
    mEditFileName = "editor.tmp";
 
-   SDL_ShowCursor(SDL_DISABLE);        // Turn off cursor
+   SDL_SetCursor(Cursor::getTransparent());  // Turn off cursor
    bool nts = mNeedToSave;             // Save these parameters because they are normally reset when a level is saved.
    S32 auul = mAllUndoneUndoLevel;     // Since we're only saving a temp copy, we really shouldn't reset them...
 
@@ -4161,7 +4160,7 @@ void EditorMenuUserInterface::setupMenus()
 
 void EditorMenuUserInterface::onEscape()
 {
-   SDL_ShowCursor(SDL_DISABLE);
+   SDL_SetCursor(Cursor::getTransparent());
    getUIManager()->reactivatePrevUI();
 }
 

@@ -1079,6 +1079,12 @@ S32 LuaRobot::copyMoveFromObject(lua_State *L)
 }
 
 
+Ship *LuaRobot::getObj()
+{
+   return thisRobot;
+}
+
+
 const char LuaRobot::className[] = "LuaRobot";     // This is the class name as it appears to the Lua scripts
 
 
@@ -1090,6 +1096,20 @@ bool EventManager::anyPending = false;
 Vector<lua_State *> EventManager::subscriptions[EventTypes];
 Vector<lua_State *> EventManager::pendingSubscriptions[EventTypes];
 Vector<lua_State *> EventManager::pendingUnsubscriptions[EventTypes];
+
+// C++ constructor
+EventManager::EventManager()
+{
+   // Do nothing
+}
+
+
+// Lua constructor
+EventManager::EventManager(lua_State *L)
+{
+   // Do nothing
+}
+
 
 void EventManager::subscribe(lua_State *L, EventType eventType)
 {
@@ -1366,7 +1386,7 @@ Robot::~Robot()
 
    // Server only from here on down
 
-   if(getGame()->getGameType())
+   if(getGame() && getGame()->getGameType())
       getGame()->getGameType()->serverRemoveClient(mClientInfo.get());
 
 
@@ -1384,6 +1404,12 @@ Robot::~Robot()
    delete mPlayerInfo;
 
    logprintf(LogConsumer::LogLuaObjectLifecycle, "Robot terminated [%s] (%d)", mScriptName.c_str(), robots.size());
+}
+
+
+lua_State *Robot::getL()
+{
+   return L;
 }
 
 
@@ -1501,6 +1527,8 @@ string Robot::runGetName()
       logError("Exception encountered trying to retrieve robot name: %s.  Aborting script.", e.what());
       return "";
    }
+
+   return "";
 }
 
 
@@ -1850,6 +1878,59 @@ boost::shared_ptr<ClientInfo> Robot::getClientInfo()
    return mClientInfo;
 }
 
+
+bool Robot::isRobot()
+{
+   return true;
+}
+
+
+LuaPlayerInfo *Robot::getPlayerInfo()
+{
+   return mPlayerInfo;
+}
+
+
+S32 Robot::getScore()
+{
+   return mScore;
+}
+
+
+F32 Robot::getRating()
+{
+   return mTotalScore == 0 ? 0.5f : (F32)mScore / (F32)mTotalScore;
+}
+
+
+const char *Robot::getScriptName()
+{
+   return mScriptName.c_str();
+}
+
+
+void Robot::setPaused(bool isPaused)
+{
+   mIsPaused = isPaused;
+}
+
+
+void Robot::togglePauseStatus()
+{
+   mIsPaused = !mIsPaused;
+}
+
+
+bool Robot::isPaused()
+{
+   return mIsPaused;
+}
+
+
+void Robot::addSteps(S32 steps)
+{
+   mStepCount = steps * robots.size();
+}
 
 
 };
