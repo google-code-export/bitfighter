@@ -1838,6 +1838,8 @@ void Robot::idle(GameObject::IdleCallPath path)
          mCurrentMove.moduleSecondary[i] = false;
       }
 
+      tickTimer(deltaT);
+
       if(!mIsPaused || mStepCount > 0)
       {
          if(mStepCount > 0)
@@ -1851,24 +1853,31 @@ void Robot::idle(GameObject::IdleCallPath path)
    }
 
    Parent::idle(path);     // All client paths can use this idle
+}
 
-   
-//--
-//-- This will be called every tick... update timer, then call robot's onTick() method if it exists
-//--
-//function _onTick(self, deltaT)
-//   Timer:_tick(deltaT)     -- Really should only be called once for all bots
-//
-//   if _declared("onTick") and type(onTick) == "function" then
-//      onTick(self, deltaT)
-//   end
-//
-//   -- TODO: Here for compatibility with older bots.  Remove this in a later release
-//   if _declared("getMove") and type(getMove) == "function" then
-//      getMove(self, deltaT)
-//   end
-//
-//end
+
+// Advance timers by deltaT
+void Robot::tickTimer(U32 deltaT)
+{
+   try
+   {
+      lua_getglobal(L, "_tickTimer");   
+      Lunar<LuaRobot>::push(L, this->mLuaRobot);
+
+      lua_pushnumber(L, deltaT);    // Pass the time elapsed since we were last here
+
+      if (lua_pcall(L, 2, 0, 0) != 0)
+         throw LuaException(lua_tostring(L, -1));
+   }
+   catch(LuaException &e)
+   {
+      logError("Robot error running _tickTimer(): %s.  Shutting robot down.", e.what());
+
+      // Safer than "delete this" -- adds bot to delete list, where it will be deleted later (or at least outside this construct)
+      deleteObject();
+
+      return;
+   }
 }
 
 
