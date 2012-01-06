@@ -316,11 +316,7 @@ void MenuUserInterface::render()
       if(getUIManager()->getGameUserInterface())
          getUIManager()->getGameUserInterface()->render();
 
-      glColor(Colors::black, 0.6f);
-
-      TNLAssert(glIsEnabled(GL_BLEND), "Why is blending off here?");
-
-      drawRect(0, 0, canvasWidth, canvasHeight, GL_POLYGON);
+      dimUnderlyingUI();
    }
 
    glColor(Colors::white);    
