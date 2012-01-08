@@ -524,6 +524,13 @@ bool BotNavMeshZone::buildBotMeshZones(ServerGame *game, bool triangulateZones)
    Rect bounds = game->getWorldExtents();
    bounds.expandToInt(Point(LEVEL_ZONE_BUFFER, LEVEL_ZONE_BUFFER));      // Provide a little breathing room
 
+   // Make sure level isn't too big for zone generation, which uses 16 bit ints
+   if(bounds.getHeight() >= (F32)U16_MAX || bounds.getWidth() >= (F32)U16_MAX)
+   {
+      logprintf(LogConsumer::LogLevelError, "Level too big for zone generation! (max size in either dimension is %d)", U16_MAX);
+      return false;
+   }
+
    Vector<F32> holes;
    Vector<Vector<Point> > solution;
 
@@ -705,13 +712,10 @@ void BotNavMeshZone::buildBotNavMeshZoneConnections(ServerGame *game)
    NeighboringZone neighbor;
 
    // Figure out which zones are adjacent to which, and find the "gateway" between them
-   for(S32 i = 0; i < zones.size(); i++)
+   for(S32 i = 0; i < zones.size() - 1; i++)
    {
-      for(S32 j = i; j < zones.size(); j++)
+      for(S32 j = i + 1; j < zones.size(); j++)
       {
-         if(i == j)
-            continue;      // Don't check self...
-
          // Do zones i and j touch?  First a quick and dirty bounds check:
          if(!zones[i]->getExtent().intersectsOrBorders(zones[j]->getExtent()))
             continue;
