@@ -52,6 +52,8 @@ protected:
       FirstFreeMask   = Parent::FirstFreeMask << 3
    };
 
+   static bool mInitial;       // True on initial unpack, false thereafter
+
 public:
    Item(const Point &pos = Point(0,0), F32 radius = 1);      // Constructor
 
@@ -87,70 +89,6 @@ public:
    virtual S32 getShip(lua_State *L);
    virtual GameObject *getGameObject();            // Return the underlying GameObject
 };
-
-
-////////////////////////////////////////
-////////////////////////////////////////
-
-class CoreItem : public Item
-{
-
-typedef Item Parent;
-
-private:
-   static const U32 CoreStartWidth = 50;
-   static const U32 CoreMinWidth = 10;
-   static const U32 CoreStartingHitPoints = 15;
-
-   bool hasExploded;
-   U32 mHitPoints;
-
-public:
-   CoreItem();     // Constructor  
-   CoreItem *clone() const;
-
-   void renderItem(const Point &pos);
-   bool getCollisionPoly(Vector<Point> &polyPoints) const;
-   bool getCollisionCircle(U32 state, Point &center, F32 &radius) const;
-   bool collide(GameObject *otherObject);
-
-   F32 calcCoreWidth() const;
-
-   void damageObject(DamageInfo *theInfo);
-   U32 packUpdate(GhostConnection *connection, U32 updateMask, BitStream *stream);
-   void unpackUpdate(GhostConnection *connection, BitStream *stream);
-   void onItemExploded(Point pos);
-
-   bool processArguments(S32 argc, const char **argv, Game *game);
-   string toString(F32 gridSize) const;
-
-   void setRadius(F32 radius);
-
-   TNL_DECLARE_CLASS(CoreItem);
-
-   ///// Editor methods
-   const char *getEditorHelpString();
-   const char *getPrettyNamePlural();
-   const char *getOnDockName();
-   const char *getOnScreenName();
-
-   F32 getEditorRadius(F32 currentScale);
-   void renderDock();
-
-   ///// Lua interface
-public:
-   CoreItem(lua_State *L);    // Constructor
-
-   static const char className[];
-
-   static Lunar<CoreItem>::RegType methods[];
-
-   S32 getClassID(lua_State *L);
-
-   S32 getHitPoints(lua_State *L);   // Index of current asteroid size (0 = initial size, 1 = next smaller, 2 = ...) (returns int)
-   void push(lua_State *L);
-};
-
 
 
 };
