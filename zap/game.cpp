@@ -175,6 +175,13 @@ bool ClientInfo::getNeedToCheckAuthenticationWithMaster()
 }
 
 
+// Check if player is "on hold" due to inactivity; bots are never on hold.  Server only!
+bool ClientInfo::isSpawnDelayed()
+{
+   return mIsRobot ? false : getConnection()->getTimeSinceLastMove() > 20000;    // 20 secs
+}
+
+
 void ClientInfo::resetLoadout()
 {
    mLoadout.clear();
@@ -1226,6 +1233,7 @@ void Game::checkConnectionToMaster(U32 timeDelta)
             {
                if(mNameToAddressThread->mAddress.isValid())
                {
+                  TNLAssert(!mConnectionToMaster, "Already have connection to master!");
                   mConnectionToMaster = new MasterServerConnection(this);
                   mConnectionToMaster->connect(mNetInterface, mNameToAddressThread->mAddress);
                }
