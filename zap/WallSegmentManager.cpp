@@ -24,23 +24,15 @@
 //------------------------------------------------------------------------------------
 
 #include "WallSegmentManager.h"
-//#include "barrier.h"
-#include "BotNavMeshZone.h"
 #include "gameObjectRender.h"
-#include "GeomUtils.h"              // For polygon triangulation
 #include "EngineeredItem.h"         // For forcefieldprojector def
-#include "gameType.h"               // For BarrierRec struct
 #include "game.h"
-#include "config.h"
-#include "stringUtils.h"
-
 
 #ifndef ZAP_DEDICATED 
-#include "UI.h"  // for glColor(Color)
-#include "SDL/SDL_opengl.h"
+#   include "UI.h"  // for glColor(Color)
+#   include "SDL/SDL_opengl.h"
 #endif
 
-#include <cmath>                    // C++ version of this headers includes float overloads
 
 using namespace TNL;
 
@@ -52,8 +44,8 @@ namespace Zap
 WallSegmentManager::WallSegmentManager()
 {
    // These deleted in the destructor
-   mWallSegmentDatabase = new GridDatabase();      
-   mWallEdgeDatabase = new GridDatabase();
+   mWallSegmentDatabase = new GridDatabase(false);      
+   mWallEdgeDatabase = new GridDatabase(false);
 }
 
 
