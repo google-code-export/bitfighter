@@ -24,22 +24,18 @@
 //------------------------------------------------------------------------------------
 
 #include "barrier.h"
+#include "WallSegmentManager.h"
 #include "BotNavMeshZone.h"
 #include "gameObjectRender.h"
-#include "GeomUtils.h"              // For polygon triangulation
-//#include "EngineeredItem.h"         // For forcefieldprojector def
 #include "gameType.h"               // For BarrierRec struct
 #include "game.h"
 #include "config.h"
 #include "stringUtils.h"
-#include "WallSegmentManager.h"
 
 #ifndef ZAP_DEDICATED 
-//#   include "UI.h"  // for glColor(Color)
 #   include "SDL/SDL_opengl.h"
 #endif
 
-#include <cmath>                    // C++ version of this headers includes float overloads
 
 using namespace TNL;
 
@@ -60,6 +56,7 @@ bool loadBarrierPoints(const WallRec *barrier, Vector<Point> &points)
 
    return (points.size() >= 2);
 }
+
 
 ////////////////////////////////////////
 ////////////////////////////////////////
@@ -99,8 +96,6 @@ void WallRec::constructWalls(Game *theGame)
       }
    }
 }
-
-
 
 
 ////////////////////////////////////////
@@ -435,8 +430,8 @@ void WallItem::onGeomChanged()
    // Fill extendedEndPoints from the vertices of our wall's centerline, or from PolyWall edges
    processEndPoints();
 
-   WallSegmentManager *wallSegmentManager = getGame()->getWallSegmentManager();
    EditorObjectDatabase *editorDatabase = getGame()->getEditorDatabase();
+   WallSegmentManager *wallSegmentManager = editorDatabase->getWallSegmentManager();
 
    wallSegmentManager->computeWallSegmentIntersections(editorDatabase, this);    
    
@@ -566,7 +561,7 @@ void WallItem::setSelected(bool selected)
    Parent::setSelected(selected);
    
    // Find the associated segment(s) and mark them as selected (or not)
-   getGame()->getWallSegmentManager()->setSelected(mSerialNumber, selected);
+   getDatabase()->getWallSegmentManager()->setSelected(mSerialNumber, selected);
 }
 
 
@@ -662,18 +657,20 @@ void PolyWall::setSelected(bool selected)
    Parent::setSelected(selected);
    
    // Find the associated segment(s) and mark them as selected (or not)
-   getGame()->getWallSegmentManager()->setSelected(mSerialNumber, selected);
+   getDatabase()->getWallSegmentManager()->setSelected(mSerialNumber, selected);
 }
 
 
 // Only called from editor
 void PolyWall::onGeomChanged()
 {
-   WallSegmentManager *wallSegmentManager = getGame()->getWallSegmentManager();
-   wallSegmentManager->computeWallSegmentIntersections(getGame()->getEditorDatabase(), this);
+   EditorObjectDatabase *database = getGame()->getEditorDatabase();
+   WallSegmentManager *wallSegmentManager = database->getWallSegmentManager();
+
+   wallSegmentManager->computeWallSegmentIntersections(database, this);
 
    if(!isBatchUpdatingGeom())
-      wallSegmentManager->finishedChangingWalls(getGame()->getEditorDatabase(), mSerialNumber);
+      wallSegmentManager->finishedChangingWalls(database, mSerialNumber);
 
    Parent::onGeomChanged();
 }
