@@ -27,32 +27,35 @@
 #include "gameObject.h"
 #include "moveObject.h"    // For def of ActualState
 #include "EditorObject.h"  // For def of EditorObject
+#include "WallSegmentManager.h"
 
 #include <map>
 
 namespace Zap
 {
 
-//class BucketEntry;
-
 U32 GridDatabase::mQueryId = 0;
 ClassChunker<GridDatabase::BucketEntry> *GridDatabase::mChunker = NULL;
 U32 GridDatabase::mCountGridDatabase = 0;
 
 // Constructor
-GridDatabase::GridDatabase()
+GridDatabase::GridDatabase(bool createWallSegmentManager)
 {
    if(mChunker == NULL)
       mChunker = new ClassChunker<BucketEntry>();     // static shared by all databases, reference counted and deleted in destructor
 
    mCountGridDatabase++;
 
-
    mQueryId = 0;
 
    for(U32 i = 0; i < BucketRowCount; i++)
       for(U32 j = 0; j < BucketRowCount; j++)
          mBuckets[i][j] = NULL;
+
+   if(createWallSegmentManager)
+      mWallSegmentManager = new WallSegmentManager();    // gets deleted in destructor
+   else
+      mWallSegmentManager = NULL;
 }
 
 
@@ -63,7 +66,11 @@ GridDatabase::~GridDatabase()
 
    TNLAssert(mChunker != NULL || mCountGridDatabase != 0, "running GridDatabase Destructor without initalizing?")
 
+   if(mWallSegmentManager)
+      delete mWallSegmentManager;
+
    mCountGridDatabase--;
+
    if(mCountGridDatabase == 0)
       delete mChunker;
 }
@@ -284,6 +291,12 @@ void GridDatabase::dumpObjects()
 }
 
 
+WallSegmentManager *GridDatabase::getWallSegmentManager() const
+{
+   return mWallSegmentManager;
+}
+
+
 ////////////////////////////////////////
 ////////////////////////////////////////
 
@@ -317,7 +330,6 @@ void DatabaseObject::initialize()
    mExtent = Rect(); 
    mDatabase = NULL;
 }
-
 
 
 // Find objects along a ray, returning first discovered object, along with time of
