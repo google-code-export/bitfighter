@@ -185,8 +185,6 @@ public:
    virtual void onGeomChanged();
    virtual void onItemDragging();
 
-   //bool getCollisionPoly(Vector<Point> &polyPoints);
-
    /////
    // Editor methods
    const char *getEditorHelpString();
@@ -194,6 +192,8 @@ public:
    const char *getOnDockName();
    const char *getOnScreenName();
    string toString(F32 gridSize) const;
+
+   F32 getEditorRadius(F32 currentScale);
 
    /////
    // Lua interface  ==>  don't need these!!
