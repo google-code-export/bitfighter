@@ -2020,7 +2020,7 @@ void EditorUserInterface::renderWalls(EditorObjectDatabase *database, const Poin
    {
       EditorObject *obj = objList->get(i);
 
-      if(obj->getObjectTypeNumber() == WallItemTypeNumber)
+      if(isWallType(obj->getObjectTypeNumber()))
          if( selected == (obj->isSelected() || obj->anyVertsSelected()) )    // Only draw sel'ed items when renderSelectedObjects is true
             obj->renderInEditor(mCurrentScale, mSnapVertexIndex, false, mPreviewMode); // <== wall centerlines rendered in here
    }
