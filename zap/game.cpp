@@ -766,20 +766,6 @@ GridDatabase *Game::getGameObjDatabase()
 }
 
 
-EditorObjectDatabase *Game::getEditorDatabase()
-{ 
-   TNLAssert(false, "Not implemented!");
-   return NULL;
-}  
-
-
-void Game::setEditorDatabase(boost::shared_ptr<EditorObjectDatabase> database)
-{
-   TNLAssert(database.get(), "Database should not be NULL!");
-   mEditorDatabase = boost::dynamic_pointer_cast<EditorObjectDatabase>(database);
-}
-
-
 MasterServerConnection *Game::getConnectionToMaster()
 {
    return mConnectionToMaster;
@@ -1322,44 +1308,7 @@ const ModuleInfo *Game::getModuleInfo(ShipModule module)
 
 void Game::computeWorldObjectExtents()
 {
-   fillVector.clear();
-   mGameObjDatabase->findObjects(fillVector);
-
-   if(fillVector.size() == 0)     // No objects ==> no extents!
-   {
-      mWorldExtents = Rect();
-      return;
-   }
-
-   // All this rigamarole is to make world extent correct for levels that do not overlap (0,0)
-   // The problem is that the GameType is treated as an object, and has the extent (0,0), and
-   // a mask of UnknownType.  Fortunately, the GameType tends to be first, so what we do is skip
-   // all objects until we find an UnknownType object, then start creating our extent from there.
-   // We have to assign theRect to an extent object initially to avoid getting the default coords
-   // of (0,0) that are assigned by the constructor.
-   Rect theRect;
-
-   S32 first = -1;
-
-   // Look for first non-UnknownType object
-   for(S32 i = 0; i < fillVector.size() && first == -1; i++)
-      if(fillVector[i]->getObjectTypeNumber() != UnknownTypeNumber)
-      {
-         theRect = fillVector[i]->getExtent();
-         first = i;
-      }
-
-   if(first == -1)      // No suitable objects found, return empty extents
-   {
-      mWorldExtents = Rect();
-      return;
-   }
-
-   // Now start unioning the extents of remaining objects.  Should be all of them.
-   for(S32 i = first + 1; i < fillVector.size(); i++)
-      theRect.unionRect(fillVector[i]->getExtent());
-
-   mWorldExtents = theRect;
+   mWorldExtents = mGameObjDatabase->getExtents();
 }
 
 
