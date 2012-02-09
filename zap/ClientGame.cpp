@@ -51,7 +51,6 @@
 
 #include "IniFile.h"             // For CIniFile def
 
-
 #include "BotNavMeshZone.h"      // For zone clearing code
 #include "ScreenInfo.h"
 #include "Joystick.h"
@@ -108,9 +107,9 @@ ClientGame::ClientGame(const Address &bindAddress, GameSettings *settings) : Gam
 
    mRemoteLevelDownloadFilename = "downloaded.level";
 
-   mUIManager = new UIManager(this);         // Gets deleted in destructor
+   mUIManager = new UIManager(this);               // Gets deleted in destructor
 
-   mClientInfo = new FullClientInfo(NULL, false);    // Will be deleted in destructor
+   mClientInfo = new FullClientInfo(NULL, false);  // Will be deleted in destructor
    mLocalRemoteClientInfo = NULL;
 
    mSpawnDelayed = false;
@@ -152,7 +151,7 @@ ClientGame::~ClientGame()
    cleanUp();
 
    delete mUserInterfaceData;
-   delete mUIManager;   
+   delete mUIManager; 
    delete mConnectionToServer.getPointer();
    delete mClientInfo;
 }
@@ -556,9 +555,7 @@ void ClientGame::idle(U32 timeDelta)
          }
       }
       if(mGameType)
-      {
          mGameType->idle(GameObject::ClientIdleMainRemote, timeDelta);
-      }
 
       if(controlObject)
          SoundSystem::setListenerParams(controlObject->getPos(), controlObject->getVel());
@@ -1847,7 +1844,7 @@ bool ClientGame::processPseudoItem(S32 argc, const char **argv, const string &le
 
          newObject->initializeEditor();     // Only runs unselectVerts
 
-         newObject->processArguments(argc - 1 - skipArgs, argv + 1 + skipArgs, this);
+         newObject->processArguments(argc - skipArgs, argv + skipArgs, this);
          
          if(newObject->getVertCount() >= 2)
          {
