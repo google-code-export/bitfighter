@@ -95,7 +95,6 @@ private:
    char mDb[64];
    char mUser[64];
    char mPassword[64];
-
    Vector<ServerInfo> cachedServers;
 
    S32 lastGameID;
@@ -108,7 +107,6 @@ private:
 
    void addToServerCache(U64 id, const string &serverName, const string &serverIPAddr);         // Add database ID to our cache
    U64 getServerIDFromCache(const string &serverName, const string &serverIPAddr);              // And get it back out again
-
 public:
    DatabaseWriter();
 
