@@ -63,12 +63,11 @@ InstructionsUserInterface::InstructionsUserInterface(ClientGame *game) : Parent(
 
 void InstructionsUserInterface::onActivate()
 {
-   mCurPage = 1;
+   mCurPage = 0;
 }
 
 
-static const U32 NUM_PAGES = 13;
-
+// This must be kept aligned with enum IntructionPages
 static const char *pageHeaders[] = {
    "CONTROLS",
    "LOADOUT SELECTION",
@@ -78,6 +77,7 @@ static const char *pageHeaders[] = {
    "GAME OBJECTS",
    "MORE GAME OBJECTS",
    "MORE GAME OBJECTS",
+   "GAME INDICATORS",
    "ADVANCED COMMANDS",
    "LEVEL COMMANDS",
    "ADMIN COMMANDS",
@@ -96,8 +96,8 @@ static ControlStringsEditor consoleCommands1[] = {
 void InstructionsUserInterface::render()
 {
    glColor(Colors::red);
-   drawStringf(3, 3, 25, "INSTRUCTIONS - %s", pageHeaders[mCurPage - 1]);
-   drawStringf(625, 3, 25, "PAGE %d/%d", mCurPage, NUM_PAGES);
+   drawStringf(3, 3, 25, "INSTRUCTIONS - %s", pageHeaders[mCurPage]);
+   drawStringf(625, 3, 25, "PAGE %d/%d", mCurPage + 1, InstructionMaxPages);  // We +1 to be natural
    drawCenteredString(571, 20, "LEFT - previous page  RIGHT, SPACE - next page  ESC exits");
 
    glColor(0.7f);
@@ -106,52 +106,55 @@ void InstructionsUserInterface::render()
 
    switch(mCurPage)
    {
-      case 1:
+      case InstructionControls:
          renderPage1();
          break;
-      case 2:
+      case InstructionLoadout:
          renderPage2();
          break;
-      case 3:
+      case InstructionModules:
          renderModulesPage();
          break;
-      case 4:
+      case InstructionWeaponProjectiles:
          renderPageObjectDesc(0);
          break;
-      case 5:
+      case InstructionSpyBugs:
          renderPageObjectDesc(1);
          break;
-      case 6:
+      case InstructionGameObjects1:
          renderPageObjectDesc(2);
          break;
-      case 7:
+      case InstructionGameObjects2:
          renderPageObjectDesc(3);
          break;
-      case 8:
+      case InstructionGameObjects3:
          renderPageObjectDesc(4);
          break;
-      case 9:
+      case InstructionGameIndicators:
+         renderPageGameIndicators();
+         break;
+      case InstructionAdvancedCommands:
          renderPageCommands(0);
          break;
-      case 10:
+      case InstructionLevelCommands:
          renderPageCommands(1, "Level change permissions are required to use these commands");     // Level control commands
          break;
-      case 11:
+      case InstructionAdminCommands:
          renderPageCommands(2, "Admin permissions are required to use these commands");            // Admin commands
          break;
-      case 12:
+      case InstructionDebugCommands:
          renderPageCommands(3);     // Debug commands
          break;
-      case 13:
+      case InstructionScriptingConsole:
          renderConsoleCommands("Open the console by pressing [Ctrl-/] in game", consoleCommands1);   // Scripting console
          break;
 
-      // When adding page, be sure to increase NUM_PAGES, and add item to pageHeaders array
+      // When adding page, be sure to add item to pageHeaders array and InstructionPages enum
    }
 }
 
 
-void InstructionsUserInterface::activatePage(U32 pageIndex)
+void InstructionsUserInterface::activatePage(IntructionPages pageIndex)
 {
    this->activate();
    mCurPage = pageIndex;
@@ -406,6 +409,83 @@ void InstructionsUserInterface::renderPage2()
 }
 
 
+static const char *indicatorInstructions1[] = {
+   "Game indicators are helps on the scoreboard or other areas that",
+   "give you more information about the game or players."
+};
+
+
+static const char *scoreboardMarks[][3] = {
+   {"@ ",  "ChumpChange",  "Indicates the player is a server administrator"},
+   {"+ ",  "ChumpChange",  "Indicates the player has level change permissions"},
+   {"B ",  "S_Bot",  "Indicates the player is a bot"}
+};
+
+
+void InstructionsUserInterface::renderPageGameIndicators()
+{
+   S32 y = 40;
+   S32 descSize = 20;
+   S32 textSize = 17;
+   S32 symbolSize = textSize * 0.8f;
+   S32 vertAdjustFact = (textSize - symbolSize) / 2 - 1;
+
+   // Description
+   glColor(Colors::white);
+   for(U32 i = 0; i < ARRAYSIZE(indicatorInstructions1); i++)
+   {
+      drawCenteredString(y, descSize, indicatorInstructions1[i]);
+      y += 26;
+   }
+
+   y += 20;
+
+   glColor(Colors::yellow);
+   drawCenteredString(y, descSize, "SCOREBOARD INDICATORS");
+   y += 26;
+
+   // Scoreboard marks
+   for(U32 i = 0; i < ARRAYSIZE(scoreboardMarks); i++)
+   {
+      S32 x = 30;
+
+      // Draw the mark
+      glColor(Colors::cyan);
+      x += drawStringAndGetWidth(x, y + vertAdjustFact, symbolSize, scoreboardMarks[i][0]);
+
+      // Draw sample nickname
+      glColor(Colors::white);
+      drawString(x, y, textSize, scoreboardMarks[i][1]);
+
+      // Draw description
+      x = 250;
+      drawString(x, y, textSize, scoreboardMarks[i][2]);
+      y += 26;
+   }
+
+   y += 20;
+
+   // Badges
+   glColor(Colors::yellow);
+   drawCenteredString(y, descSize, "BADGES / ACHIEVEMENTS");
+   y += 26;
+
+   // Name
+   glColor(Colors::white);
+   S32 x = 30;
+   x += drawStringAndGetWidth(x, y, textSize, "ChumpChange");
+
+   // Badge
+   x += textSize/2 + 10;
+   render25FlagsBadge(x, y + textSize/2, textSize/2);
+
+   // Description
+   glColor(Colors::white);
+   x = 250;
+   drawString(x, y, textSize, "Badges may appear next to the players name");
+}
+
+
 static const char *moduleInstructions[] = {
    "Modules have up to 3 modes: Passive, Active, and Kinetic (P/A/K)",
    "Passive mode is always active and costs no energy (e.g. Armor).",
@@ -454,7 +534,7 @@ void InstructionsUserInterface::renderModulesPage()
 
       // Hacky special case  TODO: find a way to generalize this
       if(i == 3 || i == 6)
-   {
+      {
          x += getStringWidth(textsize, moduleDescriptions[i - 1][0]);
          y -= 20;
       }
@@ -843,8 +923,8 @@ void InstructionsUserInterface::nextPage()
 {
    mCurPage++;
 
-   if(mCurPage > NUM_PAGES)
-      mCurPage = 1;
+   if(mCurPage > InstructionMaxPages - 1)
+      mCurPage = 0;
 }
 
 
@@ -852,8 +932,8 @@ void InstructionsUserInterface::prevPage()
 {
    mCurPage--;
 
-   if(mCurPage < 1)
-      mCurPage = NUM_PAGES;
+   if(mCurPage < 0)
+      mCurPage = InstructionMaxPages - 1;
 }
 
 
