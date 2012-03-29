@@ -429,10 +429,10 @@ public:
 
    void addTime(U32 time);          // Extend the game by time (in ms)
 
-   void SRV_clientRequestLoadout(ClientInfo *clientInfo, const Vector<U32> &loadout);
+   void SRV_clientRequestLoadout(ClientInfo *clientInfo, const Vector<U8> &loadout);
    void SRV_updateShipLoadout(GameObject *shipObject); // called from LoadoutZone when a Ship touches the zone
-   string validateLoadout(const Vector<U32> &loadout);
-   void setClientShipLoadout(ClientInfo *clientInfo, const Vector<U32> &loadout, bool silent = false);
+   string validateLoadout(const Vector<U8> &loadout);
+   void setClientShipLoadout(ClientInfo *clientInfo, const Vector<U8> &loadout, bool silent = false);
 
 
    bool checkTeamRange(S32 team);                     // Team in range? Used for processing arguments.

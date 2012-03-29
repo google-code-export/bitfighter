@@ -878,7 +878,7 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sReleaseCommanderMap, (), (),
 
 
 // Client has changed his loadout configuration.  This gets run on the server as soon as the loadout is entered.
-TNL_IMPLEMENT_RPC(GameConnection, c2sRequestLoadout, (Vector<U32> loadout), (loadout), NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirClientToServer, 0)
+TNL_IMPLEMENT_RPC(GameConnection, c2sRequestLoadout, (Vector<U8> loadout), (loadout), NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirClientToServer, 0)
 {
    getClientInfo()->sRequestLoadout(loadout);
 }
@@ -1798,7 +1798,7 @@ bool GameConnection::isInCommanderMap()
 }
 
 
-const Vector<U32> &GameConnection::getLoadout()
+const Vector<U8> &GameConnection::getLoadout()
 {
    return mLoadout;
 }
