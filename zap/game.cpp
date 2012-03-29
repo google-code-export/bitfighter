@@ -100,6 +100,7 @@ ClientInfo::ClientInfo()
    mBadges = NO_BADGES;
    mNeedToCheckAuthenticationWithMaster = false;     // Does client report that they are verified
    mSpawnDelayed = false;
+   mIsBusy = false;
 }
 
 
@@ -197,6 +198,18 @@ bool ClientInfo::isSpawnDelayed()
    return mSpawnDelayed;
 }
 
+
+// Returns true if spawn has actually been delayed 
+bool ClientInfo::isBusy()
+{
+   return mIsBusy;
+}
+
+
+void ClientInfo::setIsBusy(bool isBusy)
+{
+   mIsBusy = isBusy;
+}
 
 
 void ClientInfo::resetLoadout(bool levelHasLoadoutZone)
@@ -482,7 +495,7 @@ VoiceDecoder *FullClientInfo::getVoiceDecoder()
 #ifndef ZAP_DEDICATED
 // Constructor
 RemoteClientInfo::RemoteClientInfo(const StringTableEntry &name, bool isAuthenticated, Int<BADGE_COUNT> badges, 
-                                   bool isRobot, bool isAdmin, bool isSpawnDelayed) : ClientInfo()
+                                   bool isRobot, bool isAdmin, bool isSpawnDelayed, bool isBusy) : ClientInfo()
 {
    mName = name;
    mIsAuthenticated = isAuthenticated;
@@ -492,6 +505,7 @@ RemoteClientInfo::RemoteClientInfo(const StringTableEntry &name, bool isAuthenti
    mRating = 0;
    mBadges = badges;
    mSpawnDelayed = isSpawnDelayed;
+   mIsBusy = isBusy;
 
    // Initialize speech stuff
    mDecoder = new SpeexVoiceDecoder();                                  // Deleted in destructor
