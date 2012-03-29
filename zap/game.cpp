@@ -217,7 +217,7 @@ void ClientInfo::resetLoadout(bool levelHasLoadoutZone)
    mOldLoadout.clear();
 
    // Save current loadout to put on-deck
-   Vector<U32> loadout = getLoadout();
+   Vector<U8> loadout = getLoadout();
 
    resetLoadout();
 
@@ -236,7 +236,7 @@ void ClientInfo::resetLoadout()
 }
 
 
-const Vector<U32> &ClientInfo::getLoadout()
+const Vector<U8> &ClientInfo::getLoadout()
 {
    return mLoadout;
 }
@@ -364,20 +364,15 @@ bool ClientInfo::sEngineerDeployObject(U32 type)
 }
 
 
-void ClientInfo::sRequestLoadout(Vector<U32> &loadout)
+void ClientInfo::sRequestLoadout(Vector<U8> &loadout)
 {
    mLoadout = loadout;
+
    GameType *gt = gServerGame->getGameType();
+
    if(gt)
       gt->SRV_clientRequestLoadout(this, mLoadout);    // This will set loadout if ship is in loadout zone
-
-   // Check if ship is in a loadout zone, in which case we'll make the loadout take effect immediately
-   //Ship *ship = dynamic_cast<Ship *>(this->getControlObject());
-
-   //if(ship && ship->isInZone(LoadoutZoneType))
-      //ship->setLoadout(loadout);
 }
-
 
 
 // Return pointer to statistics tracker 
