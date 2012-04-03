@@ -34,6 +34,8 @@
 #include "NexusGame.h"        // For getItem()
 #include "soccerGame.h"       // For getItem()
 #include "projectile.h"       // For getItem()
+#include "loadoutZone.h"
+#include "goalZone.h"
 #include "teleporter.h"
 #include "speedZone.h"
 #include "EngineeredItem.h"   // For getItem()
@@ -133,6 +135,7 @@ S32 LuaObject::returnVec(lua_State *L, F32 x, F32 y)
    lua_pushvec(L, x, y);
    return 1;
 }
+
 
 // Returns a float to a calling Lua function
 S32 LuaObject::returnFloat(lua_State *L, F32 num)
@@ -530,12 +533,22 @@ LuaScriptRunner::LuaScriptRunner()
 {
    L = NULL;
    mScriptingDirSet = false;
+
+   // Initialize all subscriptions to unsubscribed -- bits will automatically subscribe to onTick later
+   for(S32 i = 0; i < EventManager::EventTypes; i++)
+      mSubscriptions[i] = false;
 }
 
 
 // Destructor
 LuaScriptRunner::~LuaScriptRunner()
 {
+   // Make sure we're unsubscribed to all those events we subscribed to.  Don't want to
+   // send an event to a dead bot, after all...
+   for(S32 i = 0; i < EventManager::EventTypes; i++)
+      if(mSubscriptions[i])
+         EventManager::get()->unsubscribeImmediate(L, (EventManager::EventType)i);
+
    if(L)
       lua_close(L);
 }
@@ -676,7 +689,9 @@ bool LuaScriptRunner::startLua(ScriptType scriptType)
 
    registerClasses();
 
-   lua_atpanic(L, luaPanicked);     // Register our panic function 
+   lua_atpanic(L, luaPanicked);  // Register our panic function 
+
+   setEnums(L);                  // Set scads of global vars in the Lua instance that mimic the use of the enums we use everywhere
 
 #ifdef USE_PROFILER
    init_profiler(L);
@@ -687,7 +702,6 @@ bool LuaScriptRunner::startLua(ScriptType scriptType)
 
    setPointerToThis();     
 
-   setEnums(L);      // Set scads of global vars in the Lua instance that mimic the use of the enums we use everywhere
 
    // Load two sets of helper functions: the first is loaded for every script, the second is different for bots, levelgens, plugins, etc.
    // We expect to find these helper functions in mScriptingDir
@@ -704,8 +718,125 @@ bool LuaScriptRunner::startLua(ScriptType scriptType)
 }
 
 
+// Register classes needed by all script runners
+void LuaScriptRunner::registerClasses()
+{
+   Lunar<LuaUtil>::Register(L);
 
-#define setEnumName(number, name) { lua_pushinteger(L, number); lua_setglobal(L, name); }
+   Lunar<LuaGameInfo>::Register(L);
+   Lunar<LuaTeamInfo>::Register(L);
+   Lunar<LuaPlayerInfo>::Register(L);
+
+   Lunar<LuaWeaponInfo>::Register(L);
+   Lunar<LuaModuleInfo>::Register(L);
+
+   Lunar<LuaLoadout>::Register(L);
+
+   Lunar<LuaRobot>::Register(L);
+   Lunar<LuaShip>::Register(L);
+
+   Lunar<RepairItem>::Register(L);
+   Lunar<ResourceItem>::Register(L);
+   Lunar<TestItem>::Register(L);
+   Lunar<Asteroid>::Register(L);
+   Lunar<Turret>::Register(L);
+   Lunar<Teleporter>::Register(L);
+
+   Lunar<ForceFieldProjector>::Register(L);
+   Lunar<FlagItem>::Register(L);
+   Lunar<SoccerBallItem>::Register(L);
+   Lunar<ResourceItem>::Register(L);
+
+   Lunar<LuaProjectile>::Register(L);
+   Lunar<Mine>::Register(L);
+   Lunar<SpyBug>::Register(L);
+
+   Lunar<GoalZone>::Register(L);
+   Lunar<LoadoutZone>::Register(L);
+   Lunar<NexusObject>::Register(L);
+   Lunar<CoreItem>::Register(L);
+}
+
+
+// Hand off any script arguments to Lua, by packing them in the args table, which is where Lua traditionally stores cmd line args
+void LuaScriptRunner::setLuaArgs(const Vector<string> &args)
+{
+   // Put args into a table that the Lua script can read.  By Lua convention, we'll put the name of the robot/script into the 0th element.
+   lua_createtable(L, args.size() + 1, 0);
+
+   lua_pushstring(L, mScriptName.c_str());
+   lua_rawseti(L, -2, 0);
+
+   for(S32 i = 0; i < args.size(); i++)
+   {
+      lua_pushstring(L, args[i].c_str());
+      lua_rawseti(L, -2, i + 1);
+   }
+
+   lua_setglobal(L, "arg");
+}
+
+
+ void LuaScriptRunner::setModulePath()   
+ {                                                          // What's on the stack:
+   lua_pushstring(L, "package");                            // "package"
+   lua_gettable(L, LUA_GLOBALSINDEX);                       // value of package global -- appears to be a table
+   lua_pushstring(L, "path");                               // table, "path"
+   lua_pushstring(L, (mScriptingDir + "/?.lua").c_str());   // table, "path", mScriptingDir + "/?.lua"
+   lua_settable(L, -3);                                     // table
+   lua_pop(L, 1);                                           // stack should be empty
+ }
+
+
+// Overwrite Lua's panicky panic function with something that doesn't kill the whole game
+// if something goes wrong!
+int LuaScriptRunner::luaPanicked(lua_State *L)
+{
+   string msg = lua_tostring(L, 1);
+
+   throw LuaException(msg);
+
+   return 0;
+}
+
+
+int LuaScriptRunner::subscribe(lua_State *L)
+{
+   // Get the event off the stack
+   static const char *methodName = "LuaUtil:subscribe()";
+   LuaObject::checkArgCount(L, 1, methodName);
+
+   lua_Integer eventType = LuaObject::getInt(L, 0, methodName);
+   if(eventType < 0 || eventType >= EventManager::EventTypes)
+      return 0;
+
+   EventManager::get()->subscribe(L, (EventManager::EventType)eventType);
+   mSubscriptions[eventType] = true;
+
+   return 0;
+}
+
+
+int LuaScriptRunner::unsubscribe(lua_State *L)
+{
+   // Get the event off the stack
+   static const char *methodName = "LuaUtil:unsubscribe()";
+   LuaObject::checkArgCount(L, 1, methodName);
+
+   lua_Integer eventType = LuaObject::getInt(L, 0, methodName);
+   if(eventType < 0 || eventType >= EventManager::EventTypes)
+      return 0;
+
+   EventManager::get()->unsubscribe(L, (EventManager::EventType)eventType);
+   mSubscriptions[eventType] = false;
+   return 0;
+}
+
+
+#define setEnumName(number, name) { lua_pushinteger(L, number);             lua_setglobal(L, name); }
+#define setEnum(name)             { lua_pushinteger(L, name);               lua_setglobal(L, #name); }
+#define setGTEnum(name)           { lua_pushinteger(L, GameType::name);     lua_setglobal(L, #name); }
+#define setEventEnum(name)        { lua_pushinteger(L, EventManager::name); lua_setglobal(L, #name); }
 
 // Set scads of global vars in the Lua instance that mimic the use of the enums we use everywhere
 void LuaScriptRunner::setEnums(lua_State *L)
@@ -810,57 +941,21 @@ void LuaScriptRunner::setEnums(lua_State *L)
 
    setEnum(EngineeredTurret);
    setEnum(EngineeredForceField);
+
+   // A few other misc constants -- in Lua, we reference the teams as first team == 1, so neutral will be 0 and hostile -1
+   lua_pushinteger(L, 0); lua_setglobal(L, "NeutralTeamIndx");
+   lua_pushinteger(L, -1); lua_setglobal(L, "HostileTeamIndx");
+
 }
 
 #undef setEnumName
-
-
-
-// Hand off any script arguments to Lua, by packing them in the args table, which is where Lua traditionally stores cmd line args
-void LuaScriptRunner::setLuaArgs(const Vector<string> &args)
-{
-   // Put args into a table that the Lua script can read.  By Lua convention, we'll put the name of the robot/script into the 0th element.
-   lua_createtable(L, args.size() + 1, 0);
-
-   lua_pushstring(L, mScriptName.c_str());
-   lua_rawseti(L, -2, 0);
-
-   for(S32 i = 0; i < args.size(); i++)
-   {
-      lua_pushstring(L, args[i].c_str());
-      lua_rawseti(L, -2, i + 1);
-   }
-
-   lua_setglobal(L, "arg");
-}
-
-
- void LuaScriptRunner::setModulePath()   
- {                                                          // What's on the stack:
-   lua_pushstring(L, "package");                            // "package"
-   lua_gettable(L, LUA_GLOBALSINDEX);                       // value of package global -- appears to be a table
-   lua_pushstring(L, "path");                               // table, "path"
-   lua_pushstring(L, (mScriptingDir + "/?.lua").c_str());   // table, "path", mScriptingDir + "/?.lua"
-   lua_settable(L, -3);                                     // table
-   lua_pop(L, 1);                                           // stack should be empty
- }
-
-
-// Overwrite Lua's panicky panic function with something that doesn't kill the whole game
-// if something goes wrong!
-int LuaScriptRunner::luaPanicked(lua_State *L)
-{
-   string msg = lua_tostring(L, 1);
-
-   throw LuaException(msg);
-
-   return 0;
-}
+#undef setEnum
+#undef setGTEnum
+#undef setEventEnum
 
 
 ////////////////////////////////////////
 ////////////////////////////////////////
-
 
 LuaItem *LuaItem::getItem(lua_State *L, S32 index, U32 type, const char *functionName)
 {
@@ -871,7 +966,7 @@ LuaItem *LuaItem::getItem(lua_State *L, S32 index, U32 type, const char *functio
         return  Lunar<LuaShip>::check(L, index);
 
       case BulletTypeNumber:  // pass through
-      case MineTypeNumber:
+      case MineTypeNumber:    // pass through
       case SpyBugTypeNumber:
          return Lunar<LuaProjectile>::check(L, index);
 
@@ -921,6 +1016,7 @@ S32 LuaItem::getClassID(lua_State *L)
    TNLAssert(false, "Unimplemented method!");
    return -1;
 }
+
 
 
 };

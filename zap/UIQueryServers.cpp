@@ -953,8 +953,15 @@ void QueryServersUserInterface::recalcCurrentIndex()
 }
 
 
+void QueryServersUserInterface::onTextInput(char ascii)
+{
+   if(ascii)
+      mLineEditor.addChar(ascii);
+}
+
+
 // All key handling now under one roof!
-bool QueryServersUserInterface::onKeyDown(InputCode inputCode, char ascii)
+bool QueryServersUserInterface::onKeyDown(InputCode inputCode)
 {
    inputCode = InputCodeManager::convertJoystickToKeyboard(inputCode);
 
@@ -976,7 +983,7 @@ bool QueryServersUserInterface::onKeyDown(InputCode inputCode, char ascii)
       return true;
    }
 
-   if(Parent::onKeyDown(inputCode, ascii))
+   if(Parent::onKeyDown(inputCode))
       return true;
 
    S32 currentIndex = -1;
@@ -1058,20 +1065,18 @@ bool QueryServersUserInterface::onKeyDown(InputCode inputCode, char ascii)
    {
       backPage();
 
-      SDL_SetCursor(Cursor::getTransparent());        // Hide cursor when navigating with keyboard or joystick
+      Cursor::disableCursor();        // Hide cursor when navigating with keyboard or joystick
       mItemSelectedWithMouse = false;
    }
    else if(inputCode == KEY_PAGEDOWN) 
    {
       advancePage();
 
-      SDL_SetCursor(Cursor::getTransparent());        // Hide cursor when navigating with keyboard or joystick
+      Cursor::disableCursor();        // Hide cursor when navigating with keyboard or joystick
       mItemSelectedWithMouse = false;
    }
    else if (inputCode == KEY_DELETE || inputCode == KEY_BACKSPACE)       // Do backspacey things
-      mLineEditor.handleBackspace(inputCode);   
-   else if(ascii)                               // Other keys - add key to message
-      mLineEditor.addChar(ascii);
+      mLineEditor.handleBackspace(inputCode);
 
    // The following keys only make sense if there are some servers to browse through
    else if(servers.size() == 0)
@@ -1084,7 +1089,7 @@ bool QueryServersUserInterface::onKeyDown(InputCode inputCode, char ascii)
          currentIndex = servers.size() - 1;
       mPage = currentIndex / getServersPerPage(); 
 
-      SDL_SetCursor(Cursor::getTransparent());        // Hide cursor when navigating with keyboard or joystick
+      Cursor::disableCursor();        // Hide cursor when navigating with keyboard or joystick
       mItemSelectedWithMouse = false;
       selectedId = servers[currentIndex].id;
    }
@@ -1096,11 +1101,15 @@ bool QueryServersUserInterface::onKeyDown(InputCode inputCode, char ascii)
 
       mPage = currentIndex / getServersPerPage();
 
-      SDL_SetCursor(Cursor::getTransparent());        // Hide cursor when navigating with keyboard or joystick
+      Cursor::disableCursor();        // Hide cursor when navigating with keyboard or joystick
       mItemSelectedWithMouse = false;
       selectedId = servers[currentIndex].id;
    }
+   // If no key is handled
+   else
+      return false;
 
+   // A key was handled
    return true;
 }
 
@@ -1201,7 +1210,7 @@ void QueryServersUserInterface::onMouseMoved()
 
    const Point *mousePos = gScreenInfo.getMousePos();
 
-   SDL_SetCursor(Cursor::getDefault());
+   Cursor::enableCursor();
 
    if(mouseInHeaderRow(mousePos))
    {
@@ -1213,12 +1222,14 @@ void QueryServersUserInterface::onMouseMoved()
             break;
          }
    }
-
-   else if(isMouseOverDivider())
-      SDL_SetCursor(Cursor::getVerticalResize());
-
    else
       mHighlightColumn = mSortColumn;
+
+   if(isMouseOverDivider())
+      SDL_SetCursor(Cursor::getVerticalResize());
+   else
+      SDL_SetCursor(Cursor::getDefault());
+
 
    mItemSelectedWithMouse = true;
    mJustMovedMouse = true;
