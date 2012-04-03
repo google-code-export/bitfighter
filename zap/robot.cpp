@@ -61,35 +61,20 @@ const bool QUIT_ON_SCRIPT_ERROR = true;
 GridDatabase *LuaRobot::getBotZoneDatabase()
 {
    TNLAssert(dynamic_cast<ServerGame *>(thisRobot->getGame()), "Not a ServerGame");
-	return ((ServerGame *)thisRobot->getGame())->getBotZoneDatabase();
+   return ((ServerGame *)thisRobot->getGame())->getBotZoneDatabase();
 }
 
 // Constructor
 LuaRobot::LuaRobot(lua_State *L) : LuaShip((Robot *)lua_touserdata(L, 1))
 {
-   //lua_atpanic(L, luaPanicked);                  // Register our panic function
    thisRobot = (Robot *)lua_touserdata(L, 1);    // Register our robot
    thisRobot->mLuaRobot = this;
-
-   // Initialize all subscriptions to unsubscribed -- we'll subscribe to onTick later
-   for(S32 i = 0; i < EventManager::EventTypes; i++)
-      subscriptions[i] = false;
-
-   // A few misc constants -- in Lua, we reference the teams as first team == 1, so neutral will be 0 and hostile -1
-   lua_pushinteger(L, 0); lua_setglobal(L, "NeutralTeamIndx");
-   lua_pushinteger(L, -1); lua_setglobal(L, "HostileTeamIndx");
 }
 
 
 // Destructor
 LuaRobot::~LuaRobot()
 {
-   // Make sure we're unsubscribed to all those events we subscribed to.  Don't want to
-   // send an event to a dead bot, after all...
-   for(S32 i = 0; i < EventManager::EventTypes; i++)
-      if(subscriptions[i])
-         EventManager::get()->unsubscribeImmediate(thisRobot->getL(), (EventManager::EventType)i);
-
    logprintf(LogConsumer::LogLuaObjectLifecycle, "Deleted Lua Robot Object (%p)\n", this);
 }
 
@@ -720,7 +705,7 @@ S32 LuaRobot::getWaypoint(lua_State *L)  // Takes a luavec or an x,y
 {
    static const char *methodName = "Robot:getWaypoint()";
 
-	TNLAssert(dynamic_cast<ServerGame *>(thisRobot->getGame()), "Not a ServerGame");
+   TNLAssert(dynamic_cast<ServerGame *>(thisRobot->getGame()), "Not a ServerGame");
    ServerGame *serverGame = (ServerGame *) thisRobot->getGame();
 
    Point target = getPointOrXY(L, 1, methodName);
@@ -873,7 +858,7 @@ U16 LuaRobot::findClosestZone(const Point &point)
    }
 
    // Target must be outside extents of the map, find nearest zone if a straight line was drawn
-   if (closestZone == U16_MAX)
+   if(closestZone == U16_MAX)
    {
       Point extentsCenter = thisRobot->getGame()->getWorldExtents().getCenter();
 
@@ -909,39 +894,14 @@ S32 LuaRobot::findAndReturnClosestZone(lua_State *L, const Point &point)
 
 S32 LuaRobot::subscribe(lua_State *L)
 {
-   // Get the event off the stack
-   static const char *methodName = "Robot:subscribe()";
-   checkArgCount(L, 1, methodName);
-
-   S32 eventType = (S32)getInt(L, 0, methodName);
-   if(eventType < 0 || eventType >= EventManager::EventTypes)
-      return 0;
-
-   doSubscribe(L, EventManager::EventType(eventType));
-
+   thisRobot->subscribe(L);
    return 0;
-}
-
-
-void LuaRobot::doSubscribe(lua_State *L, EventManager::EventType eventType)
-{
-   EventManager::get()->subscribe(L, eventType);
-   subscriptions[eventType] = true;
 }
 
 
 S32 LuaRobot::unsubscribe(lua_State *L)
 {
-   // Get the event off the stack
-   static const char *methodName = "Robot:unsubscribe()";
-   checkArgCount(L, 1, methodName);
-
-   S32 eventType = (S32)getInt(L, 0, methodName);
-   if(eventType < 0 || eventType >= EventManager::EventTypes)
-      return 0;
-
-   EventManager::get()->unsubscribe(L, (EventManager::EventType) eventType);
-   subscriptions[eventType] = false;
+   thisRobot->unsubscribe(L);
    return 0;
 }
 

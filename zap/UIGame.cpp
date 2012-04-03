@@ -231,7 +231,7 @@ void GameUserInterface::onActivate()
 {
    mDisableShipKeyboardInput = false;  // Make sure our ship controls are active
    mMissionOverlayActive = false;      // Turn off the mission overlay (if it was on)
-   SDL_SetCursor(Cursor::getTransparent());        // Turn off cursor
+   Cursor::disableCursor();            // Turn off cursor
    onMouseMoved();                     // Make sure ship pointed is towards mouse
 
    // Clear out any lingering chat messages
@@ -264,10 +264,7 @@ void GameUserInterface::onReactivate()
    getGame()->undelaySpawn();
 
    mDisableShipKeyboardInput = false;
-   SDL_SetCursor(Cursor::getTransparent());    // Turn off cursor
-
-   // Removed because coming out of help screen would deactivate helpers and chat boxes
-//   enterMode(PlayMode);
+   Cursor::disableCursor();    // Turn off cursor
 
    if(mCurrentChatType == NoChat)
       setBusyChatting(false);
@@ -1154,9 +1151,25 @@ void GameUserInterface::activateModule(S32 index)
 }
 
 
+void GameUserInterface::onTextInput(char ascii)
+{
+   // Pass the key on to the console for processing
+   if(OGLCONSOLE_ProcessBitfighterTextInputEvent(ascii) != 0)
+      return;
+
+   // Make sure we have a chat box open
+   if(mCurrentChatType != NoChat)
+      // Append any keys to the chat message
+      if(ascii)
+         // Protect against crashes while game is initializing (because we look at the ship for the player's name)
+         if(getGame()->getConnectionToServer())     // getGame() cannot return NULL here
+            mLineEditor.addChar(ascii);
+}
+
+
 // Key pressed --> take action!
 // Handles all keypress events, including mouse clicks and controller button presses
-bool GameUserInterface::onKeyDown(InputCode inputCode, char ascii)
+bool GameUserInterface::onKeyDown(InputCode inputCode)
 {
    GameSettings *settings = getGame()->getSettings();
 
@@ -1172,14 +1185,15 @@ bool GameUserInterface::onKeyDown(InputCode inputCode, char ascii)
    if(checkInputCode(settings, InputCodeManager::BINDING_OUTGAMECHAT, inputCode))
       setBusyChatting(true);
 
-   if(Parent::onKeyDown(inputCode, ascii))
-   {
-      // Do nothing... key processed
-   }
-   else if(OGLCONSOLE_ProcessBitfighterKeyEvent(inputCode, ascii))   // Pass the key on to the console for processing
-   {
-      // Do nothing... key processed
-   }
+   if(!startedInHelper || (!mHelper && mCurrentChatType == NoChat))
+      getGame()->undelaySpawn();
+
+   if(Parent::onKeyDown(inputCode))
+      return true;
+
+   else if(OGLCONSOLE_ProcessBitfighterKeyEvent(inputCode))   // Pass the key on to the console for processing
+      return true;
+
    else if(checkInputCode(settings, InputCodeManager::BINDING_HELP, inputCode))   // Turn on help screen
    {
       playBoop();
@@ -1192,6 +1206,8 @@ bool GameUserInterface::onKeyDown(InputCode inputCode, char ascii)
          getUIManager()->getInstructionsUserInterface()->activatePage(InstructionsUserInterface::InstructionAdvancedCommands);
       else
          getUIManager()->getInstructionsUserInterface()->activate();
+
+      return true;
    }
 
    // Ctrl-/ toggles console window for the moment
@@ -1201,12 +1217,16 @@ bool GameUserInterface::onKeyDown(InputCode inputCode, char ascii)
       if(OGLCONSOLE_GetVisibility())      // Hide console if it's visible...
          OGLCONSOLE_HideConsole();
       else                                // ...and show it if it's not
-         OGLCONSOLE_ShowConsole();     
+         OGLCONSOLE_ShowConsole();
+
+      return true;
    }
    else if(checkInputCode(settings, InputCodeManager::BINDING_MISSION, inputCode))
    {
       mMissionOverlayActive = true;
       getUIManager()->getGameUserInterface()->clearLevelInfoDisplayTimer();    // Clear level-start display if user hits F2
+
+      return true;
    }
    else if(inputCode == KEY_M && InputCodeManager::checkModifier(KEY_CTRL))    // Ctrl-M, for now, to cycle through message dispaly modes
    {
@@ -1214,11 +1234,14 @@ bool GameUserInterface::onKeyDown(InputCode inputCode, char ascii)
       if(m >= MessageDisplayModes)
          m = 0;
       mMessageDisplayMode = MessageDisplayMode(m);
+
+      return true;
    }
    else if(mHelper && mHelper->processInputCode(inputCode))   // Will return true if key was processed
    {
       // Experimental, to keep ship from moving after entering a quick chat that has the same shortcut as a movement key
       InputCodeManager::setState(inputCode, false);
+      return true;
    }
    else 
    {
@@ -1246,16 +1269,19 @@ bool GameUserInterface::onKeyDown(InputCode inputCode, char ascii)
          }
       }
 
-      if(mCurrentChatType == NoChat)
-         processPlayModeKey(inputCode, ascii);   
-      else
-         processChatModeKey(inputCode, ascii);
-   }
-   
-   if(!startedInHelper || (!mHelper && mCurrentChatType == NoChat))
-      getGame()->undelaySpawn();
+      bool handled = false;
+      if(!OGLCONSOLE_GetVisibility())
+      {
+         if(mCurrentChatType == NoChat)
+            handled = processPlayModeKey(inputCode);
+         else
+            handled = processChatModeKey(inputCode);
+      }
 
-   return true;
+      return handled;
+   }
+
+   return false;
 }
 
 
@@ -1324,7 +1350,7 @@ bool checkInputCode(InputCode codeUserEntered, InputCode codeToActivateCommand)
 
 
 // Can only get here if we're not in chat mode
-void GameUserInterface::processPlayModeKey(InputCode inputCode, char ascii)
+bool GameUserInterface::processPlayModeKey(InputCode inputCode)
 {
    GameSettings *settings = getGame()->getSettings();
    //InputMode inputMode = getGame()->getSettings()->getIniSettings()->inputMode;
@@ -1383,12 +1409,12 @@ void GameUserInterface::processPlayModeKey(InputCode inputCode, char ascii)
          else
             mShutdownMode = None;
 
-         return;
+         return true;
       }
       else if(mShutdownMode == Canceled)
       {
          mShutdownMode = None;
-         return;
+         return true;
       }
 
       playBoop();
@@ -1453,6 +1479,10 @@ void GameUserInterface::processPlayModeKey(InputCode inputCode, char ascii)
             checkInputCode(settings, InputCodeManager::BINDING_RIGHT, inputCode))
                mWrongModeMsgDisplay.reset(WRONG_MODE_MSG_DISPLAY_TIME);
    }
+   else
+      return false;
+
+   return true;
 }
 
 
@@ -2256,9 +2286,9 @@ CommandInfo chatCmds[] = {
    { "ban",                GameUserInterface::banPlayerHandler,          { NAME, INT }, 2, ADMIN_COMMANDS,  0,  1,  {"<name>","[duration]"}, "Ban a player from the server (IP-based, def. = 60 mins)" },
    { "banip",              GameUserInterface::banIpHandler,              { STR, INT },  2, ADMIN_COMMANDS,  0,  1,  {"<ip>","[duration]"},   "Ban an IP address from the server (def. = 60 mins)" },
    { "shutdown",           GameUserInterface::shutdownServerHandler,     { INT, STR },  2, ADMIN_COMMANDS,  0,  1,  {"[time]","[message]"},  "Start orderly shutdown of server (def. = 10 secs)" },
-   { "setlevpass",         GameUserInterface::setLevPassHandler,         { STR },       1, ADMIN_COMMANDS,  0,  1,  {"[passwd]"},            "Set server password (use blank to clear)" },
-   { "setadminpass",       GameUserInterface::setAdminPassHandler,       { STR },       1, ADMIN_COMMANDS,  0,  1,  {"[passwd]"},            "Set level change password (use blank to clear)" },
-   { "setserverpass",      GameUserInterface::setServerPassHandler,      { STR },       1, ADMIN_COMMANDS,  0,  1,  {"<passwd>"},            "Set admin password" },
+   { "setlevpass",         GameUserInterface::setLevPassHandler,         { STR },       1, ADMIN_COMMANDS,  0,  1,  {"[passwd]"},            "Set level change password (use blank to clear)" },
+   { "setadminpass",       GameUserInterface::setAdminPassHandler,       { STR },       1, ADMIN_COMMANDS,  0,  1,  {"[passwd]"},            "Set admin password" },
+   { "setserverpass",      GameUserInterface::setServerPassHandler,      { STR },       1, ADMIN_COMMANDS,  0,  1,  {"<passwd>"},            "Set server password (use blank to clear)" },
    { "leveldir",           GameUserInterface::setLevelDirHandler,        { STR },       1, ADMIN_COMMANDS,  0,  1,  {"<new level folder>"},  "Set leveldir param on the server (changes levels available)" },
    { "setservername",      GameUserInterface::setServerNameHandler,      { STR },       1, ADMIN_COMMANDS,  0,  1,  {"<name>"},              "Set server name" },
    { "setserverdescr",     GameUserInterface::setServerDescrHandler,     { STR },       1, ADMIN_COMMANDS,  0,  1,  {"<descr>"},             "Set server description" },
@@ -2463,7 +2493,7 @@ static Vector<string> *getCandidateList(Game *game, const char *first, S32 arg)
 }
 
 
-void GameUserInterface::processChatModeKey(InputCode inputCode, char ascii)
+bool GameUserInterface::processChatModeKey(InputCode inputCode)
 {
    TNLAssert(mCurrentChatType != NoChat, "Must be in a chat mode to get here!");
 
@@ -2545,20 +2575,10 @@ void GameUserInterface::processChatModeKey(InputCode inputCode, char ascii)
          mLineEditor.completePartial(candidates, partial, pos, appender); 
       }
    }
-   else if(ascii)     // Append any other keys to the chat message
-   {
-      // Protect against crashes while game is initializing (because we look at the ship for the player's name)
-      if(getGame()->getConnectionToServer())     // getGame() cannot return NULL here
-      {
-//         S32 promptSize = getStringWidth(CHAT_FONT_SIZE, mCurrentChatType == TeamChat ? "(Team): " : "(Global): ");
-//
-//         S32 nameSize = getStringWidthf(CHAT_FONT_SIZE, "%s: ", getGame()->getClientInfo()->getName().getString());
-//         S32 nameWidth = max(nameSize, promptSize);
-         // Above block repeated above
+   else
+      return false;
 
-         mLineEditor.addChar(ascii);
-      }
-   }
+   return true;
 }
 
 

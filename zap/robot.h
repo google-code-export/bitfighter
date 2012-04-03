@@ -159,9 +159,6 @@ private:
    S32 findAndReturnClosestZone(lua_State *L, const Point &point); // Wraps findClosestZone and handles returning the result to Lua
    S32 doFindItems(lua_State *L, Rect *scope = NULL);    // Worker method for various find functions
 
-   bool subscriptions[EventManager::EventTypes];         // Keep track of which events we're subscribed to for rapid unsubscription upon death
-   void doSubscribe(lua_State *L, EventManager::EventType eventType);   // Do the work of subscribing, wrapped by subscribe()
-
 public:
   // Constants
 
