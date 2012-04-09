@@ -27,9 +27,9 @@
 #define _RECT_H_
 
 #include "Point.h"
+#include "tnlTypes.h"
 
 namespace TNL {
-   typedef float F32;
    template<class T> class Vector;
 };
 
@@ -38,6 +38,20 @@ using namespace TNL;
 
 namespace Zap
 {
+
+class IntRect
+{
+public:
+   S32 minx, miny, maxx, maxy;
+   IntRect();
+   IntRect(S32 x1, S32 y1, S32 x2, S32 y2);
+
+   void set(S32 x1, S32 y1, S32 x2, S32 y2);
+};
+
+
+////////////////////////////////////////
+////////////////////////////////////////
 
 class Rect
 {

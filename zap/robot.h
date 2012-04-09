@@ -122,7 +122,7 @@ public:
    static void deleteBot(const StringTableEntry &name);  // Delete bot by name
    static void deleteAllBots();
 
-   static Robot *findBot(lua_State *L);   // Find the bot that owns this L
+   static Robot *findBot(const char *id); // Find the bot with specified script id
 
    bool startLua();                       // Fire up bot's Lua processor
    void setPointerToThis();
@@ -156,8 +156,8 @@ private:
 
    Point getNextWaypoint();                          // Helper function for getWaypoint()
    U16 findClosestZone(const Point &point);          // Finds zone closest to point, used when robots get off the map
-   S32 findAndReturnClosestZone(lua_State *L, const Point &point); // Wraps findClosestZone and handles returning the result to Lua
-   S32 doFindItems(lua_State *L, Rect *scope = NULL);    // Worker method for various find functions
+   S32 findAndReturnClosestZone(lua_State *L, const Point &point);            // Wraps findClosestZone and handles returning the result to Lua
+   S32 doFindItems(lua_State *L, const char *methodName, Rect *scope = NULL); // Worker method for various find functions
 
 public:
   // Constants
