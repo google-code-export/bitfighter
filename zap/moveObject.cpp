@@ -35,11 +35,13 @@
 #include "stringUtils.h"
 
 #ifndef ZAP_DEDICATED
-#include "ClientGame.h"
-#include "sparkManager.h"
-#include "UI.h" // for extern void glColor
-#include "UIEditorMenus.h"
+#  include "ClientGame.h"
+#  include "sparkManager.h"
+#  include "UI.h" // for extern void glColor
+#  include "UIEditorMenus.h"
 #endif
+
+#include "LuaWrapper.h"
 
 #include <math.h>
 
@@ -1930,12 +1932,31 @@ TestItem::TestItem() : Parent(Point(0,0), true, (F32)TEST_ITEM_RADIUS, TEST_ITEM
 {
    mNetFlags.set(Ghostable);
    mObjectTypeNumber = TestItemTypeNumber;
+   mLuaProxy = NULL;
+}
+
+
+// Destructor
+TestItem::~TestItem()
+{
+   if(mLuaProxy)
+      mLuaProxy->setDefunct(true);
+   logprintf("TestItem destroyed!");
 }
 
 
 TestItem *TestItem::clone() const
 {
    return new TestItem(*this);
+}
+
+
+void TestItem::idle(GameObject::IdleCallPath path)
+{
+   //if(path == ServerIdleMainLoop && (abs(getPos().x) > 1000 || abs(getPos().y > 1000)))
+   //   deleteObject(100);
+
+   Parent::idle(path);
 }
 
 
@@ -2001,10 +2022,117 @@ bool TestItem::getCollisionPoly(Vector<Point> &polyPoints) const
 }
 
 
+///////////////////////////////////////////////////////
+
+
+static S32 TestItemL_getClassId(lua_State* L)
+{
+   return LuaObject::returnInt(L, TestItemTypeNumber);
+}
+
+
+S32 TestItem::getClassID(lua_State *L)
+{
+   return returnInt(L, TestItemTypeNumber);
+}
+
+
+static S32 TestItemL_getLoc(lua_State* L)
+{
+   LuaTestItem* w = luaW_check<LuaTestItem>(L, 1); 
+   if(w->isDefunct())
+      return LuaObject::returnNil(L);
+
+   return w->mTestItem->getLoc(L);
+}
+
+
+static S32 TestItemL_getRad(lua_State* L)
+{
+   TestItem* w = luaW_check<TestItem>(L, 1); 
+
+   return w->getRad(L);
+}
+
+
+static S32 TestItemL_getVel(lua_State* L)
+{
+   LuaTestItem* w = luaW_check<LuaTestItem>(L, 1); 
+   
+   return w->mTestItem->getVel(L);
+}
+
+
+void TestItem::Register(lua_State *L)
+{
+   static const luaL_reg metatable[] =
+   {
+       { "getClassID",  TestItemL_getClassId },
+       { "getLoc",      TestItemL_getLoc },
+       { "getRad",      TestItemL_getRad },
+       { "getVel",      TestItemL_getVel },
+       { NULL, NULL }
+   };
+
+   luaW_register<LuaTestItem>(L, "TestItem", NULL, metatable); 
+   lua_pop(L, 1);                            // Remove metatable from stack
+}
+
+
+void TestItem::push(lua_State *L)
+{
+   if(!mLuaProxy)                            // Create a proxy if we don't yet have one
+      mLuaProxy = new LuaTestItem(this);     // Proxy will be deleted by Lua
+
+   luaW_push<LuaTestItem>(L, mLuaProxy);     // Tell Lua about the proxy
+   luaW_hold<LuaTestItem>(L, mLuaProxy);     // Tell Lua to collect the proxy when it's done with it
+}
+
+
+S32 LuaTestItem::id = 0;
+
+// Constructor -- required (but not used) by LuaWrapper
+LuaTestItem::LuaTestItem() { TNLAssert(false, "Unused"); }
+
+
+// Constructor
+LuaTestItem::LuaTestItem(TestItem *testItem)
+{
+   mId = id++;
+
+   mTestItem = testItem;  
+   mTestItem->mLuaProxy = this;
+   mDefunct = false;
+
+   logprintf("Creating testItem proxy %d for %p (this: %p)", mId, mTestItem, this);
+}
+
+
+// Destructor
+LuaTestItem::~LuaTestItem()
+{
+   if(!mDefunct)
+      mTestItem->mLuaProxy = NULL;
+}
+
+
+void LuaTestItem::setDefunct(bool isDefunct)
+{
+   mDefunct = isDefunct;
+}
+
+
+bool LuaTestItem::isDefunct()
+{
+   return mDefunct;
+}
+
+
+
 ///// Lua Interface
 
 const char TestItem::className[] = "TestItem";      // Class name as it appears to Lua scripts
-
+/*
 // Lua constructor
 TestItem::TestItem(lua_State *L)
 {
@@ -2035,7 +2163,7 @@ void TestItem::push(lua_State *L)
 {
    Lunar<TestItem>::push(L, this);
 }
-
+*/
 
 ////////////////////////////////////////
 ////////////////////////////////////////
