@@ -148,6 +148,7 @@ protected:
 
 public:
    MoveItem(Point p = Point(0,0), bool collideable = false, float radius = 1, float mass = 1);   // Constructor
+   virtual ~MoveItem();                                                                          // Destructor
 
    void idle(GameObject::IdleCallPath path);
 
@@ -186,8 +187,19 @@ public:
    virtual S32 isOnShip(lua_State *L);                 // Is flag being carried by a ship?
    virtual S32 getShip(lua_State *L);
 
-};
+   // Lua interface
+private:
+   LuaProxy<MoveItem> *mLuaProxy;      // Proxy object
 
+public:
+   MoveItem(lua_State *L);             //  Lua constructor
+   
+   template <class T> void push(lua_State *L) { luaW_push<T>(L, this); }   // Tell Lua about the proxy
+   //void GameObject::push(lua_State *L)       // Lua-aware classes will implement this
+
+   LuaProxy<MoveItem> *getLuaProxy() { return mLuaProxy; }
+   void setLuaProxy(LuaProxy<MoveItem> *obj) { mLuaProxy = obj; }
+};
 
 
 ////////////////////////////////////////
@@ -407,7 +419,6 @@ class TestItem : public MoveItem
 
 public:
    TestItem();     // Constructor
-   ~TestItem();
    TestItem *clone() const;
 
    // Test methods
@@ -433,40 +444,25 @@ public:
    void renderDock();
 
    ///// Lua Interface
-
-   TestItem(lua_State *L);             //  Lua constructor
-   LuaProxy<TestItem> *mLuaProxy;      // Proxy object
-   void setLuaProxy(LuaProxy<TestItem> *obj);
-   LuaProxy<TestItem> *getLuaProxy();
-
    static const char className[];
 
-   static Lunar<TestItem>::RegType methods[];
 
-   S32 getClassID(lua_State *L);
-   void push(lua_State *L);
-};
+//////////////////////////////////////////////////////
+//////////////////////////////////////////////////////
+// TEMPLATE CHALLENGE -- Remove the remaining code in this class, and 
+// provide the functionality generically from parent class (MoveItem)
+// Can you do it?
+//////////////////////////////////////////////////////
+//////////////////////////////////////////////////////
 
-
-// Proxy object for testItem -- we want this as generic as possible
-class LuaTestItem 
-{
-public:
-   TestItem *mTestItem;    
-   bool mDefunct;
-
-   static S32 id;
-   S32 mId;
+private:
+   LuaProxy<TestItem> *mLuaProxy;      // Proxy object
 
 public:
-   LuaTestItem();                     // Constructor (unused, but required by LuaWrapper)
-   LuaTestItem(TestItem *testItem);   // Constructor
-   ~LuaTestItem();                    // Destructor
+   LuaProxy<TestItem> *getLuaProxy() { return mLuaProxy; }
+   void setLuaProxy(LuaProxy<TestItem> *obj) { mLuaProxy = obj; }
 
-   void setDefunct(bool isDefunct);
-   bool isDefunct();
 };
-
 
 
 ////////////////////////////////////////
