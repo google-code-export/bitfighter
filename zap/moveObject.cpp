@@ -725,6 +725,16 @@ MoveItem::MoveItem(Point p, bool collideable, float radius, float mass) : MoveOb
    mInitial = false;
 
    updateTimer = 0;
+
+   mLuaProxy = NULL;
+}
+
+
+// Destructor
+MoveItem::~MoveItem()
+{
+   if(mLuaProxy)
+      mLuaProxy->setDefunct(true);
 }
 
 
@@ -1040,6 +1050,28 @@ bool MoveItem::collide(GameObject *otherObject)
 
 ////
 // LuaItem interface
+
+//template <class T> 
+//void MoveItem::setLuaProxy(LuaProxy<T> *obj)
+//{
+//   mLuaProxy = obj;
+//}
+//
+//
+//template <class T> 
+//LuaProxy<T> *MoveItem::getLuaProxy()
+//{
+//   return mLuaProxy;
+//}
+
+// void GameObject::push(lua_State *L)       // Lua-aware classes will implement this
+
+//template <class T> 
+//void MoveItem::push(lua_State *L)
+//{
+//   luaW_push<T>(L, this);    // Tell Lua about the proxy
+//}
+
 
 S32 MoveItem::isOnShip(lua_State *L)
 {
@@ -1932,15 +1964,6 @@ TestItem::TestItem() : Parent(Point(0,0), true, (F32)TEST_ITEM_RADIUS, TEST_ITEM
 {
    mNetFlags.set(Ghostable);
    mObjectTypeNumber = TestItemTypeNumber;
-   mLuaProxy = NULL;
-}
-
-
-// Destructor
-TestItem::~TestItem()
-{
-   if(mLuaProxy)
-      mLuaProxy->setDefunct(true);
 }
 
 
@@ -1971,28 +1994,12 @@ void TestItem::renderDock()
 }
 
 
-const char *TestItem::getEditorHelpString()
-{
-   return "Bouncy object that floats around and gets in the way.";
-}
+const char TestItem::className[] = "TestItem";     // For LuaW
 
-
-const char *TestItem::getPrettyNamePlural()
-{
-   return "TestItems";
-}
-
-
-const char *TestItem::getOnDockName()
-{
-   return "Test";
-}
-
-
-const char *TestItem::getOnScreenName()
-{
-   return "TestItem";
-}
+const char *TestItem::getOnScreenName()      {  return "TestItem";   }
+const char *TestItem::getPrettyNamePlural()  {  return "TestItems";  }
+const char *TestItem::getOnDockName()        {  return "Test";       }
+const char *TestItem::getEditorHelpString()  {  return "Bouncy object that floats around and gets in the way."; }
 
 
 F32 TestItem::getEditorRadius(F32 currentScale)
@@ -2027,12 +2034,6 @@ bool TestItem::getCollisionPoly(Vector<Point> &polyPoints) const
 static S32 TestItemL_getClassId(lua_State* L)
 {
    return LuaObject::returnInt(L, TestItemTypeNumber);
-}
-
-
-S32 TestItem::getClassID(lua_State *L)
-{
-   return returnInt(L, TestItemTypeNumber);
 }
 
 
@@ -2074,64 +2075,6 @@ const luaL_reg TestItem::luaMethods[] =
 };
 
 
-
-void TestItem::setLuaProxy(LuaProxy<TestItem> *obj)
-{
-   mLuaProxy = obj;
-}
-
-
-LuaProxy<TestItem> *TestItem::getLuaProxy()
-{
-   return mLuaProxy;
-}
-
-
-void TestItem::push(lua_State *L)
-{
-   //if(!mLuaProxy)                            // Create a proxy if we don't yet have one
-   //   mLuaProxy = new LuaTestItem(this);     // Proxy will be deleted by Lua
-
-   luaW_push<TestItem>(L, this);    // Tell Lua about the proxy
-}
-
-
-///// Lua Interface
-
-const char TestItem::className[] = "TestItem";      // Class name as it appears to Lua scripts
-/*
-// Lua constructor
-TestItem::TestItem(lua_State *L)
-{
-   // Do nothing, for now...  should take params from stack and create testItem object
-}
-
-
-// Define the methods we will expose to Lua
-Lunar<TestItem>::RegType TestItem::methods[] =
-{
-   // Standard gameItem methods
-   method(TestItem, getClassID),
-   method(TestItem, getLoc),
-   method(TestItem, getRad),
-   method(TestItem, getVel),
-
-   {0,0}    // End method list
-};
-
-
-S32 TestItem::getClassID(lua_State *L)
-{
-   return returnInt(L, TestItemTypeNumber);
-}
-
-
-void TestItem::push(lua_State *L)
-{
-   Lunar<TestItem>::push(L, this);
-}
-*/
-
 ////////////////////////////////////////
 ////////////////////////////////////////
 
@@ -2151,7 +2094,6 @@ ResourceItem *ResourceItem::clone() const
 {
    return new ResourceItem(*this);
 }
-
 
 
 void ResourceItem::renderItem(const Point &pos)
