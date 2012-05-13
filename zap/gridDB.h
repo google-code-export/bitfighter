@@ -26,6 +26,7 @@
 #ifndef _GRIDDB_H_
 #define _GRIDDB_H_
 
+#include "GeomObject.h"    // Base class
 
 #include "tnlTypes.h"
 #include "tnlDataChunker.h"
@@ -46,7 +47,7 @@ typedef bool (*TestFunc)(U8);
 class  GridDatabase;
 class EditorObjectDatabase;
 
-class DatabaseObject
+class DatabaseObject : public GeomObject
 {
 
 friend class GridDatabase;
@@ -75,6 +76,8 @@ public:
 
    virtual bool getCollisionPoly(Vector<Point> &polyPoints) const;
    virtual bool getCollisionCircle(U32 stateIndex, Point &point, float &radius) const;
+   Rect getBounds(U32 stateIndex) const;     // Returns bounding box around the above
+
 
    virtual bool isCollisionEnabled();
 
