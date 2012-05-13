@@ -227,6 +227,16 @@ bool isVisibleOnCmdrsMapWithSensorType(U8 x)
 }
 
 
+//bool isMoveItemType(U8 x)
+//{
+//   return x == 
+//}
+//
+//bool isMoveObjectType(U8 x)
+//{
+//   return isMoveItem(x) || isShipType(x); 
+//}
+
 bool isAnyObjectType(U8 x)
 {
    return true;
@@ -247,263 +257,116 @@ DamageInfo::DamageInfo()
 ////////////////////////////////////////
 
 // Constructor
-GeometryContainer::GeometryContainer()
+EditorObject::EditorObject()
 {
-   mGeometry = NULL;
+   mLitUp = false; 
+   mSelected = false; 
 }
 
 
-// Copy constructor
-GeometryContainer::GeometryContainer(const GeometryContainer &container)
+void EditorObject::onItemDragging()  { /* Do nothing */ }
+void EditorObject::onAttrsChanging() { /* Do nothing */ }
+void EditorObject::onAttrsChanged()  { /* Do nothing */ }
+
+
+const char *EditorObject::getEditorHelpString()
 {
-   const Geometry *old = container.mGeometry;
-
-   switch(container.mGeometry->getGeomType())
-   {
-      case geomPoint:
-         mGeometry = new PointGeometry(*static_cast<const PointGeometry *>(old));
-         break;
-      case geomSimpleLine:
-         mGeometry = new SimpleLineGeometry(*static_cast<const SimpleLineGeometry *>(old));
-         break;
-      case geomPolyLine:
-         mGeometry = new PolylineGeometry(*static_cast<const PolylineGeometry *>(old));
-         break;
-      case geomPolygon:
-         mGeometry = new PolygonGeometry(*static_cast<const PolygonGeometry *>(old));
-         break;
-      default:
-         TNLAssert(false, "Invalid value!");
-         break;
-   }
+   TNLAssert(false, "getEditorHelpString method not implemented!");
+   return "getEditorHelpString method not implemented!";  // better then a NULL crash in non-debug mode or continuing past the Assert
 }
 
 
-// Destructor
-GeometryContainer::~GeometryContainer()
+const char *EditorObject::getPrettyNamePlural()
 {
-   delete mGeometry;
+   TNLAssert(false, "getPrettyNamePlural method not implemented!");
+   return "getPrettyNamePlural method not implemented!";
 }
 
 
-Geometry *GeometryContainer::getGeometry() const
+const char *EditorObject::getOnDockName()
 {
-   return mGeometry;
+   TNLAssert(false, "getOnDockName method not implemented!");
+   return "getOnDockName method not implemented!";
 }
 
 
-const Geometry *GeometryContainer::getConstGeometry() const
+const char *EditorObject::getOnScreenName()
 {
-   return mGeometry;
+   TNLAssert(false, "getOnScreenName method not implemented!");
+   return "getOnScreenName method not implemented!";
 }
 
 
-void GeometryContainer::setGeometry(Geometry *geometry)
+// Not all editor objects will implement this
+const char *EditorObject::getInstructionMsg()
 {
-   mGeometry = geometry;
+   return "";
 }
 
 
-const Vector<Point> *GeometryContainer::getOutline() const
+string EditorObject::getAttributeString()
 {
-   return mGeometry->getOutline();
+   return "";
 }
 
 
-const Vector<Point> *GeometryContainer::getFill() const    
+S32 EditorObject::getDockRadius()
 {
-   return mGeometry->getFill();
+   return 10;
 }
 
 
-Point GeometryContainer::getVert(S32 index) const   
-{   
-   return mGeometry->getVert(index);  
+
+bool EditorObject::isSelected()
+{
+   return mSelected;
 }
 
 
-string GeometryContainer::geomToString(F32 gridSize) const 
-{  
-   return mGeometry->geomToString(gridSize);  
+void EditorObject::setSelected(bool selected)
+{
+   mSelected = selected;
+}
+
+
+bool EditorObject::isLitUp() 
+{ 
+   return mLitUp; 
+}
+
+
+void EditorObject::setLitUp(bool litUp) 
+{ 
+   mLitUp = litUp; 
+
+   if(!litUp) 
+      setVertexLitUp(NONE); 
+}
+
+
+bool EditorObject::isVertexLitUp(S32 vertexIndex)
+{
+   return mVertexLitUp == vertexIndex;
+}
+
+
+void EditorObject::setVertexLitUp(S32 vertexIndex)
+{
+   mVertexLitUp = vertexIndex;
+}
+
+
+// Size of object in editor 
+F32 EditorObject::getEditorRadius(F32 currentScale)
+{
+   return 10 * currentScale;   // 10 pixels is base size
 }
 
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-
-// Constructor
-GeomObject::GeomObject()
-{
-   // Do nothing
-}
-
-
-// Destructor
-GeomObject::~GeomObject()
-{
-   // Do nothing
-};
-
-
-   // mGeometry will be deleted in destructor
-void GeomObject::setNewGeometry(GeomType geomType)
-{
-   TNLAssert(!mGeometry.getGeometry(), "This object already has a geometry!");
-
-   switch(geomType)
-   {
-      case geomPoint:
-         mGeometry.setGeometry(new PointGeometry());
-         return;
-
-      case geomSimpleLine:
-         mGeometry.setGeometry(new SimpleLineGeometry());
-         return;
-
-      case geomPolyLine:
-         mGeometry.setGeometry(new PolylineGeometry());
-         return;
-
-      case geomPolygon:
-         mGeometry.setGeometry(new PolygonGeometry());
-         return;
-
-      default:
-         TNLAssert(false, "Unknown geometry!");
-         break;
-   }
-}
-
-
-// Basic definitions
-GeomType GeomObject::getGeomType()              {   return mGeometry.getGeometry()->getGeomType();   }
-Point   GeomObject::getVert(S32 index) const   {   return mGeometry.getVert(index);  }
-
-bool GeomObject::deleteVert(S32 vertIndex)               
-{   
-   if(mGeometry.getGeometry()->deleteVert(vertIndex))
-   {
-      onPointsChanged();  
-      return true;
-   }
-
-   return false;
-}
-
-
-bool GeomObject::insertVert(Point vertex, S32 vertIndex) 
-{   
-   if(mGeometry.getGeometry()->insertVert(vertex, vertIndex))
-   {
-      onPointsChanged();
-      return true;
-   }
-
-   return false;
-}
-
-
-void GeomObject::setVert(const Point &pos, S32 index)    { mGeometry.getGeometry()->setVert(pos, index); }
-                                                                                           
-bool GeomObject::anyVertsSelected()          {   return mGeometry.getGeometry()->anyVertsSelected();        }
-S32 GeomObject::getVertCount() const         {   return mGeometry.getGeometry()->getVertCount();            }
-S32 GeomObject::getMinVertCount() const      {   return mGeometry.getGeometry()->getMinVertCount();         }
-
-void GeomObject::clearVerts()                {   mGeometry.getGeometry()->clearVerts(); onPointsChanged();  }                        
-
-
-bool GeomObject::addVertFront(Point vert)
-{
-   if(mGeometry.getGeometry()->addVertFront(vert))
-   {
-      onPointsChanged();
-      return true;
-   }
-
-   return false;
-}
-
-
-bool GeomObject::addVert(const Point &point, bool ignoreMaxPointsLimit) 
-{
-   if(mGeometry.getGeometry()->addVert(point, ignoreMaxPointsLimit))
-   {
-      onPointsChanged();
-      return true;
-   }
-
-   return false;
-}
-
-
-// Vertex selection -- only needed in editor
-void GeomObject::selectVert(S32 vertIndex)   {   mGeometry.getGeometry()->selectVert(vertIndex);            }
-void GeomObject::aselectVert(S32 vertIndex)  {   mGeometry.getGeometry()->aselectVert(vertIndex);           }
-void GeomObject::unselectVert(S32 vertIndex) {   mGeometry.getGeometry()->unselectVert(vertIndex);          }
-void GeomObject::unselectVerts()             {   mGeometry.getGeometry()->unselectVerts();                  }
-     
-bool GeomObject::vertSelected(S32 vertIndex) {   return mGeometry.getGeometry()->vertSelected(vertIndex);   }
-
-// Geometric calculations
-Point GeomObject::getCentroid()     {   return mGeometry.getGeometry()->getCentroid();     }
-F32  GeomObject::getLabelAngle()   {   return mGeometry.getGeometry()->getLabelAngle();   }
-      
-
-// Geometry operations
-const Vector<Point> *GeomObject::getOutline() const       {   return mGeometry.getOutline();    }
-const Vector<Point> *GeomObject::getFill() const          {   return mGeometry.getFill();       }
-
-Rect GeomObject::calcExtents()                            {   return mGeometry.getGeometry()->calcExtents();   }
-
-
-// Geometric manipulations
-void GeomObject::rotateAboutPoint(const Point &center, F32 angle)  {  mGeometry.getGeometry()->rotateAboutPoint(center, angle);   }
-void GeomObject::flip(F32 center, bool isHoriz)                    {  mGeometry.getGeometry()->flip(center, isHoriz);             }
-void GeomObject::scale(const Point &center, F32 scale)             {  mGeometry.getGeometry()->scale(center, scale);              }
-
-// Move object to location, specifying (optional) vertex to be positioned at pos
-void GeomObject::moveTo(const Point &pos, S32 snapVertex)          {  mGeometry.getGeometry()->moveTo(pos, snapVertex);           }
-void GeomObject::offset(const Point &offset)                       {  mGeometry.getGeometry()->offset(offset);                    }
-
-// Geom in-out
-void GeomObject::packGeom(GhostConnection *connection, BitStream *stream)    {   mGeometry.getGeometry()->packGeom(connection, stream);     }
-void GeomObject::unpackGeom(GhostConnection *connection, BitStream *stream)  {   mGeometry.getGeometry()->unpackGeom(connection, stream); onPointsChanged();  }
-
-void GeomObject::readGeom(S32 argc, const char **argv, S32 firstCoord, F32 gridSize) 
-{  
-   mGeometry.getGeometry()->readGeom(argc, argv, firstCoord, gridSize); 
-   onPointsChanged();
-} 
-
-string GeomObject::geomToString(F32 gridSize) const {  return mGeometry.geomToString(gridSize);  }
-
-// Settings
-void GeomObject::disableTriangulation() {   mGeometry.getGeometry()->disableTriangulation();   }
-
-
-void GeomObject::onGeomChanging()
-{
-   if(getGeomType() == geomPolygon)
-      onGeomChanged();               // Allows poly fill to get reshaped as vertices move
-
-   onPointsChanged();
-}
-
-
-void GeomObject::onGeomChanged() {  /* Do nothing */ }
-
-
-void GeomObject::onPointsChanged()                        
-{   
-   mGeometry.getGeometry()->onPointsChanged();
-}
-
-
-////////////////////////////////////////
-////////////////////////////////////////
-
-// BfObject - the declerations are in BfObject.h
+// BfObject - the declarations are in GameObject.h
 
 // Constructor
 BfObject::BfObject()
@@ -511,8 +374,6 @@ BfObject::BfObject()
    mGame = NULL;
    mObjectTypeNumber = UnknownTypeNumber;
 
-   mLitUp = false; 
-   mSelected = false; 
    assignNewSerialNumber();
 
    mTeam = -1;
@@ -553,7 +414,7 @@ void BfObject::setUserDefinedItemId(S32 itemId)
 }
 
 
-S32 BfObject::getTeam()
+S32 BfObject::getTeam() const
 {
    return mTeam;
 }
@@ -565,7 +426,7 @@ void BfObject::setTeam(S32 team)
 }
 
 
-const Color *BfObject::getColor() 
+const Color *BfObject::getColor() const
 { 
    return mGame->getTeamColor(mTeam);
 }
@@ -663,90 +524,12 @@ void BfObject::unselect()
 }
 
 
-bool BfObject::isSelected()
-{
-   return mSelected;
-}
-
-
-void BfObject::setSelected(bool selected)
-{
-   mSelected = selected;
-}
-
-
-bool BfObject::isLitUp() 
-{ 
-   return mLitUp; 
-}
-
-
-void BfObject::setLitUp(bool litUp) 
-{ 
-   mLitUp = litUp; 
-
-   if(!litUp) 
-      setVertexLitUp(NONE); 
-}
-
-
-bool BfObject::isVertexLitUp(S32 vertexIndex)
-{
-   return mVertexLitUp == vertexIndex;
-}
-
-
-void BfObject::setVertexLitUp(S32 vertexIndex)
-{
-   mVertexLitUp = vertexIndex;
-}
-
-
 void BfObject::onGeomChanged()
 {
    GeomObject::onGeomChanged();
    updateExtentInDatabase();
 }
 
-
-void BfObject::onItemDragging()  { /* Do nothing */ }
-void BfObject::onAttrsChanging() { /* Do nothing */ }
-void BfObject::onAttrsChanged()  { /* Do nothing */ }
-
-
-const char *BfObject::getEditorHelpString()
-{
-   TNLAssert(false, "getEditorHelpString method not implemented!");
-   return "getEditorHelpString method not implemented!";  // better then a NULL crash in non-debug mode or continuing past the Assert
-}
-
-
-const char *BfObject::getPrettyNamePlural()
-{
-   TNLAssert(false, "getPrettyNamePlural method not implemented!");
-   return "getPrettyNamePlural method not implemented!";
-}
-
-
-const char *BfObject::getOnDockName()
-{
-   TNLAssert(false, "getOnDockName method not implemented!");
-   return "getOnDockName method not implemented!";
-}
-
-
-const char *BfObject::getOnScreenName()
-{
-   TNLAssert(false, "getOnScreenName method not implemented!");
-   return "getOnScreenName method not implemented!";
-}
-
-
-// Not all editor objects will implement this
-const char *BfObject::getInstructionMsg()
-{
-   return "";
-}
 
 
 #ifndef ZAP_DEDICATED
@@ -771,9 +554,9 @@ void BfObject::renderAndLabelHighlightedVertices(F32 currentScale)
 
    // Label and highlight any selected or lit up vertices.  This will also highlight point items.
    for(S32 i = 0; i < getVertCount(); i++)
-      if(vertSelected(i) || isVertexLitUp(i) || ((mSelected || mLitUp)  && getVertCount() == 1))
+      if(vertSelected(i) || isVertexLitUp(i) || ((isSelected() || isLitUp())  && getVertCount() == 1))
       {
-         glColor((vertSelected(i) || (mSelected && getGeomType() == geomPoint)) ? SELECT_COLOR : HIGHLIGHT_COLOR);
+         glColor((vertSelected(i) || (isSelected() && getGeomType() == geomPoint)) ? SELECT_COLOR : HIGHLIGHT_COLOR);
 
          Point center = getVert(i) + getEditorSelectionOffset(currentScale);
 
@@ -805,12 +588,6 @@ void BfObject::initializeEditor()
    unselectVerts();
 }
 
-
-// Size of object in editor 
-F32 BfObject::getEditorRadius(F32 currentScale)
-{
-   return 10 * currentScale;   // 10 pixels is base size
-}
 
 
 string BfObject::toString(F32) const
@@ -902,17 +679,6 @@ EditorObjectDatabase *BfObject::getEditorObjectDatabase()
 }
 
 
-string BfObject::getAttributeString()
-{
-   return "";
-}
-
-
-S32 BfObject::getDockRadius()
-{
-   return 10;
-}
-
 
 // For editing attributes -- all implementation will need to be provided by the children
 EditorAttributeMenuUI *BfObject::getAttributeMenu()                                      { return NULL; }
@@ -930,7 +696,7 @@ BfObject::~BfObject()
 }
 
 
-bool BfObject::isControlled()
+bool BfObject::controllingClientIsValid()
 {
    return mControllingClient.isValid();
 }
@@ -1048,6 +814,8 @@ Vector<Point> BfObject::getRepairLocations(const Point &repairOrigin)
 // Returns number of ships hit
 S32 BfObject::radiusDamage(Point pos, S32 innerRad, S32 outerRad, TestFunc objectTypeTest, DamageInfo &info, F32 force)
 {
+   GameType *gameType = getGame()->getGameType();
+
    // Check for players within range.  If so, blast them to little tiny bits!
    // Those within innerRad get full force of the damage.  Those within outerRad get damage prop. to distance
    Rect queryRect(pos, pos);
@@ -1059,7 +827,6 @@ S32 BfObject::radiusDamage(Point pos, S32 innerRad, S32 outerRad, TestFunc objec
    // Ghosts can't do damage
    if(isGhost())
       info.damageAmount = 0;
-
 
    S32 shipsHit = 0;
 
@@ -1075,8 +842,7 @@ S32 BfObject::radiusDamage(Point pos, S32 innerRad, S32 outerRad, TestFunc objec
          continue;
 
       // Can one damage another?
-      if(getGame()->getGameType())
-         if(!getGame()->getGameType()->objectCanDamageObject(info.damagingObject, foundObject))
+      if(gameType && !gameType->objectCanDamageObject(info.damagingObject, foundObject))
             continue;
 
       //// Check if damager is an area weapon, and damagee is a projectile... if so, kill it
@@ -1133,20 +899,18 @@ S32 BfObject::radiusDamage(Point pos, S32 innerRad, S32 outerRad, TestFunc objec
 void BfObject::findObjects(TestFunc objectTypeTest, Vector<DatabaseObject *> &fillVector, const Rect &ext)
 {
    GridDatabase *gridDB = getDatabase();
-   if(!gridDB)
-      return;
 
-   gridDB->findObjects(objectTypeTest, fillVector, ext);
+   if(gridDB)
+      gridDB->findObjects(objectTypeTest, fillVector, ext);
 }
 
 
 void BfObject::findObjects(U8 typeNumber, Vector<DatabaseObject *> &fillVector, const Rect &ext)
 {
    GridDatabase *gridDB = getDatabase();
-   if(!gridDB)
-      return;
 
-   gridDB->findObjects(typeNumber, fillVector, ext);
+   if(gridDB)
+      gridDB->findObjects(typeNumber, fillVector, ext);
 }
 
 
@@ -1155,12 +919,12 @@ BfObject *BfObject::findObjectLOS(U8 typeNumber, U32 stateIndex, Point rayStart,
 {
    GridDatabase *gridDB = getDatabase();
 
-   if(!gridDB)
-      return NULL;
-
-   return dynamic_cast<BfObject *>(
+   if(gridDB)
+     return dynamic_cast<BfObject *>(
          gridDB->findObjectLOS(typeNumber, stateIndex, rayStart, rayEnd, collisionTime, collisionNormal)
          );
+
+   return NULL;
 }
 
 
@@ -1169,12 +933,12 @@ BfObject *BfObject::findObjectLOS(TestFunc objectTypeTest, U32 stateIndex, Point
 {
    GridDatabase *gridDB = getDatabase();
 
-   if(!gridDB)
-      return NULL;
-
-   return dynamic_cast<BfObject *>(
+   if(gridDB)
+     return static_cast<BfObject *>(
          gridDB->findObjectLOS(objectTypeTest, stateIndex, rayStart, rayEnd, collisionTime, collisionNormal)
          );
+
+   return NULL;
 }
 
 
@@ -1220,44 +984,21 @@ StringTableEntry BfObject::getKillString()
 }
 
 
-F32 BfObject::getRating()
-{
-   return 0; // TODO: Fix this
-}
-
-
-S32 BfObject::getScore()
-{
-   return 0; // TODO: Fix this
-}
+//F32 BfObject::getRating()
+//{
+//   return 0; // TODO: Fix this
+//}
+//
+//
+//S32 BfObject::getScore()
+//{
+//   return 0; // TODO: Fix this
+//}
 
 
 S32 BfObject::getRenderSortValue()
 {
    return 2;
-}
-
-
-Rect BfObject::getBounds(U32 stateIndex) const
-{
-   Rect ret;
-   Point p;
-   float radius;
-   Vector<Point> bounds;
-
-   if(getCollisionPoly(bounds))
-   {
-      ret.min = ret.max = bounds[0];
-      for(S32 i = 1; i < bounds.size(); i++)
-         ret.unionPoint(bounds[i]);
-   }
-   else if(getCollisionCircle(stateIndex, p, radius))
-   {
-      ret.max = p + Point(radius, radius);
-      ret.min = p - Point(radius, radius);
-   }
-
-   return ret;
 }
 
 
@@ -1317,52 +1058,52 @@ bool BfObject::isCollisionEnabled()
    return mDisableCollisionCount == 0;
 }
 
-
-// Find if the specified point is in theObject's collisionPoly or collisonCircle
-bool BfObject::collisionPolyPointIntersect(Point point)
-{
-   Point center;
-   F32 radius;
-   Rect rect;
-
-   Vector<Point> polyPoints;
-
-   polyPoints.clear();
-
-   if(getCollisionPoly(polyPoints))
-      return PolygonContains2(polyPoints.address(), polyPoints.size(), point);
-
-   else if(getCollisionCircle(MoveObject::ActualState, center, radius))
-      return(center.distanceTo(point) <= radius);
-
-   else
-      return false;
-}
-
-
-// Find if the specified polygon intersects theObject's collisionPoly or collisonCircle
-bool BfObject::collisionPolyPointIntersect(Vector<Point> points)
-{
-   Point center;
-   Rect rect;
-   F32 radius;
-   Vector<Point> polyPoints;
-
-   polyPoints.clear();
-
-   if(getCollisionPoly(polyPoints))
-      return polygonsIntersect(polyPoints, points);
-
-   else if(getCollisionCircle(MoveObject::ActualState, center, radius))
-   {
-      Point unusedPt;
-      return polygonCircleIntersect(&points[0], points.size(), center, radius * radius, unusedPt);
-   }
-
-   else
-      return false;
-}
-
+//
+//// Find if the specified point is in theObject's collisionPoly or collisonCircle
+//bool BfObject::collisionPolyPointIntersect(Point point)
+//{
+//   Point center;
+//   F32 radius;
+//   Rect rect;
+//
+//   Vector<Point> polyPoints;
+//
+//   polyPoints.clear();
+//
+//   if(getCollisionPoly(polyPoints))
+//      return PolygonContains2(polyPoints.address(), polyPoints.size(), point);
+//
+//   else if(getCollisionCircle(MoveObject::ActualState, center, radius))
+//      return(center.distanceTo(point) <= radius);
+//
+//   else
+//      return false;
+//}
+//
+//
+//// Find if the specified polygon intersects theObject's collisionPoly or collisonCircle
+//bool BfObject::collisionPolyPointIntersect(Vector<Point> points)
+//{
+//   Point center;
+//   Rect rect;
+//   F32 radius;
+//   Vector<Point> polyPoints;
+//
+//   polyPoints.clear();
+//
+//   if(getCollisionPoly(polyPoints))
+//      return polygonsIntersect(polyPoints, points);
+//
+//   else if(getCollisionCircle(MoveObject::ActualState, center, radius))
+//   {
+//      Point unusedPt;
+//      return polygonCircleIntersect(&points[0], points.size(), center, radius * radius, unusedPt);
+//   }
+//
+//   else
+//      return false;
+//}
+//
 
 // Find if the specified polygon intersects theObject's collisionPoly or collisonCircle
 bool BfObject::collisionPolyPointIntersect(Point center, F32 radius)

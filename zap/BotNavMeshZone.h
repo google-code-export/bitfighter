@@ -76,7 +76,7 @@ public:
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-class BotNavMeshZone : public DatabaseObject, public GeomObject 
+class BotNavMeshZone : public DatabaseObject 
 {
    typedef GeomObject Parent;
 
@@ -97,14 +97,8 @@ public:
 
    void render(S32 layerIndex);
 
-   S32 getRenderSortValue();
-
-   // Create objects from parameters stored in level file
-   bool processArguments(S32 argc, const char **argv, Game *game);
-
    GridDatabase *getGameObjDatabase();
    void addToZoneDatabase();
-   void onAddedToGame(Game *theGame);
 
    static GridDatabase *getBotZoneDatabase();
 
@@ -114,11 +108,7 @@ public:
    bool getCollisionPoly(Vector<Point> &polyPoints) const;
 
    // Only gets run on the server, never on client
-   bool collide(BfObject *hitObject);
-
-   // These methods will be empty later...
-   U32 packUpdate(GhostConnection *connection, U32 updateMask, BitStream *stream);
-   void unpackUpdate(GhostConnection *connection, BitStream *stream);
+   //bool collide(BfObject *hitObject);
 
    U16 getZoneId() { return mZoneId; }
 

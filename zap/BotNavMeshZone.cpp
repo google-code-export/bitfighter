@@ -99,11 +99,6 @@ Point BotNavMeshZone::getCenter()
 
 void BotNavMeshZone::render(S32 layerIndex)    
 {
-   //if(!dynamic_cast<ClientGame *>(getGame())->isShowingDebugMeshZones())
-   //   return;
-   // isShowingDebugMeshZones doesn't work, and not needed. getGame() is ServerGame, because gClientGame is rendering server's BotZones
-   // Client does not have any BotZones
-
    if(layerIndex == 0)
       renderNavMeshZone(getOutline(), getFill(), getCentroid(), mZoneId, true);
 
@@ -114,35 +109,21 @@ void BotNavMeshZone::render(S32 layerIndex)
 
 // Use this to help keep track of which robots are where
 // Only gets run on the server, never on client, obviously, because that's where the bots are!!!
-bool BotNavMeshZone::collide(BfObject *hitObject)
-{
-   // This does not get run anymore, it is in a seperate database.
-   if(hitObject->getObjectTypeNumber() == RobotShipTypeNumber)     // Only care about robots...
-   {
-      Robot *r = (Robot *) hitObject;
-      r->setCurrentZone(mZoneId);
-   }
-   return false;
-}
-
-
-S32 BotNavMeshZone::getRenderSortValue()
-{
-   return -2;
-}
+//bool BotNavMeshZone::collide(BfObject *hitObject)
+//{
+//   // This does not get run anymore, it is in a seperate database.
+//   if(hitObject->getObjectTypeNumber() == RobotShipTypeNumber)     // Only care about robots...
+//   {
+//      Robot *r = (Robot *) hitObject;
+//      r->setCurrentZone(mZoneId);
+//   }
+//   return false;
+//}
 
 
 GridDatabase *BotNavMeshZone::getBotZoneDatabase()
 {
    return &mBotZoneDatabase;
-}
-
-
-// Create objects from parameters stored in level file -- use of this function is deprecated
-bool BotNavMeshZone::processArguments(S32 argc, const char **argv, Game *game)
-{
-   logprintf(LogConsumer::LogLevelError, "BotNavMeshZones are now created automatically -- remove them from your level files to improve performance.");
-   return false;
 }
 
 
@@ -153,30 +134,11 @@ void BotNavMeshZone::addToZoneDatabase()
 }
 
 
-void BotNavMeshZone::onAddedToGame(Game *theGame)
-{
-   TNLAssert(false, "Should not be added to game");
-}
-
-
 // More precise boundary for precise collision detection
 bool BotNavMeshZone::getCollisionPoly(Vector<Point> &polyPoints) const
 {
    polyPoints = *getOutline();
    return true;
-}
-
-
-U32 BotNavMeshZone::packUpdate(GhostConnection *connection, U32 updateMask, BitStream *stream)
-{
-   // Do nothing, not used
-   return 0;
-}
-
-
-void BotNavMeshZone::unpackUpdate(GhostConnection *connection, BitStream *stream)
-{
-   // Do nothing, not used
 }
 
 
@@ -192,9 +154,8 @@ U16 BotNavMeshZone::findZoneContaining(GridDatabase *botZoneDatabase, const Poin
       // First a quick, crude elimination check then more comprehensive one
       // Since our zones are convex, we can use the faster method!  Yay!
       // Actually, we can't, as it is not reliable... reverting to more comprehensive (and working) version.
-      BotNavMeshZone *zone = dynamic_cast<BotNavMeshZone *>(fillVector[i]);
+      BotNavMeshZone *zone = static_cast<BotNavMeshZone *>(fillVector[i]);
 
-      TNLAssert(zone, "NULL zone in findZoneContaining");
       if( zone->getExtent().contains(p) 
                         && (PolygonContains2(zone->getOutline()->address(), zone->getOutline()->size(), p)) )
          return zone->mZoneId;
@@ -506,13 +467,15 @@ bool BotNavMeshZone::buildBotMeshZones(ServerGame *game, bool triangulateZones)
    U32 starttime = Platform::getRealMilliseconds();
 #endif
 
+   mAllZones.deleteAndClear();
+
    Rect bounds = game->getWorldExtents();
    bounds.expandToInt(Point(LEVEL_ZONE_BUFFER, LEVEL_ZONE_BUFFER));      // Provide a little breathing room
 
    // Make sure level isn't too big for zone generation, which uses 16 bit ints
    if(bounds.getHeight() >= (F32)U16_MAX || bounds.getWidth() >= (F32)U16_MAX)
    {
-      logprintf(LogConsumer::LogLevelError, "Level too big for zone generation! (max dimension, after gridSize expansion, is %d)", U16_MAX);
+      logprintf(LogConsumer::LogLevelError, "Level too big for zone generation! (max allowed dimension, after gridSize expansion, is %d)", U16_MAX);
       return false;
    }
 
@@ -824,7 +787,6 @@ Vector<Point> AStar::findPath(const Vector<BotNavMeshZone *> *zones, S32 startZo
    // This block here lets us repeatedly reuse the whichList array without resetting it or recreating it
    // which, for larger numbers of zones should be a real time saver.  It's not clear if it is particularly
    // more efficient for the zone counts we typically see in Bitfighter levels.
-
    if(onClosedList > U16_MAX - 3 ) // Reset whichList when we've run out of headroom
    {
       for(S32 i = 0; i < MAX_ZONES; i++) 
