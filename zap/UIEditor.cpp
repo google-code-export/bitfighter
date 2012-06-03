@@ -296,15 +296,8 @@ void EditorUserInterface::saveUndoState(bool forceSelectionOfTargetObject)
    }
 
 
-   GridDatabase *eod = getDatabase();
-   TNLAssert(eod, "I expected to have a valid GridDatabase here!");
-
-   GridDatabase *newDB = eod;
-   //eod->dumpObjects();     
-
-   mUndoItems[mLastUndoIndex % UNDO_STATES] = boost::shared_ptr<GridDatabase>(new GridDatabase(*newDB));  // Make a copy
-
-   //mUndoItems[mLastUndoIndex % UNDO_STATES]->dumpObjects();
+   GridDatabase *newDB = new GridDatabase(getDatabase());    // Make a copy
+   mUndoItems[mLastUndoIndex % UNDO_STATES] = boost::shared_ptr<GridDatabase>(newDB);  
 
    mLastUndoIndex++;
    mLastRedoIndex = mLastUndoIndex;
@@ -2591,8 +2584,8 @@ bool EditorUserInterface::checkForEdgeHit(const Point &point, BfObject *object)
 
 bool EditorUserInterface::checkForWallHit(const Point &point, DatabaseObject *object)
 {
-   WallSegment *wallSegment = dynamic_cast<WallSegment *>(object);
-   TNLAssert(wallSegment, "Expected a WallSegment!");
+   TNLAssert(dynamic_cast<WallSegment *>(object), "Expected a WallSegment!");
+   WallSegment *wallSegment = static_cast<WallSegment *>(object);
 
    if(triangulatedFillContains(wallSegment->getTriangulatedFillPoints(), point))
    {
@@ -3172,7 +3165,7 @@ void EditorUserInterface::doSplit(BfObject *object, S32 vertex)
       }
    }
 
-   addToEditor(newObj, getGame(), object->getEditorObjectDatabase());     // Needs to happen before onGeomChanged, so mGame will not be NULL
+   addToEditor(newObj, getGame(), object->getDatabase());     // Needs to happen before onGeomChanged, so mGame will not be NULL
 
    // Tell the new segments that they have new geometry
    object->onGeomChanged();
