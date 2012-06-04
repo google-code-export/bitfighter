@@ -125,8 +125,8 @@ EditorUserInterface::EditorUserInterface(ClientGame *game) : Parent(game)
 
    mWasTesting = false;
 
-   mSnapObject = NULL;
-   mSnapVertexIndex = NONE;
+   clearSnapEnviornment();
+
    mHitItem = NULL;
    mHitVertex = NONE;
    mDockItemHit = NULL;
@@ -296,7 +296,13 @@ void EditorUserInterface::saveUndoState(bool forceSelectionOfTargetObject)
    }
 
 
-   GridDatabase *newDB = new GridDatabase(getDatabase());    // Make a copy
+   GridDatabase *newDB = new GridDatabase();    // Make a copy
+
+
+   newDB->copyObjects(getDatabase());
+
+
+
    mUndoItems[mLastUndoIndex % UNDO_STATES] = boost::shared_ptr<GridDatabase>(newDB);  
 
    mLastUndoIndex++;
@@ -339,13 +345,19 @@ void EditorUserInterface::autoSave()
 }
 
 
+void EditorUserInterface::clearSnapEnviornment()
+{
+   mSnapObject = NULL;
+   mSnapVertexIndex = NONE;
+}
+
+
 void EditorUserInterface::undo(bool addToRedoStack)
 {
    if(!undoAvailable())
       return;
 
-   mSnapObject = NULL;
-   mSnapVertexIndex = NONE;
+   clearSnapEnviornment();
 
    if(mLastUndoIndex == mLastRedoIndex && !mRedoingAnUndo)
    {
@@ -374,8 +386,7 @@ void EditorUserInterface::redo()
 {
    if(mLastRedoIndex != mLastUndoIndex)      // If there's a redo state available...
    {
-      mSnapObject = NULL;
-      mSnapVertexIndex = NONE;
+      clearSnapEnviornment();
 
       mLastUndoIndex++;
 
@@ -514,8 +525,9 @@ void EditorUserInterface::cleanUp()
    mLoadTarget = getDatabase();
    clearDatabase(mLoadTarget);
    game->clearTeams();
-   mSnapObject = NULL;
-   mSnapVertexIndex = NONE;
+   
+   clearSnapEnviornment();
+   
    mAddingVertex = false;
    clearLevelGenItems();
    mGameTypeArgs.clear();
@@ -2932,8 +2944,7 @@ void EditorUserInterface::findSnapVertex()
    if(mDraggingObjects)    // Don't change snap vertex once we're dragging
       return;
 
-   mSnapObject = NULL;
-   mSnapVertexIndex = NONE;
+   clearSnapEnviornment();
 
    Point mouseLevelCoord = convertCanvasToLevelCoord(mMousePos);
 
@@ -3041,8 +3052,7 @@ void EditorUserInterface::deleteSelection(bool objectsOnly)
                deleted = true;
 
                geomChanged = true;
-               mSnapObject = NULL;
-               mSnapVertexIndex = NONE;
+               clearSnapEnviornment();
             }
          }
 
@@ -3312,11 +3322,8 @@ void EditorUserInterface::doneDeleteingWalls()
 void EditorUserInterface::doneDeleteing()
 {
    // Reset a bunch of things
-   mSnapObject = NULL;
-   mSnapVertexIndex = NONE;
-
+   clearSnapEnviornment();
    validateLevel();
-
    onMouseMoved();   // Reset cursor  
 }
 
