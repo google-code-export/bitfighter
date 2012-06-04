@@ -138,7 +138,7 @@ public:
    BucketEntry *mBuckets[BucketRowCount][BucketRowCount];
 
    GridDatabase(bool createWallSegmentManager = true);   // Constructor
-   GridDatabase(const GridDatabase &source);
+   // GridDatabase::GridDatabase(const GridDatabase &source);
    virtual ~GridDatabase();                              // Destructor
 
 
@@ -165,6 +165,9 @@ public:
 
    void findObjects(const Vector<U8> &types, Vector<DatabaseObject *> &fillVector);
    void findObjects(const Vector<U8> &types, Vector<DatabaseObject *> &fillVector, const Rect &extents);
+
+   void copyObjects(const GridDatabase *source);
+
 
 
    bool testTypes(const Vector<U8> &types, U8 objectType) const;

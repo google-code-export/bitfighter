@@ -42,33 +42,29 @@ U32 GridDatabase::mCountGridDatabase = 0;
 GridDatabase::GridDatabase(bool createWallSegmentManager)
 {
    if(mChunker == NULL)
-      mChunker = new ClassChunker<BucketEntry>();     // static shared by all databases, reference counted and deleted in destructor
+      mChunker = new ClassChunker<BucketEntry>();        // Static shared by all databases, reference counted and deleted in destructor
 
    mCountGridDatabase++;
-
-   mQueryId = 0;
 
    for(U32 i = 0; i < BucketRowCount; i++)
       for(U32 j = 0; j < BucketRowCount; j++)
          mBuckets[i][j] = NULL;
 
    if(createWallSegmentManager)
-      mWallSegmentManager = new WallSegmentManager();    // gets deleted in destructor
+      mWallSegmentManager = new WallSegmentManager();    // Gets deleted in destructor
    else
       mWallSegmentManager = NULL;
 }
 
 
 // Copy contents of source into this
-GridDatabase::GridDatabase(const GridDatabase &source)
-{
-   mAllObjects.reserve(source.mAllObjects.size());
-
-   for(S32 i = 0; i < source.mAllObjects.size(); i++)
-   {
-      addToDatabase(source.mAllObjects[i]->clone(), source.mAllObjects[i]->getExtent());
-   }
-}
+// GridDatabase::GridDatabase(const GridDatabase &source)
+// {
+//    mAllObjects.reserve(source.mAllObjects.size());
+// 
+//    for(S32 i = 0; i < source.mAllObjects.size(); i++)
+//       addToDatabase(source.mAllObjects[i]->clone(), source.mAllObjects[i]->getExtent());
+// }
 
 
 // Destructor
@@ -85,6 +81,16 @@ GridDatabase::~GridDatabase()
 
    if(mCountGridDatabase == 0)
       delete mChunker;
+}
+
+
+void GridDatabase::copyObjects(const GridDatabase *source)
+{
+   // Fill copy with objects from existing database
+   mAllObjects.reserve(source->mAllObjects.size());
+
+   for(S32 i = 0; i < source->mAllObjects.size(); i++)
+      addToDatabase(source->mAllObjects[i]->clone(), source->mAllObjects[i]->getExtent());
 }
 
 
