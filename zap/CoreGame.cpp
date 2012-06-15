@@ -731,8 +731,8 @@ void CoreItem::idle(BfObject::IdleCallPath path)
          setMaskBits(ItemChangedMask);
    }
 
-   // Only run the following on the client
 #ifndef ZAP_DEDICATED
+   // Only run the following on the client
    if(path != BfObject::ClientIdleMainRemote)
       return;
 
@@ -1004,7 +1004,7 @@ void CoreItem::onItemExploded(Point pos)
 
 void CoreItem::onItemDragging()
 {
-      fillPanelGeom(getPos(), getGame()->getGameType()->getRemainingGameTimeInMs() + getGame()->getGameType()->getRenderingOffset(), mPanelGeom);
+   fillPanelGeom(getPos(), getGame()->getGameType()->getRemainingGameTimeInMs() + getGame()->getGameType()->getRenderingOffset(), mPanelGeom);
 }
 #endif
 
@@ -1018,7 +1018,6 @@ REGISTER_LUA_SUBCLASS(CoreItem, Item);
 
 const char *CoreItem::luaClassName = "CoreItem";
 
-// Standard methods available to all Items
 const luaL_reg CoreItem::luaMethods[] =
 {
    { "getHealth", luaW_doMethod<CoreItem, &CoreItem::getHealth> },
