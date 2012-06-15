@@ -57,11 +57,19 @@ private:
    bool mIsRobot;
 
    U32 mRespawnTime;
+   Vector<DatabaseObject *> mZones1;    // A list of zones the ship is currently in
+   Vector<DatabaseObject *> mZones2;
+   bool mZones1IsCurrent;
 
    // Find objects of specified type that may be under the ship, and put them in fillVector
    void findObjectsUnderShip(U8 typeNumber);
 
-   SafePtr<Teleporter> mEngineeredTeleport;
+   // Idle helpers
+   void checkForSpeedzones();    
+   void checkForZones();
+
+   Vector<DatabaseObject *> *getCurrZoneList();    // Get list of zones ship is currently in
+   Vector<DatabaseObject *> *getPrevZoneList();    // Get list of zones ship was in last tick
 
 protected:
    SafePtr <ClientInfo> mClientInfo;
@@ -220,7 +228,6 @@ public:
 
    void setEngineeredTeleport(Teleporter *teleport);
    Teleporter *getEngineeredTeleport();
-
    F32 getSensorActiveZoomFraction();
    F32 getSensorEquipZoomFraction();
    Point getAimVector();
@@ -247,7 +254,7 @@ public:
 
    void updateModuleSounds();
    void emitMovementSparks();
-   bool findRepairTargets();
+   void findRepairTargets();
    void repairTargets();
 
    void controlMoveReplayComplete();
