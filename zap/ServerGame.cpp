@@ -375,9 +375,10 @@ LevelInfo getLevelInfoFromFileChunk(char *chunk, S32 size, LevelInfo &levelInfo)
                if(gt)
                {
                   levelInfo.levelType = gt->getGameTypeId();
-                  delete gt;
                   foundGameType = true;
                }
+
+               delete theObject;
             }
             else if(list.size() >= 2 && list[0] == "LevelName")
             {
@@ -442,7 +443,7 @@ bool ServerGame::getLevelInfo(const string &fullFilename, LevelInfo &levelInfo)
 
       // Provide a default levelname
       if(levelInfo.levelName == "")
-         levelInfo.levelName = levelInfo.levelFileName;     // was mLevelInfos[mLevelLoadIndex].levelFileName
+         levelInfo.levelName = levelInfo.levelFileName;   
 
       return true;
    }
@@ -749,10 +750,15 @@ void ServerGame::sendLevelStatsToMaster()
 
    bool hasLevelGen = getGameType()->getScriptName() != "";
 
-   // construct the info now, to be later sent, sending later avoids overloading the master with too much data
-   mSendLevelInfoDelayNetInfo = masterConn->s2mSendLevelInfo_construct(mLevelFileHash, mGameType->getLevelName()->getString(), mGameType->getLevelCredits()->getString(), 
-                                GameType::getGameTypeName(mGameType->getGameTypeId()), hasLevelGen, (U8)teamCountU8, 
-                                mGameType->getWinningScore(), mGameType->getRemainingGameTime());
+   // Construct the info now, to be later sent, sending later avoids overloading the master with too much data
+   mSendLevelInfoDelayNetInfo = masterConn->s2mSendLevelInfo_construct(mLevelFileHash, mGameType->getLevelName()->getString(), 
+                                mGameType->getLevelCredits()->getString(), 
+                                getCurrentLevelTypeName(),
+                                hasLevelGen, 
+                                (U8)teamCountU8, 
+                                mGameType->getWinningScore(), 
+                                mGameType->getRemainingGameTime());
+
    mSendLevelInfoDelayCount.reset(6000);  // set time left to send
 
    mSentHashes.push_back(mLevelFileHash);
@@ -1375,8 +1381,13 @@ void ServerGame::idle(U32 timeDelta)
             prevRobotCount = getRobotCount();
             prevPlayerCount = getPlayerCount();
 
-            masterConn->updateServerStatus(getCurrentLevelName(), getCurrentLevelTypeName(), getRobotCount(), 
-                                           getPlayerCount(), mSettings->getMaxPlayers(), mInfoFlags);
+            masterConn->updateServerStatus(getCurrentLevelName(), 
+                                           getCurrentLevelTypeName(), 
+                                           getRobotCount(), 
+                                           getPlayerCount(), 
+                                           mSettings->getMaxPlayers(), 
+                                           mInfoFlags);
+
             mMasterUpdateTimer.reset(UpdateServerStatusTime);
          }
          else
