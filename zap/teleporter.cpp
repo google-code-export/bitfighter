@@ -84,6 +84,28 @@ S32 DestManager::getRandomDest() const
 void DestManager::addDest(const Point &dest)
 {
    mDests.push_back(dest);
+
+   if(mDests.size() == 1)      // Just added the first dest
+   {
+      mOwner->setVert(dest, 1);
+      mOwner->updateExtentInDatabase();
+   }
+   
+   // If we're the server, update the clients 
+   if(mOwner->getGame() && mOwner->getGame()->isServer())
+      mOwner->s2cAddDestination(dest);
+}
+
+
+void DestManager::clear()
+{
+   mDests.clear();
+   mOwner->setVert(mOwner->getPos(), 1);       // Set destination to same as origin
+   mOwner->updateExtentInDatabase();
+
+   // If we're the server, update the clients 
+   if(mOwner->getGame() && mOwner->getGame()->isServer())
+      mOwner->s2cClearDestinations();
 }
 
 
@@ -107,18 +129,13 @@ void DestManager::read(BitStream *stream)
 }
 
 
-void DestManager::clear()
-{
-   mDests.clear();
-}
-
-
 /*const*/ Vector<Point> *DestManager::getDestList() /*const*/
 {
    return &mDests;
 }
 
 
+// Only done at creation time
 void DestManager::setOwner(Teleporter *owner)
 {
    mOwner = owner;
@@ -168,7 +185,6 @@ Teleporter *Teleporter::clone() const
 {
    return new Teleporter(*this);
 }
-
 
 
 void Teleporter::onAddedToGame(Game *theGame)
@@ -254,6 +270,20 @@ bool Teleporter::processArguments(S32 argc2, const char **argv2, Game *game)
 }
 
 
+TNL_IMPLEMENT_NETOBJECT_RPC(Teleporter, s2cAddDestination, (Point dest), (dest),
+   NetClassGroupGameMask, RPCGuaranteed, RPCToGhost, 0)
+{
+   mDestManager.addDest(dest);
+}
+
+
+TNL_IMPLEMENT_NETOBJECT_RPC(Teleporter, s2cClearDestinations, (), (),
+   NetClassGroupGameMask, RPCGuaranteed, RPCToGhost, 0)
+{
+   mDestManager.clear();
+}
+
+
 string Teleporter::toString(F32 gridSize) const
 {
    string out = string(getClassName()) + " " + geomToString(gridSize);
@@ -261,6 +291,15 @@ string Teleporter::toString(F32 gridSize) const
       out += " Delay=" + ftos(mTeleporterDelay / 1000.f, 3);
    return out;
 }
+
+
+Rect Teleporter::calcExtents()
+{
+   Rect rect(getVert(0), getVert(1));
+   rect.expand(Point(Teleporter::TELEPORTER_RADIUS, Teleporter::TELEPORTER_RADIUS));
+   return rect;
+}
+
 
 
 bool Teleporter::checkDeploymentPosition(const Point &position, GridDatabase *gb, Ship *ship)
@@ -318,10 +357,6 @@ U32 Teleporter::packUpdate(GhostConnection *connection, U32 updateMask, BitStrea
    else if(stream->writeFlag(updateMask & TeleportMask))    // Basically, this gets triggered if a ship passes through
       stream->write(mLastDest);     // Where ship is going
 
-   // If we've adjusted the exit point, needed with engineering teleports
-   if(stream->writeFlag(updateMask & ExitPointChangedMask))
-      Types::write(*stream, *mDestManager.getDestList());
-
    // If we're not destroyed and health has changed
    if(!stream->writeFlag(mHasExploded))
    {
@@ -335,17 +370,18 @@ U32 Teleporter::packUpdate(GhostConnection *connection, U32 updateMask, BitStrea
 
 void Teleporter::unpackUpdate(GhostConnection *connection, BitStream *stream)
 {
-   if(stream->readFlag())
+   if(stream->readFlag())                 // InitMask
    {
       U32 count;
       Point pos;
       pos.read(stream);
       setVert(pos, 0);
+      setVert(pos, 1);                    // Simulate a point geometry -- will be changed later when we add our first dest
 
       mEngineered = stream->readFlag();
 
       count = stream->readInt(16);
-      mDestManager.resize(count);      // Prepare the list for multiple additions
+      mDestManager.resize(count);         // Prepare the list for multiple additions
 
       for(U32 i = 0; i < count; i++)
          mDestManager.read(i, stream);
@@ -372,18 +408,6 @@ void Teleporter::unpackUpdate(GhostConnection *connection, BitStream *stream)
       SoundSystem::playSoundEffect(SFXTeleportOut, getVert(0));
 #endif
       timeout = mTeleporterDelay;
-   }
-
-   if(stream->readFlag())        // ExitPointChangedMask
-   {
-      mDestManager.read(stream);
-
-      setVert(mDestManager.getDest(0), 1);
-
-      // Update the object extents  --> methinks location won't need to be updated
-      Rect rect(getVert(0), getVert(1));
-      rect.expand(Point(TELEPORTER_RADIUS, TELEPORTER_RADIUS));
-      setExtent(rect);
    }
 
    // mHasExploded
@@ -499,7 +523,7 @@ Point Teleporter::getDest(S32 index)
 void Teleporter::addDest(const Point &dest)
 {
    mDestManager.addDest(dest);
-   setMaskBits(ExitPointChangedMask);
+   //setMaskBits(ExitPointChangedMask);
 }
 
 
@@ -520,8 +544,6 @@ void Teleporter::setEndpoint(const Point &point)
 {
    mDestManager.addDest(point);
    setVert(point, 1);
-
-   setMaskBits(ExitPointChangedMask);
 }
 
 
@@ -645,7 +667,7 @@ void Teleporter::render()
       renderTeleporter(getVert(0), renderStyle, true, mTime, zoomFraction, radiusFraction, (F32)TELEPORTER_RADIUS, 1.0, mDestManager.getDestList(), trackerCount);
    }
 
-   if(mEngineered)
+   if(mEngineered && mDestManager.getDestCount() > 0)
    {
       // We render the exit point of engineered teleports with an outline
       renderTeleporterOutline(getVert(1), (F32)TELEPORTER_RADIUS, Colors::richGreen);
