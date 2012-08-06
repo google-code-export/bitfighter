@@ -902,6 +902,12 @@ void MoveItem::renderItem(const Point &pos)
 }
 
 
+void MoveItem::renderItemAlpha(const Point &pos, F32 alpha)
+{
+   TNLAssert(false, "Unimplemented function!");
+}
+
+
 void MoveItem::onMountDestroyed()
 {
    dismount();
@@ -2013,6 +2019,7 @@ U32 Worm::packUpdate(GhostConnection *connection, U32 updateMask, BitStream *str
 
 void Worm::unpackUpdate(GhostConnection *connection, BitStream *stream)
 {
+#ifndef ZAP_DEDICATED
    Parent::unpackUpdate(connection, stream);
 
    mHeadIndex = stream->readInt(5);
@@ -2049,6 +2056,7 @@ void Worm::unpackUpdate(GhostConnection *connection, BitStream *stream)
    Vector<Point> p;
    getCollisionPoly(p);
    setExtent(p);
+#endif
 }
 
 
@@ -2179,6 +2187,12 @@ ResourceItem *ResourceItem::clone() const
 void ResourceItem::renderItem(const Point &pos)
 {
    renderResourceItem(pos);
+}
+
+
+void ResourceItem::renderItemAlpha(const Point &pos, F32 alpha)
+{
+   renderResourceItem(pos, alpha);
 }
 
 
