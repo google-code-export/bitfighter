@@ -852,10 +852,11 @@ void Mine::renderItem(const Point &pos)
       GameType *gameType = clientGame->getGameType();
 
 
-      // Can see mine if laid by teammate in team game || sensor is active ||
-      // you laid it yourself
-      visible = ( (ship->getTeam() == getTeam()) && gameType->isTeamGame() ) || ship->isModulePrimaryActive(ModuleSensor) ||
-                  (localClient && localClient->getClientInfo()->getName() == mSetBy);
+      // Can see mine if laid by teammate in team game OR you laid it yourself OR
+      // sensor is active and you're within the detection distance
+      visible = ( (ship->getTeam() == getTeam()) && gameType->isTeamGame() ) ||
+            (localClient && localClient->getClientInfo()->getName() == mSetBy) ||
+            (ship->hasModule(ModuleSensor) && (ship->getPos() - getPos()).lenSquared() < Ship::SensorCloakDetectionDistance * Ship::SensorCloakDetectionDistance);
    }
    else     // Must be in editor?
    {
@@ -1074,10 +1075,12 @@ void SpyBug::renderItem(const Point &pos)
 
       GameType *gameType = clientGame->getGameType();
 
-      // Can see bug if laid by teammate in team game || sensor is active ||
-      //       you laid it yourself                   || spyBug is neutral
-      visible = ( ((ship->getTeam() == getTeam()) && gameType->isTeamGame())   || ship->isModulePrimaryActive(ModuleSensor) ||
-                  (conn && conn->getClientInfo()->getName() == mSetBy) || getTeam() == TEAM_NEUTRAL);
+      // Can see bug if laid by teammate in team game OR you laid it yourself OR
+      // spyBug is neutral OR sensor is active and you're within the detection distance
+      visible = ((ship->getTeam() == getTeam()) && gameType->isTeamGame())   ||
+            (conn && conn->getClientInfo()->getName() == mSetBy) ||
+            getTeam() == TEAM_NEUTRAL ||
+            (ship->hasModule(ModuleSensor) && (ship->getPos() - getPos()).lenSquared() < Ship::SensorCloakDetectionDistance * Ship::SensorCloakDetectionDistance);
    }
    else    
       visible = true;      // We get here in editor when in preview mode
@@ -1220,43 +1223,6 @@ void HeatSeekerProjectile::idle(IdleCallPath path)
          mTimeRemaining -= deltaT;
    }
 
-   // Test for collision
-   Point startPos = getPos();
-   Point endPos = startPos + (getVel() * (F32(deltaT) / 1000.f));    // getVel() returns dist/sec; deltaT is in ms
-   endPos.normalize(endPos.len() + mRadius + 1);
-
-   F32 outCollisionTime;
-   U32 aliveTime = getGame()->getCurrentTime() - getCreationTime();
-
-   Rect searchRect(startPos, endPos);
-   fillVector.clear();
-
-   findObjects((TestFunc)isWeaponCollideableType, fillVector, searchRect);
-
-   for(S32 i = 0; i < fillVector.size(); i++)
-   {
-      BfObject *foundObject = static_cast<BfObject *>(fillVector[i]);
-
-      // No colliding with self
-      if(foundObject == this)
-         continue;
-
-      // Don't collide with objects that have collision disabled (like flags and teleporters)
-      if(!foundObject->collide(this))
-         continue;
-
-      // Don't collide with shooter withing first 500 ms of shooting
-      if(mShooter.isValid() && mShooter == foundObject && aliveTime < 500)
-         continue;
-
-      if(objectIntersectsSegment(foundObject, startPos, endPos, outCollisionTime))
-      {
-         Point collisionPoint = startPos + (endPos - startPos) * outCollisionTime;
-         handleCollision(foundObject, collisionPoint);
-         return;  // Ka-boom!
-      }
-   }
-
    // Do we need a target?
    if(!mAcquiredTarget)
       acquireTarget();
@@ -1347,6 +1313,7 @@ void HeatSeekerProjectile::acquireTarget()
    for(S32 i = 0; i < fillVector.size(); i++)
    {
       BfObject *foundObject = static_cast<BfObject *>(fillVector[i]);
+      TNLAssert(dynamic_cast<BfObject *>(fillVector[i]), "Not a BfObject");
 
       // Don't target self
       if(mShooter == foundObject)
@@ -1466,7 +1433,24 @@ void HeatSeekerProjectile::handleCollision(BfObject *hitObject, Point collisionP
 
 bool HeatSeekerProjectile::collide(BfObject *otherObj)
 {
-   return false;
+	if(isGhost())
+		return isWallType(otherObj->getObjectTypeNumber());
+
+   // Don't collide with shooter withing first 500 ms of shooting
+   if(mShooter.isValid() && mShooter == otherObj && getGame()->getCurrentTime() - getCreationTime() < 500)
+      return false;
+
+   return isWeaponCollideableType(otherObj->getObjectTypeNumber());
+}
+
+bool HeatSeekerProjectile::collided(BfObject *otherObj, U32 stateIndex)
+{
+   setVel(stateIndex, Point(0,0));
+   if(!isGhost() && stateIndex == ActualState)
+   {
+      handleCollision(otherObj, getActualPos());
+   }
+   return true;
 }
 
 

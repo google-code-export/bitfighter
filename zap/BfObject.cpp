@@ -791,6 +791,10 @@ bool BfObject::collide(BfObject *hitObject)
 {
    return false;
 }
+bool BfObject::collided(BfObject *hitObject, U32 stateIndex)
+{
+   return false;
+}
 
 
 Vector<Point> BfObject::getRepairLocations(const Point &repairOrigin)
@@ -1288,6 +1292,15 @@ GENERATE_LUA_FUNARGS_TABLE(BfObject, LUA_METHODS);
 
 const char *BfObject::luaClassName = "BfItem";
 REGISTER_LUA_CLASS(BfObject);
+
+/**
+ * @luafunc getAllies(f, n)
+ * @brief Gets the list of allies of a faction.
+ *
+ *    @param f Faction to get allies of.
+ *    @param[out] Number of allies.
+ *    @return The allies of the faction.
+ */
 
 
 S32 BfObject::getClassID(lua_State *L)  { return returnInt  (L, mObjectTypeNumber); }
