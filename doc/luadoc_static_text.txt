@@ -1,0 +1,38 @@
+/**
+
+@mainpage Bitfighter Lua Documentation
+
+@section intro_sec Introduction
+
+Here is some info about scripting levels and robots in Bitfighter.
+
+@section datatypes Bitfighter datatypes
+* Point
+* geometry - When we refer to geometery, we are referring either to a Point object or a table of Point objects, depending on the context. 
+For example, if the object is inherently point-like (such as an Item or Projectile), then geometry is a Point.  
+For more complex objects (such as a WallItem or a Zone), geometry refers to a Lua table of points.
+
+The Geom class provides a collection of tools to make common transormations to tables of points.  Currently these functions do not work on a single point.
+bool
+int
+num
+
+@subsection step1 Step 1: Opening the box
+
+@section programming_robots Programming Robots
+
+@section programming_levelgens Programming Levelgens
+
+@section programming_plugins Programming Editor Plugins
+
+@section events Events
+
+@section timers Timers
+Timer is a utility class that makes it easier to manage timing periodic or delayed events. The timer code is based on a very nice library written by Haywood Slap.
+
+A timer object that can be used to schedule arbitrary events to be executed at some time in the future. All times are given in milliseconds.
+
+etc...
+
+ */
+
