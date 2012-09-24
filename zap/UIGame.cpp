@@ -2115,35 +2115,53 @@ void GameUserInterface::resetScoreHandler(const Vector<string> &words)
 }
 
 
-static void fixupArgs(Vector<StringTableEntry> &args)
+static bool fixupArgs(ClientGame *game, Vector<StringTableEntry> &args)
 {
    // c2sAddBot expects the args is a slightly different order than what we have; it wants team first, then bot name, then bot args
    // However, we want users to be able to enter the bot name first, followed by an optional team.
-   // If the first arg is a string and the second is a number, switch the args.  If first arg is a string, and there is no second arg,
-   // insert the NO_TEAM arg.
-   bool firstArgIsInt = args.size() >= 1 && isInteger(args[0].getString());
-   bool secondArgIsInt = args.size() >= 2 && isInteger(args[1].getString());
+   // If the user specifies a team name as the 2nd arg, translate that into a team number.
+   // If the first arg is a string and there is a second arg, switch them.  If first arg is a string, and there is no second arg,
+   // insert the NO_TEAM arg.  If first arg is numeric, hope user entered a team index first, and do not switch the args.
+   // Normal arg order is bot name, team, bot args
 
-   if(!firstArgIsInt)
+   // First thing is to try to translate the 2nd arg into a team number
+   if(args.size() >= 2 && !isInteger(args[1].getString()))
    {
-      if(secondArgIsInt)         // Looks like bot name came first... time to switch!
+      S32 teamIndex = game->getTeamIndexFromTeamName(args[1].getString());
+      if(teamIndex == NO_TEAM)
       {
-         StringTableEntry temp = args[0];
-         args[0] = args[1];
-         args[1] = temp;
+         game->displayErrorMessage("!!! Invalid team specified");
+         return false;
       }
-      else if(args.size() == 1)  // Only one arg, and it's a string; move it to 2nd and put NO_TEAMS first
-      {
-         args.push_back(args[0]);
-         args[0] = itos(NO_TEAM).c_str();
-      }
+
+      args[1] = itos(teamIndex);
    }
+
+   bool firstArgIsInt  = args.size() >= 1 && isInteger(args[0].getString());
+   
+   if(firstArgIsInt)          // If first arg is numeric, hope user entered a team index first, and do not switch the args.
+      return true;
+
+   if(args.size() >= 2)       // If the first arg is a string and there is a second arg, switch them.
+   {
+      StringTableEntry temp = args[0];
+      args[0] = args[1];
+      args[1] = temp;
+   }
+   else if(args.size() == 1)  // If first arg is a string, and there is no second arg, insert the NO_TEAM arg.
+   {
+      args.push_back(args[0]);
+      args[0] = itos(NO_TEAM).c_str();
+   }
+
+   return true;
 }
 
 
 void GameUserInterface::addBotHandler(const Vector<string> &words)
 {
    ClientGame *game = getGame();
+
    if(game->hasLevelChange("!!! Need level change permissions to add a bot"))
    {
       // Build args by skipping first word (the command)
@@ -2151,7 +2169,8 @@ void GameUserInterface::addBotHandler(const Vector<string> &words)
       for(S32 i = 1; i < words.size(); i++)
          args.push_back(StringTableEntry(words[i]));
 
-      fixupArgs(args);     // Reorder args for c2sAddBot
+      if(!fixupArgs(game, args))    // Reorder args for c2sAddBot, translate team names to indices, and do a little checking
+         return;     
 
       if(game->getGameType())
          game->getGameType()->c2sAddBot(args);
@@ -2166,14 +2185,14 @@ void GameUserInterface::addBotsHandler(const Vector<string> &words)
    {
       if(words.size() < 2)
       {
-         game->displayErrorMessage("!!! Enter number of bots to add");
+         game->displayErrorMessage("!!! Specify number of bots to add");
          return;
       }
 
       S32 count = 0;
       count = atoi(words[1].c_str());
 
-      if(count <= 0 || count >= 0x00010000)
+      if(count <= 0 || count > 16)
       {
          game->displayErrorMessage("!!! Invalid number of bots to add");
          return;
@@ -2184,7 +2203,8 @@ void GameUserInterface::addBotsHandler(const Vector<string> &words)
       for(S32 i = 2; i < words.size(); i++)
          args.push_back(StringTableEntry(words[i]));
 
-      fixupArgs(args);        // Reorder args for c2sAddBot
+      if(!fixupArgs(game, args))        // Reorder args for c2sAddBot translate team names to indices
+         return;
 
       if(game->getGameType())
          game->getGameType()->c2sAddBots(count, args);
@@ -2413,58 +2433,58 @@ void GameUserInterface::serverCommandHandler(const Vector<string> &words)
 
 CommandInfo chatCmds[] = {   
    //  cmdName          cmdCallback                 cmdArgInfo cmdArgCount   helpCategory helpGroup lines,  helpArgString            helpTextString
-   { "password",&GameUserInterface::submitPassHandler,{ STR },      1,       ADV_COMMANDS,    0,     1,     {"<password>"},         "Request admin or level change permissions"  },
-   { "servvol", &GameUserInterface::servVolHandler,   { xINT },      1,       ADV_COMMANDS,    0,     1,     {"<0-10>"},             "Set volume of server"  },
-   { "getmap",  &GameUserInterface::getMapHandler,    { STR },      1,       ADV_COMMANDS,    1,     1,     {"[file]"},             "Save currently playing level in [file], if allowed" },
-   { "idle",    &GameUserInterface::idleHandler,      {  },         0,       ADV_COMMANDS,    1,     1,     {  },                   "Place client in idle mode (AFK)" },
-   { "suspend", &GameUserInterface::suspendHandler,   {  },         0,       ADV_COMMANDS,    1,     1,     {  },                   "Place server on hold while waiting for players" },
-   { "pm",      &GameUserInterface::pmHandler,        { NAME, STR },2,       ADV_COMMANDS,    1,     1,     {"<name>","<message>"}, "Send private message to player" },
-   { "mvol",    &GameUserInterface::mVolHandler,      { xINT },      1,       ADV_COMMANDS,    2,     1,     {"<0-10>"},             "Set music volume"      },
-   { "svol",    &GameUserInterface::sVolHandler,      { xINT },      1,       ADV_COMMANDS,    2,     1,     {"<0-10>"},             "Set SFX volume"        },
-   { "vvol",    &GameUserInterface::vVolHandler,      { xINT },      1,       ADV_COMMANDS,    2,     1,     {"<0-10>"},             "Set voice chat volume" },
-   { "mnext",   &GameUserInterface::mNextHandler,     {  },         0,       ADV_COMMANDS,    2,     1,     {  },                   "Play next track in the music list" },
-   { "mprev",   &GameUserInterface::mPrevHandler,     {  },         0,       ADV_COMMANDS,    2,     1,     {  },                   "Play previous track in the music list" },
-   { "mute",    &GameUserInterface::muteHandler,      { NAME },     1,       ADV_COMMANDS,    3,     1,     {"<name>"},             "Toggle hiding chat messages from <name>" },
-   { "vmute",   &GameUserInterface::voiceMuteHandler, { NAME },     1,       ADV_COMMANDS,    3,     1,     {"<name>"},             "Toggle muting voice chat from <name>" },
+   { "password",&GameUserInterface::submitPassHandler,{ STR },       1,      ADV_COMMANDS,     0,     1,    {"<password>"},         "Request admin or level change permissions"  },
+   { "servvol", &GameUserInterface::servVolHandler,   { xINT },      1,      ADV_COMMANDS,     0,     1,    {"<0-10>"},             "Set volume of server"  },
+   { "getmap",  &GameUserInterface::getMapHandler,    { STR },       1,      ADV_COMMANDS,     1,     1,    {"[file]"},             "Save currently playing level in [file], if allowed" },
+   { "idle",    &GameUserInterface::idleHandler,      {  },          0,      ADV_COMMANDS,     1,     1,    {  },                   "Place client in idle mode (AFK)" },
+   { "suspend", &GameUserInterface::suspendHandler,   {  },          0,      ADV_COMMANDS,     1,     1,    {  },                   "Place server on hold while waiting for players" },
+   { "pm",      &GameUserInterface::pmHandler,        { NAME, STR }, 2,      ADV_COMMANDS,     1,     1,    {"<name>","<message>"}, "Send private message to player" },
+   { "mvol",    &GameUserInterface::mVolHandler,      { xINT },      1,      ADV_COMMANDS,     2,     1,    {"<0-10>"},             "Set music volume"      },
+   { "svol",    &GameUserInterface::sVolHandler,      { xINT },      1,      ADV_COMMANDS,     2,     1,    {"<0-10>"},             "Set SFX volume"        },
+   { "vvol",    &GameUserInterface::vVolHandler,      { xINT },      1,      ADV_COMMANDS,     2,     1,    {"<0-10>"},             "Set voice chat volume" },
+   { "mnext",   &GameUserInterface::mNextHandler,     {  },          0,      ADV_COMMANDS,     2,     1,    {  },                   "Play next track in the music list" },
+   { "mprev",   &GameUserInterface::mPrevHandler,     {  },          0,      ADV_COMMANDS,     2,     1,    {  },                   "Play previous track in the music list" },
+   { "mute",    &GameUserInterface::muteHandler,      { NAME },      1,      ADV_COMMANDS,     3,     1,    {"<name>"},             "Toggle hiding chat messages from <name>" },
+   { "vmute",   &GameUserInterface::voiceMuteHandler, { NAME },      1,      ADV_COMMANDS,     3,     1,    {"<name>"},             "Toggle muting voice chat from <name>" },
 
    { "add",         &GameUserInterface::addTimeHandler,         { xINT },                 0, LEVEL_COMMANDS,  0,  1,  {"<time in minutes>"},                      "Add time to the current game" },
-   { "next",        &GameUserInterface::nextLevelHandler,       {  },                    0, LEVEL_COMMANDS,  0,  1,  {  },                                       "Start next level" },
-   { "prev",        &GameUserInterface::prevLevelHandler,       {  },                    0, LEVEL_COMMANDS,  0,  1,  {  },                                       "Replay previous level" },
-   { "restart",     &GameUserInterface::restartLevelHandler,    {  },                    0, LEVEL_COMMANDS,  0,  1,  {  },                                       "Restart current level" },
-   { "random",      &GameUserInterface::randomLevelHandler,     {  },                    0, LEVEL_COMMANDS,  0,  1,  {  },                                       "Start random level" },
+   { "next",        &GameUserInterface::nextLevelHandler,       {  },                     0, LEVEL_COMMANDS,  0,  1,  {  },                                       "Start next level" },
+   { "prev",        &GameUserInterface::prevLevelHandler,       {  },                     0, LEVEL_COMMANDS,  0,  1,  {  },                                       "Replay previous level" },
+   { "restart",     &GameUserInterface::restartLevelHandler,    {  },                     0, LEVEL_COMMANDS,  0,  1,  {  },                                       "Restart current level" },
+   { "random",      &GameUserInterface::randomLevelHandler,     {  },                     0, LEVEL_COMMANDS,  0,  1,  {  },                                       "Start random level" },
    { "settime",     &GameUserInterface::setTimeHandler,         { xINT },                 1, LEVEL_COMMANDS,  0,  1,  {"<time in minutes>"},                      "Set play time for the level" },
    { "setscore",    &GameUserInterface::setWinningScoreHandler, { xINT },                 1, LEVEL_COMMANDS,  0,  1,  {"<score>"},                                "Set score to win the level" },
-   { "resetscore",  &GameUserInterface::resetScoreHandler,      {  },                    0, LEVEL_COMMANDS,  0,  1,  {  },                                       "Reset all scores to zero" },
-   { "addbot",      &GameUserInterface::addBotHandler,          { STR, TEAM, STR },      3, LEVEL_COMMANDS,  1,  2,  {"[file]", "[team num]","[args]"},          "Add bot from [file] to [team num], pass [args] to bot" },
-   { "addbots",     &GameUserInterface::addBotsHandler,         { xINT, STR, TEAM, STR }, 4, LEVEL_COMMANDS,  1,  2,  {"[count]","[file]","[team num]","[args]"}, "Add [count] bots from [file] to [team num], pass [args] to bot" },
-   { "kickbot",     &GameUserInterface::kickBotHandler,         {  },                    1, LEVEL_COMMANDS,  1,  1,  {  },                                       "Kick most recently added bot" },
-   { "kickbots",    &GameUserInterface::kickBotsHandler,        {  },                    1, LEVEL_COMMANDS,  1,  1,  {  },                                       "Kick all bots" },
+   { "resetscore",  &GameUserInterface::resetScoreHandler,      {  },                     0, LEVEL_COMMANDS,  0,  1,  {  },                                       "Reset all scores to zero" },
+   { "addbot",      &GameUserInterface::addBotHandler,          { STR, TEAM, STR },       3, LEVEL_COMMANDS,  1,  2,  {"[file]", "[team name or num]","[args]"},          "Add bot from [file] to [team num], pass [args] to bot" },
+   { "addbots",     &GameUserInterface::addBotsHandler,         { xINT, STR, TEAM, STR }, 4, LEVEL_COMMANDS,  1,  2,  {"[count]","[file]","[team name or num]","[args]"}, "Add [count] bots from [file] to [team num], pass [args] to bot" },
+   { "kickbot",     &GameUserInterface::kickBotHandler,         {  },                     1, LEVEL_COMMANDS,  1,  1,  {  },                                       "Kick most recently added bot" },
+   { "kickbots",    &GameUserInterface::kickBotsHandler,        {  },                     1, LEVEL_COMMANDS,  1,  1,  {  },                                       "Kick all bots" },
 
-   { "kick",               &GameUserInterface::kickPlayerHandler,         { NAME },      1, ADMIN_COMMANDS,  0,  1,  {"<name>"},              "Kick a player from the game" },
+   { "kick",               &GameUserInterface::kickPlayerHandler,         { NAME },       1, ADMIN_COMMANDS,  0,  1,  {"<name>"},              "Kick a player from the game" },
    { "ban",                &GameUserInterface::banPlayerHandler,          { NAME, xINT }, 2, ADMIN_COMMANDS,  0,  1,  {"<name>","[duration]"}, "Ban a player from the server (IP-based, def. = 60 mins)" },
    { "banip",              &GameUserInterface::banIpHandler,              { STR, xINT },  2, ADMIN_COMMANDS,  0,  1,  {"<ip>","[duration]"},   "Ban an IP address from the server (def. = 60 mins)" },
    { "shutdown",           &GameUserInterface::shutdownServerHandler,     { xINT, STR },  2, ADMIN_COMMANDS,  0,  1,  {"[time]","[message]"},  "Start orderly shutdown of server (def. = 10 secs)" },
-   { "setlevpass",         &GameUserInterface::setLevPassHandler,         { STR },       1, ADMIN_COMMANDS,  0,  1,  {"[passwd]"},            "Set level change password (use blank to clear)" },
-   { "setadminpass",       &GameUserInterface::setAdminPassHandler,       { STR },       1, ADMIN_COMMANDS,  0,  1,  {"[passwd]"},            "Set admin password" },
-   { "setserverpass",      &GameUserInterface::setServerPassHandler,      { STR },       1, ADMIN_COMMANDS,  0,  1,  {"<passwd>"},            "Set server password (use blank to clear)" },
-   { "leveldir",           &GameUserInterface::setLevelDirHandler,        { STR },       1, ADMIN_COMMANDS,  0,  1,  {"<new level folder>"},  "Set leveldir param on the server (changes levels available)" },
-   { "setservername",      &GameUserInterface::setServerNameHandler,      { STR },       1, ADMIN_COMMANDS,  0,  1,  {"<name>"},              "Set server name" },
-   { "setserverdescr",     &GameUserInterface::setServerDescrHandler,     { STR },       1, ADMIN_COMMANDS,  0,  1,  {"<descr>"},             "Set server description" },
-   { "deletecurrentlevel", &GameUserInterface::deleteCurrentLevelHandler, { },           0, ADMIN_COMMANDS,  0,  1,  {""},                    "Remove current level from server" },
-   { "gmute",              &GameUserInterface::globalMuteHandler,         { NAME },      1, ADMIN_COMMANDS,  0,  1,  {"<name>"},              "Globally mute/unmute a player" },
-   { "rename",             &GameUserInterface::renamePlayerHandler,       { NAME, STR }, 2, ADMIN_COMMANDS,  0,  1,  {"<from>","<to>"},       "Give a player a new name" },
+   { "setlevpass",         &GameUserInterface::setLevPassHandler,         { STR },        1, ADMIN_COMMANDS,  0,  1,  {"[passwd]"},            "Set level change password (use blank to clear)" },
+   { "setadminpass",       &GameUserInterface::setAdminPassHandler,       { STR },        1, ADMIN_COMMANDS,  0,  1,  {"[passwd]"},            "Set admin password" },
+   { "setserverpass",      &GameUserInterface::setServerPassHandler,      { STR },        1, ADMIN_COMMANDS,  0,  1,  {"<passwd>"},            "Set server password (use blank to clear)" },
+   { "leveldir",           &GameUserInterface::setLevelDirHandler,        { STR },        1, ADMIN_COMMANDS,  0,  1,  {"<new level folder>"},  "Set leveldir param on the server (changes levels available)" },
+   { "setservername",      &GameUserInterface::setServerNameHandler,      { STR },        1, ADMIN_COMMANDS,  0,  1,  {"<name>"},              "Set server name" },
+   { "setserverdescr",     &GameUserInterface::setServerDescrHandler,     { STR },        1, ADMIN_COMMANDS,  0,  1,  {"<descr>"},             "Set server description" },
+   { "deletecurrentlevel", &GameUserInterface::deleteCurrentLevelHandler, { },            0, ADMIN_COMMANDS,  0,  1,  {""},                    "Remove current level from server" },
+   { "gmute",              &GameUserInterface::globalMuteHandler,         { NAME },       1, ADMIN_COMMANDS,  0,  1,  {"<name>"},              "Globally mute/unmute a player" },
+   { "rename",             &GameUserInterface::renamePlayerHandler,       { NAME, STR },  2, ADMIN_COMMANDS,  0,  1,  {"<from>","<to>"},       "Give a player a new name" },
    { "maxbots",            &GameUserInterface::setMaxBotsHandler,         { xINT },       1, ADMIN_COMMANDS,  0,  1,  {"<count>"},             "Set the maximum bots allowed for this server" },
-   { "shuffle",            &GameUserInterface::shuffleTeams,              { },           0, ADMIN_COMMANDS,  0,  1,   { "" },                 "Randomly reshuffle teams" },
+   { "shuffle",            &GameUserInterface::shuffleTeams,              { },            0, ADMIN_COMMANDS,  0,  1,   { "" },                 "Randomly reshuffle teams" },
 
-   { "showcoords", &GameUserInterface::showCoordsHandler,    {  },    0,DEBUG_COMMANDS, 0,  1, {  },         "Show ship coordinates" },
-   { "showzones",  &GameUserInterface::showZonesHandler,     {  },    0,DEBUG_COMMANDS, 0,  1, {  },         "Show bot nav mesh zones" },
-   { "showpaths",  &GameUserInterface::showPathsHandler,     {  },    0,DEBUG_COMMANDS, 0,  1, {  },         "Show robot paths" },
-   { "showbots",   &GameUserInterface::showBotsHandler,      {  },    0,DEBUG_COMMANDS, 0,  1, {  },         "Show all robots" },
-   { "pausebots",  &GameUserInterface::pauseBotsHandler,     {  },    0,DEBUG_COMMANDS, 0,  1, {  },         "Pause all bots. Reissue to start again" },
-   { "stepbots",   &GameUserInterface::stepBotsHandler,      { xINT }, 1,DEBUG_COMMANDS, 1,  1, {"[steps]"},  "Advance bots by number of steps (default = 1)"},
-   { "linewidth",  &GameUserInterface::lineWidthHandler,     { xINT }, 1,DEBUG_COMMANDS, 1,  1, {"[number]"}, "Change width of all lines (default = 2)" },
-   { "maxfps",     &GameUserInterface::maxFpsHandler,        { xINT }, 1,DEBUG_COMMANDS, 1,  1, {"<number>"}, "Set maximum speed of game in frames per second" },
-   { "lag",        &GameUserInterface::lagHandler, {xINT,xINT,xINT,xINT}, 4,DEBUG_COMMANDS, 1,  2, {"<send lag>", "[% of send drop packets]", "[receive lag]", "[% of receive drop packets]"}, "Set additional lag and percent of dropped packets" },
+   { "showcoords", &GameUserInterface::showCoordsHandler,    {  },        0, DEBUG_COMMANDS, 0,  1, {  },         "Show ship coordinates" },
+   { "showzones",  &GameUserInterface::showZonesHandler,     {  },        0, DEBUG_COMMANDS, 0,  1, {  },         "Show bot nav mesh zones" },
+   { "showpaths",  &GameUserInterface::showPathsHandler,     {  },        0, DEBUG_COMMANDS, 0,  1, {  },         "Show robot paths" },
+   { "showbots",   &GameUserInterface::showBotsHandler,      {  },        0, DEBUG_COMMANDS, 0,  1, {  },         "Show all robots" },
+   { "pausebots",  &GameUserInterface::pauseBotsHandler,     {  },        0, DEBUG_COMMANDS, 0,  1, {  },         "Pause all bots. Reissue to start again" },
+   { "stepbots",   &GameUserInterface::stepBotsHandler,      { xINT },    1, DEBUG_COMMANDS, 1,  1, {"[steps]"},  "Advance bots by number of steps (default = 1)"},
+   { "linewidth",  &GameUserInterface::lineWidthHandler,     { xINT },    1, DEBUG_COMMANDS, 1,  1, {"[number]"}, "Change width of all lines (default = 2)" },
+   { "maxfps",     &GameUserInterface::maxFpsHandler,        { xINT },    1, DEBUG_COMMANDS, 1,  1, {"<number>"}, "Set maximum speed of game in frames per second" },
+   { "lag",        &GameUserInterface::lagHandler, {xINT,xINT,xINT,xINT}, 4, DEBUG_COMMANDS, 1,  2, {"<send lag>", "[% of send drop packets]", "[receive lag]", "[% of receive drop packets]"}, "Set additional lag and percent of dropped packets" },
 };
 
 
