@@ -756,6 +756,10 @@ void MoveObject::computeImpulseDirection(DamageInfo *theInfo)
 
 /////
 // Lua interface
+/**
+ *   @luaclass MoveObject
+ *   @brief    Parent class of most things that move (except bullets)
+ */
 
 //               Fn name Param profiles  Profile count                           
 #define LUA_METHODS(CLASS, METHOD) \
@@ -768,12 +772,25 @@ GENERATE_LUA_FUNARGS_TABLE(MoveObject, LUA_METHODS);
 #undef LUA_METHODS
 
 
-const char *MoveObject::luaClassName = "MoveObject";
+const char *MoveObject::luaClassName = "MoveObject";     // <== Can we rename this to MoveItem without too much confusion?
 REGISTER_LUA_SUBCLASS(MoveObject, Item);
 
 
+/**
+ *   @luafunc MoveObject::getVel()
+ *   @brief   Returns the items's velocity.
+ *   @descr   Points are used to represent velocity; the x and y components represent the speed in the x and y directions respectively.
+ *   @return  \e point representing the item's velocity.
+ */
 S32 MoveObject::getVel(lua_State *L) { return returnPoint(L, getActualVel()); }
 
+
+/**
+ * @luafunc MoveObject::setVel(vel)
+ * @brief   Sets the item's velocity.
+ * @descr   As with other functions that take a point as an input, you can also specify the x and y components as numeric arguments.
+ * @param   vel - A point representing item's velocity.
+ */
 S32 MoveObject::setVel(lua_State *L)
 {
    checkArgList(L, functionArgs, "MoveObject", "setVel");
@@ -794,14 +811,14 @@ MoveItem::MoveItem(Point p, bool collideable, float radius, float mass) : MoveOb
 
    updateTimer = 0;
 
-   LUAW_CONSTRUCTOR_INITIALIZATIONS;
+   // LUAW_CONSTRUCTOR_INITIALIZATIONS;
 }
 
 
 // Destructor
 MoveItem::~MoveItem()
 {
-   LUAW_DESTRUCTOR_CLEANUP;
+   // LUAW_DESTRUCTOR_CLEANUP;
 }
 
 
@@ -870,16 +887,9 @@ void MoveItem::mountToShip(Ship *theShip)
 }
 
 
-void MoveItem::setMountedMask()
-{
-   setMaskBits(MountMask);
-}
-
-
-void MoveItem::setPositionMask()
-{
-   setMaskBits(PositionMask);
-}
+// Mask setting
+void MoveItem::setMountedMask()  { setMaskBits(MountMask);    }
+void MoveItem::setPositionMask() { setMaskBits(PositionMask); }
 
 
 bool MoveItem::isMounted()
@@ -1159,18 +1169,6 @@ S32 MoveItem::getShip(lua_State *L)
 }
 
 
-/////
-// Lua interface
-
-// Standard methods available to all MoveItems
-const luaL_reg           MoveItem::luaMethods[]   = { { NULL, NULL } };
-const LuaFunctionProfile MoveItem::functionArgs[] = { { NULL, { }, 0 } };
-
-
-const char *MoveItem::luaClassName = "MoveItem";
-REGISTER_LUA_SUBCLASS(MoveItem, MoveObject);
-
-
 ////////////////////////////////////////
 ////////////////////////////////////////
 
@@ -1272,7 +1270,7 @@ bool Asteroid::getCollisionPoly(Vector<Point> &polyPoints) const
    //   polyPoints.push_back(p);
    //}
 
-   return false;  // No Collision Poly, that may help reduce lag with client and server
+   return false;  // No Collision Poly, that may help reduce lag with client and server  <== Why?
 }
 
 
@@ -1499,9 +1497,14 @@ string Asteroid::getAttributeString()
 /////
 // Lua interface
 
+/**
+ *   @luaclass Asteroid
+ *   @brief    Just like the arcade game!  Yo!
+ */
+
 //               Fn name       Param profiles  Profile count                           
 #define LUA_METHODS(CLASS, METHOD) \
-   METHOD(CLASS, getSize,      ARRAYDEF({{ END }}), 1 ) \
+   METHOD(CLASS, getSizeIndex, ARRAYDEF({{ END }}), 1 ) \
    METHOD(CLASS, getSizeCount, ARRAYDEF({{ END }}), 1 ) \
 
 GENERATE_LUA_METHODS_TABLE(Asteroid, LUA_METHODS);
@@ -1511,10 +1514,22 @@ GENERATE_LUA_FUNARGS_TABLE(Asteroid, LUA_METHODS);
 
 
 const char *Asteroid::luaClassName = "Asteroid";
-REGISTER_LUA_SUBCLASS(Asteroid, MoveItem);
+REGISTER_LUA_SUBCLASS(Asteroid, MoveObject);
 
+/**
+ *  @luafunc Asteroid::getSizeIndex()
+ *  @brief   Get %s asteroids current size index.
+ *  @descr   Index 0 represents the %asteroid's initial size.  After it has been broken once, it's size index will be 1, and so on.
+ *           This method will always return an integer between 0 and the value returned by the %getSizeCount() method.
+ *  @return  \e int - Index corresponding to the %asteroid's current size.
+ */
+S32 Asteroid::getSizeIndex(lua_State *L) { return returnInt(L, ASTEROID_INITIAL_SIZELEFT - mSizeLeft); }
 
-S32 Asteroid::getSize(lua_State *L)      { return returnInt(L, ASTEROID_INITIAL_SIZELEFT - mSizeLeft); }
+/**
+ *  @luafunc Asteroid::getSizeCount()
+ *  @brief   Returns size index of smallest asteroid.
+ *  @return  \e int - Index of the %asteroid's smallest size.
+ */
 S32 Asteroid::getSizeCount(lua_State *L) { return returnInt(L, ASTEROID_INITIAL_SIZELEFT);             }
 
 
@@ -1709,7 +1724,7 @@ const LuaFunctionProfile Circle::functionArgs[] = { { NULL, { }, 0 } };
 
 
 const char *Circle::luaClassName = "Circle";
-REGISTER_LUA_SUBCLASS(Circle, MoveItem);
+REGISTER_LUA_SUBCLASS(Circle, MoveObject);
 
 
 ////////////////////////////////////////
@@ -2157,13 +2172,18 @@ bool TestItem::getCollisionPoly(Vector<Point> &polyPoints) const
 /////
 // Lua interface
 
+/**
+ *  @luaclass TestItem
+ *  @brief    Large bouncy ball type item.
+ */
+
 // Inherits all MoveItem methods, has no custom methods
 const luaL_reg           TestItem::luaMethods[]   = { { NULL, NULL } };
 const LuaFunctionProfile TestItem::functionArgs[] = { { NULL, { }, 0 } };
 
 
 const char *TestItem::luaClassName = "TestItem";
-REGISTER_LUA_SUBCLASS(TestItem, MoveItem);
+REGISTER_LUA_SUBCLASS(TestItem, MoveObject);
 
 
 ////////////////////////////////////////
@@ -2271,13 +2291,19 @@ void ResourceItem::onItemDropped()
 /////
 // Lua interface
 
+/**
+ *  @luaclass ResourceItem
+ *  @brief    Small bouncy ball type item.  In levels where Engineer module is allowed, ResourceItems can be collected and transformed
+ *            into other items.
+ */
+
 // Inherits all MoveItem methods, and has a few of its own
 const luaL_reg           ResourceItem::luaMethods[]   = { { NULL, NULL } };
 const LuaFunctionProfile ResourceItem::functionArgs[] = { { NULL, { }, 0 } };
 
 
 const char *ResourceItem::luaClassName = "ResourceItem";
-REGISTER_LUA_SUBCLASS(ResourceItem, MoveItem);
+REGISTER_LUA_SUBCLASS(ResourceItem, MoveObject);
 
 
 };
