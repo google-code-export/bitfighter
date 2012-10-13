@@ -35,9 +35,17 @@ EditorPlugin::EditorPlugin() { TNLAssert(false, "Don't use this constructor!"); 
 
 // Constructor
 EditorPlugin::EditorPlugin(const string &scriptName, const Vector<string> &scriptArgs, F32 gridSize, 
-                           GridDatabase *gridDatabase, LevelLoader *caller) : 
-      Parent(scriptName, scriptArgs, gridSize, gridDatabase, caller)
+                           GridDatabase *gridDatabase, LevelLoader *caller)
 {
+   
+   mScriptName = scriptName;
+   mScriptArgs = scriptArgs;
+
+   mGridDatabase = gridDatabase;
+
+   mGridSize = gridSize;
+   mCaller = caller;
+
    LUAW_CONSTRUCTOR_INITIALIZATIONS;
 }
 
@@ -110,12 +118,18 @@ bool EditorPlugin::runGetArgsMenu(string &menuTitle, Vector<MenuItem *> &menuIte
 }
 
 
+string EditorPlugin::getScriptName()
+{
+   return mScriptName;
+}
+
+
 bool EditorPlugin::prepareEnvironment()
 {
    LuaScriptRunner::prepareEnvironment();
 
-   //if(!loadAndRunGlobalFunction(L, LUA_HELPER_FUNCTIONS_KEY) || !loadAndRunGlobalFunction(L, LEVELGEN_HELPER_FUNCTIONS_KEY))
-   //   return false;
+   if(!loadAndRunGlobalFunction(L, LUA_HELPER_FUNCTIONS_KEY) /*|| !loadAndRunGlobalFunction(L, LEVELGEN_HELPER_FUNCTIONS_KEY)*/)
+      return false;
 
    setSelf(L, this, "plugin");
 
@@ -219,7 +233,7 @@ const LuaFunctionProfile EditorPlugin::functionArgs[] = { { NULL, { }, 0 } };
 */
 S32 EditorPlugin::getGridSize(lua_State *L)
 {
-   return Parent::getGridSize(L);    
+   return returnFloat(L, mGridSize);    
 }
 
 
@@ -233,13 +247,32 @@ S32 EditorPlugin::getGridSize(lua_State *L)
 */
 S32 EditorPlugin::addLevelLine(lua_State *L)
 {
-   return Parent::addLevelLine(L);    
+   static const char *methodName = "EditorPlugin:addLevelLine()";
+
+   checkArgCount(L, 1, methodName);
+   const char *line = getCheckedString(L, 1, methodName);
+
+   mCaller->parseLevelLine(line, mGridDatabase, "Editor plugin: " + mScriptName);
+
+   return 0;
 }
 
 
 /**
  * @luafunc  table EditorPlugin::getSelectedObjects()
  * @brief    Returns a list of all selected objects in the editor.
+ * @descr    The following code sample shows how to visit each object selected in the editor.  Here, we 
+ *           nudge every selected item 100 pixels to the right.
+ * @code
+   local t = plugin:getSelectedObjects()  -- Get every selected object
+
+   for i, v in ipairs(t) do               -- Iterate over list
+      local g = v:getGeom()               -- Get the object's geometry
+      g = Geom.translate(g, 100, 0)       -- Add 100 to the x-coords
+      v:setGeom(g)                        -- Save the new geometry
+   end
+
+ * @endcode
  * @return   \e table - Lua table containing all the objects in the editor that are currently selected.
 */
 S32 EditorPlugin::getSelectedObjects(lua_State *L)

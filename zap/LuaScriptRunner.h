@@ -90,16 +90,16 @@ private:
    static bool mScriptingDirSet;
 
    void setLuaArgs(const Vector<string> &args);
-   void setModulePath();
+   static void setModulePath();
 
-   bool configureNewLuaInstance();              // Prepare a new Lua environment for use
+   static bool configureNewLuaInstance();              // Prepare a new Lua environment for use
 
-   bool loadCompileSaveHelper(const string &scriptName, const char *registryKey);
-   bool loadCompileSaveScript(const char *filename, const char *registryKey);
-   bool loadCompileScript(const char *filename);
+   static bool loadCompileSaveHelper(const string &scriptName, const char *registryKey);
+   static bool loadCompileSaveScript(const char *filename, const char *registryKey);
+   static bool loadCompileScript(const char *filename);
 
    void setEnums(lua_State *L);                       // Set a whole slew of enum values that we want the scripts to have access to
-
+   static void logErrorHandler(const char *msg, const char *prefix);
 
 protected:
    static lua_State *L;          // Main Lua state variable
@@ -108,8 +108,6 @@ protected:
 
    string mScriptId;             // Unique id for this script
 
-   virtual bool loadScript();
-   bool startLua();
    bool mSubscriptions[EventManager::EventTypes];  // Keep track of which events we're subscribed to for rapid unsubscription upon death or destruction
 
    // This method should be abstract, but luaW requires us to be able to instantiate this class
@@ -146,7 +144,6 @@ void setSelf(lua_State *L, T *self, const char *name)
 
 
 
-
 public:
    LuaScriptRunner();               // Constructor
    virtual ~LuaScriptRunner();      // Destructor
@@ -158,10 +155,13 @@ public:
    virtual const char *getErrorMessagePrefix();
 
    static lua_State *getL();
-   static void shutdown();
+   static bool startLua();          // Create L
+   static void shutdown();          // Delete L
 
    bool runMain();                                    // Run a script's main() function
    bool runMain(const Vector<string> &args);          // Run a script's main() function, putting args into Lua's arg table
+
+   bool loadScript();
 
    bool retrieveFunction(const char *functionName);   // Put specified function on top of the stack, if it's defined
 
