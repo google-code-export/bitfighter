@@ -45,8 +45,6 @@ private:
    LevelLoader *mCaller;
    F32 mGridSize;
    Point getPointFromTable(lua_State *L, int tableIndex, int key, const char *methodName);      // Helper fn
-
-protected:
    GridDatabase *mGridDatabase;
 
 public:
@@ -56,11 +54,10 @@ public:
    LuaLevelGenerator(const string &scriptName, const Vector<string> &scriptArgs, F32 gridsize, GridDatabase *gridDatabase, LevelLoader *caller);   
    virtual ~LuaLevelGenerator();       // Destructor
 
-   virtual bool prepareEnvironment();
+   bool prepareEnvironment();
    
    virtual void registerClasses();
    void onScriptInitialized();
-   bool loadScript();
    bool runScript();      
    string getScriptName();
 
