@@ -161,8 +161,8 @@ S32 LuaBase::checkArgList(lua_State *L, const LuaFunctionProfile *functionInfos,
                   }
                   break;
 
-               // PTS: A series of points, numbers, or a table containing a series of points or numbers
-               case PTS:
+               // GEOM: A series of points, numbers, or a table containing a series of points or numbers
+               case GEOM:
                   if(lua_isvec(L, stackPos))             // Series of Points
                   {
                      stackPos++;
@@ -232,7 +232,7 @@ S32 LuaBase::checkArgList(lua_State *L, const LuaFunctionProfile *functionInfos,
                   if(lua_isnumber(L, stackPos))
                   {
                      lua_Integer i = lua_tointeger(L, stackPos) - 1;    // -1 because Lua indices start with 1
-                     ok = (i >= 0 && i < Game::getAddTarget()->getTeamCount());       
+                     ok = (i >= 0 && i < Game::getAddTarget()->getTeamCount() || (i + 1) == TEAM_NEUTRAL || (i + 1) == TEAM_HOSTILE);       
                   }
                   break;
 
