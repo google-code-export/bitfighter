@@ -56,6 +56,7 @@ struct DestManager
       S32 getRandomDest() const;
 
       void addDest(const Point &dest);
+      void setDest(S32 index, const Point &dest);
       void delDest(S32 index);
 
       void resize(S32 count);
@@ -122,6 +123,7 @@ public:
    S32 getDestCount();
    Point getDest(S32 index);
    void addDest(const Point &dest);
+   void newObjectFromDock(F32 gridSize);
 
    static bool checkDeploymentPosition(const Point &position, GridDatabase *gb, Ship *ship);
 
