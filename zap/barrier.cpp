@@ -446,7 +446,6 @@ WallItem::WallItem(lua_State *L)
 {
    mObjectTypeNumber = WallItemTypeNumber;
    setWidth(Barrier::DEFAULT_BARRIER_WIDTH);
-   mAddedToGame = false;
 
    LUAW_CONSTRUCTOR_INITIALIZATIONS;
 }
@@ -504,7 +503,7 @@ void WallItem::onItemDragging()
 // to superclass event handlers.
 void WallItem::onAddedToGame(Game *game)
 {
-   mAddedToGame = true;
+   Parent::onAddedToGame(game);
 }
 
 
@@ -615,14 +614,21 @@ void WallItem::addToGame(Game *game, GridDatabase *database)
    // is convenient to transmit to the clients
    WallRec wallRec(this);
    game->getGameType()->addWall(wallRec, game);
-
-   //mAddedToGame = true;
 }
 
 
 /////
 // Lua interface
-
+/**
+  *  @luaclass WallItem
+  *  @brief Traditional wall item.
+  *  @descr A %WallItem is a traditional wall consisting of a series of straight-line segments.  WallItems have a width setting that 
+  *         expands the walls outward on the edges, but not the ends.  The game may make slight adjustments to the interior vertices
+  *         of a wall to improve visual appearance.  Collinear vertices may be deleted to simplify wall geometry.
+  *
+  *  @geom %WallItem geometry consists of two or more points forming a linear sequence, each consecutive pair defining a straight-line 
+  *        segment.  %WallItem geometry can cross or form loops with no adverse consequences.
+  */
 //               Fn name       Param profiles  Profile count                           
 #define LUA_METHODS(CLASS, METHOD) \
    METHOD(CLASS, getWidth,     ARRAYDEF({{      END }}), 1 ) \
@@ -637,11 +643,27 @@ GENERATE_LUA_FUNARGS_TABLE(WallItem, LUA_METHODS);
 const char *WallItem::luaClassName = "WallItem";
 REGISTER_LUA_SUBCLASS(WallItem, BfObject);
 
+/**
+  *  @luafunc num WallItem::getWidth()
+  *  @brief   Returns %WallItem's width setting.
+  *  @descr   Walls have a default width of 50.
+  *  @return  \e width: \e Int representing %WallItem's width.
+  */
+S32 WallItem::getWidth(lua_State *L)     
+{ 
+   return returnInt(L, getWidth()); 
+}
 
-S32 WallItem::getWidth(lua_State *L)     { return returnInt(L, getWidth()); }
+
+/**
+  *  @luafunc WallItem::setWidth(width)
+  *  @brief   Sets %WallItem's width.
+  *  @descr   Walls have a default width of 50.
+  *  @param  \e width: \e Int representing %WallItem's width.
+  */
 S32 WallItem::setWidth(lua_State *L)     
 { 
-   checkIfWallHasBeenAddedToTheGame();
+   checkIfHasBeenAddedToTheGame();
 
    checkArgList(L, functionArgs, "WallItem", "setWidth");
 
@@ -651,7 +673,7 @@ S32 WallItem::setWidth(lua_State *L)
 }
 
 
-void WallItem::checkIfWallHasBeenAddedToTheGame()
+void WallItem::checkIfHasBeenAddedToTheGame()
 {
    if(getGame() && getGame()->isServer())
    {
@@ -666,14 +688,14 @@ void WallItem::checkIfWallHasBeenAddedToTheGame()
 
 S32 WallItem::setLoc(lua_State *L)
 {
-   checkIfWallHasBeenAddedToTheGame();
+   checkIfHasBeenAddedToTheGame();
    return Parent::setLoc(L);
 }
 
 
 S32 WallItem::setGeom(lua_State *L)
 {
-   checkIfWallHasBeenAddedToTheGame();
+   checkIfHasBeenAddedToTheGame();
    return Parent::setGeom(L);
 }
 
@@ -690,7 +712,6 @@ TNL_IMPLEMENT_NETOBJECT(PolyWall);
 PolyWall::PolyWall(lua_State *L)
 {
    mObjectTypeNumber = PolyWallTypeNumber;
-   mAddedToGame = false;
 
    LUAW_CONSTRUCTOR_INITIALIZATIONS;
 }
@@ -773,15 +794,17 @@ void PolyWall::onGeomChanged()
 {
    GridDatabase *db = getDatabase();
 
-   db->getWallSegmentManager()->onWallGeomChanged(db, this, isSelected(), getSerialNumber());
-   Parent::onGeomChanged();
+   if(db)      // db might be NULL if PolyWall hasn't yet been added to the editor (e.g. if it's still a figment of Lua's fancy)
+   {
+      db->getWallSegmentManager()->onWallGeomChanged(db, this, isSelected(), getSerialNumber());
+      Parent::onGeomChanged();
+   }
 }
 
 
 void PolyWall::addToGame(Game *game, GridDatabase *database)
 {
    Parent::addToGame(game, database);
-   //mAddedToGame = true;
 }
 
 
@@ -797,12 +820,19 @@ void PolyWall::onItemDragging()
 // to superclass event handlers.
 void PolyWall::onAddedToGame(Game *game)
 {
-   mAddedToGame = true;
+  Parent::onAddedToGame(game);
 }
 
 /////
 // Lua interface
 
+/**
+  *  @luaclass PolyWall
+  *  @brief Polygonal wall item.
+  *  @descr A %PolyWall is a wall consisting of a filled polygonal shape.  
+  *
+  *  @geom %PolyWall geometry is a typical polygon.
+  */
 const luaL_reg           PolyWall::luaMethods[]   = { { NULL, NULL } };
 const LuaFunctionProfile PolyWall::functionArgs[] = { { NULL, { }, 0 } };
 
@@ -810,9 +840,9 @@ const char *PolyWall::luaClassName = "PolyWall";
 REGISTER_LUA_SUBCLASS(PolyWall, BfObject);
 
 
-void PolyWall::checkIfWallHasBeenAddedToTheGame()
+void PolyWall::checkIfHasBeenAddedToTheGame()
 {
-   if(mAddedToGame)
+   if(getGame() && getGame()->isServer())
    {
       const char *msg = "Can't modify a PolyWall that's already been added to a game!";
       logprintf(LogConsumer::LogError, msg);
