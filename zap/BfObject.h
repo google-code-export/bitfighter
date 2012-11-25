@@ -179,8 +179,8 @@ private:
    S32 mUserDefinedItemId;    // Item's unique id... 0 if there is none
 
 public:
-   EditorObject();      // Constructor
-   virtual ~EditorObject();
+   EditorObject();            // Constructor
+   virtual ~EditorObject();   // Destructor
 
    // Messages and such for the editor
    virtual const char *getOnScreenName();
