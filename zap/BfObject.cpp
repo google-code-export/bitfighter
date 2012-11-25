@@ -280,6 +280,12 @@ EditorObject::~EditorObject()
    // Do nothing
 }
 
+// Destructor
+EditorObject::~EditorObject()
+{
+   // Do nothing
+}
+
 
 void EditorObject::onItemDragging()  { /* Do nothing */ }
 void EditorObject::onAttrsChanging() { /* Do nothing */ }

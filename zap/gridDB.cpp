@@ -24,19 +24,8 @@
 //------------------------------------------------------------------------------------
 
 #include "gridDB.h"
-#include "BfObject.h"
 #include "moveObject.h"    // For def of ActualState
-#include "EditorObject.h"  // For def of EditorObject
 #include "WallSegmentManager.h"
-
-#include "boost/shared_ptr.hpp"
-
-#include <map>
-
-
-
-#include "soccerGame.h"  // TODO: delete this line
-
 
 namespace Zap
 {
@@ -96,8 +85,6 @@ GridDatabase::~GridDatabase()
 
    if(mCountGridDatabase == 0)
       delete mChunker;
-
-   logprintf("Deleting database %d", mDatabaseId);
 }
 
 
@@ -138,10 +125,11 @@ void GridDatabase::copyObjects(const GridDatabase *source)
 
 void GridDatabase::addToDatabase(DatabaseObject *theObject, const Rect &extents)
 {
-   TNLAssert(theObject->mDatabase != this, "Already added to database, trying to add to same database again");
-   TNLAssert(!theObject->mDatabase, "Already added to database, trying to add to different database");
-   TNLAssert(theObject->mExtent == extents, "extents does not equal");
-   if(theObject->mDatabase)
+   TNLAssert(theObject->mDatabase != this,  "Already added to database, trying to add to same database again!");
+   TNLAssert(!theObject->mDatabase,         "Already added to database, trying to add to different database!");
+   TNLAssert(theObject->mExtent == extents, "Extents not equal!");
+
+   if(theObject->mDatabase)      // Should never happen
       return;
 
    theObject->mDatabase = this;
