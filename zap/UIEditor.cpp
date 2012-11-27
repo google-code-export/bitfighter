@@ -346,12 +346,6 @@ void EditorUserInterface::removeUndoState()
 }
 
 
-void EditorUserInterface::autoSave()
-{
-   saveLevel(false, false, true);
-}
-
-
 void EditorUserInterface::clearSnapEnvironment()
 {
    mSnapObject = NULL;
@@ -4466,28 +4460,48 @@ void EditorUserInterface::setWarnMessage(string msg1, string msg2)
 }
 
 
-bool EditorUserInterface::saveLevel(bool showFailMessages, bool showSuccessMessages, bool autosave)
+void EditorUserInterface::autoSave()
 {
-   string saveName = autosave ? "auto.save" : mEditFileName;
+   doSaveLevel("auto.save", false);
+}
 
+
+bool EditorUserInterface::saveLevel(bool showFailMessages, bool showSuccessMessages)
+{
+   // Check if we have a valid (i.e. non-null) filename ==> should never happen!
+   if(mEditFileName == "")
+   {
+      ErrorMessageUserInterface *ui = getUIManager()->getErrorMsgUserInterface();
+
+      ui->reset();
+      ui->setTitle("INVALID FILE NAME");
+      ui->setMessage(1, "The level file name is invalid or empty.  The level cannot be saved.");
+      ui->setMessage(2, "To correct the problem, please change the file name using the");
+      ui->setMessage(3, "Game Parameters menu, which you can access by pressing [F3].");
+
+      getUIManager()->activate(ui);
+
+      return false;
+   }
+
+   if(!doSaveLevel(mEditFileName, showFailMessages))
+      return false;
+
+   mNeedToSave = false;
+   mAllUndoneUndoLevel = mLastUndoIndex;     // If we undo to this point, we won't need to save
+
+   if(showSuccessMessages)
+      setSaveMessage("Saved " + getLevelFileName(), true);
+
+   return true;
+}
+
+
+// Returns true if successful, false otherwise
+bool EditorUserInterface::doSaveLevel(const string &saveName, bool showFailMessages)
+{
    try
    {
-      // Check if we have a valid (i.e. non-null) filename
-      if(saveName == "")
-      {
-         ErrorMessageUserInterface *ui = getUIManager()->getErrorMsgUserInterface();
-
-         ui->reset();
-         ui->setTitle("INVALID FILE NAME");
-         ui->setMessage(1, "The level file name is invalid or empty.  The level cannot be saved.");
-         ui->setMessage(2, "To correct the problem, please change the file name using the");
-         ui->setMessage(3, "Game Parameters menu, which you can access by pressing [F3].");
-
-         getUIManager()->activate(ui);
-
-         return false;
-      }
-
       FolderManager *folderManager = getGame()->getSettings()->getFolderManager();
 
       string fileName = joindir(folderManager->levelDir, saveName).c_str();
@@ -4505,7 +4519,6 @@ bool EditorUserInterface::saveLevel(bool showFailMessages, bool showSuccessMessa
 
       // Write out all level items (do two passes; walls first, non-walls next, so turrets & forcefields have something to grab onto)
       const Vector<DatabaseObject *> *objList = getDatabase()->findObjects_fast();
-
 
       F32 gridSize = getGame()->getGridSize();
 
@@ -4527,16 +4540,7 @@ bool EditorUserInterface::saveLevel(bool showFailMessages, bool showSuccessMessa
       return false;
    }
 
-   if(!autosave)     // Doesn't count as a save!
-   {
-      mNeedToSave = false;
-      mAllUndoneUndoLevel = mLastUndoIndex;     // If we undo to this point, we won't need to save
-   }
-
-   if(showSuccessMessages)
-      setSaveMessage("Saved " + getLevelFileName(), true);
-
-   return true;
+   return true;      // Saved OK
 }
 
 
@@ -4591,31 +4595,23 @@ void EditorUserInterface::testLevel()
 
 void EditorUserInterface::testLevelStart()
 {
-   string tmpFileName = mEditFileName;
-   mEditFileName = "editor.tmp";       // Temp file where we'll save current level while testing
+   static const string TestFileName = "editor.tmp";   // Temp file where we'll save current level while testing
 
-   Cursor::disableCursor();            // Turn off cursor
-   bool nts = mNeedToSave;             // Save these parameters because they are normally reset when a level is saved.
-   S32 auul = mAllUndoneUndoLevel;     // Since we're only saving a temp copy, we really shouldn't reset them...
+   Cursor::disableCursor();                           // Turn off cursor
 
-   mEditorGameType = getGame()->getGameType();     // Sock our current gametype away, will use it when we reenter the editor
+   mEditorGameType = getGame()->getGameType();        // Sock our current gametype away, will use it when we reenter the editor
 
-   if(saveLevel(true, false))
+   if(doSaveLevel(TestFileName, true))
    {
-      mEditFileName = tmpFileName;     // Restore the level name
-
       mWasTesting = true;
 
       // Shouldn't need to do this, but it will clear out forcefields lingering from level load
       getGame()->getGameObjDatabase()->removeEverythingFromDatabase();     
 
       Vector<string> levelList;
-      levelList.push_back(mEditFileName);
+      levelList.push_back(TestFileName);
       initHostGame(getGame()->getSettings(), levelList, true, false);
    }
-
-   mNeedToSave = nts;                  // Restore saved parameters
-   mAllUndoneUndoLevel = auul;
 }
 
 
