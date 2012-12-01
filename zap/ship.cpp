@@ -542,8 +542,12 @@ void Ship::processWeaponFire()
       while(mFireTimer <= 0 && mEnergy >= GameWeapon::weaponInfo[curWeapon].minEnergy)
       {
          mEnergy -= GameWeapon::weaponInfo[curWeapon].drainEnergy;      // Drain energy
-if(!getGame()->isServer())
-UserInterface::playBoop();
+#ifdef SHOW_SERVER_SITUATION
+         // Make a noise when the client thinks we've shot -- ideally, there should be one boop per shot, delayed by about half
+         // of whatever /lag is set to.
+         if(!getGame()->isServer())
+            UserInterface::playBoop();
+#endif
          mWeaponFireDecloakTimer.reset(WeaponFireDecloakTime);          // Uncloak ship
 
          if(getClientInfo())
@@ -558,7 +562,6 @@ UserInterface::playBoop();
          }
 
          mFireTimer += S32(GameWeapon::weaponInfo[curWeapon].fireDelay);
-         TNLAssert(mFireTimer > 0, "???");      // DEL THIS LINE
 
          // If we've fired, Spawn Shield turns off
          if(mSpawnShield.getCurrent() != 0)
@@ -911,9 +914,8 @@ void Ship::processModules()
       if(getGame()->getModuleInfo(mModule[i])->getPrimaryUseType() == ModulePrimaryUsePassive)
          mModulePrimaryActive[mModule[i]] = true;         // needs to be true to allow stats counting
 
-      // Set loaded module states to 'on' if detected as so,
-      // unless modules are disabled or we need to cooldown
-      if(!mCooldownNeeded && getClientInfo() && !getClientInfo()->isShipSystemsDisabled())
+      // Set loaded module states to 'on' if detected as so, unless modules are disabled or we need to cooldown
+      if(!mCooldownNeeded && (!getClientInfo() || (getClientInfo() && !getClientInfo()->isShipSystemsDisabled())))
       {
          if(mCurrentMove.modulePrimary[i])
             mModulePrimaryActive[mModule[i]] = true;
