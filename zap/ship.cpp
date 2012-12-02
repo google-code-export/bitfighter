@@ -134,7 +134,7 @@ void Ship::initialize(ClientInfo *clientInfo, S32 team, const Point &pos, bool i
       mLastTrailPoint[i] = -1;   // Or something... doesn't really matter what
 #endif
 
-   mClientInfo = clientInfo;
+   mClientInfo = clientInfo;     // Will be NULL if being created by TNL
 
    setTeam(team);
    mass = 1.0;            // Ship's mass, not used
@@ -993,20 +993,23 @@ void Ship::processModules()
 
 
          // Sensor module needs to place a spybug
-         if(i == ModuleSensor && !isGhost() &&                 // Server side only
+         if(i == ModuleSensor &&  
                mSpyBugPlacementTimer.getCurrent() == 0 &&      // Prevent placement too fast
                mEnergy > moduleInfo->getPrimaryPerUseCost())   // Have enough energy
          {
-            Point direction = getAimVector();
-            GameWeapon::createWeaponProjectiles(WeaponSpyBug, direction, getActualPos(),
-                                                getActualVel(), 0, CollisionRadius - 2, this);
 
+            // Energy deduction happens on client and server, but the rest is server only
             mEnergy -= moduleInfo->getPrimaryPerUseCost();
-
             mSpyBugPlacementTimer.reset();
 
-            if(getClientInfo())
-               getClientInfo()->getStatistics()->countShot(WeaponSpyBug);
+            if(!isGhost())
+            {
+               Point direction = getAimVector();
+               GameWeapon::createWeaponProjectiles(WeaponSpyBug, direction, getActualPos(),
+                                                getActualVel(), 0, CollisionRadius - 2, this);
+               if(getClientInfo())
+                  getClientInfo()->getStatistics()->countShot(WeaponSpyBug);
+            }
          }
       }
 
