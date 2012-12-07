@@ -1,0 +1,108 @@
+/**
+
+@mainpage Bitfighter Lua Documentation
+
+@section intro_sec Introduction
+
+Here is some info about scripting levels and robots in Bitfighter.
+
+@section datatypes Bitfighter datatypes
+* point - Point is a low-overhead custom structure that represents an xy coordinate pair.  See the \link point point class documentation \endlink for further details.
+
+Note that points are immutable, so cannot be changed once created.
+
+
+* geometry - Geometry is not a formal datatype, but rather a reference to either to a point or a table of points, depending on the context. 
+For example, if the object is inherently point-like (such as an Item or Projectile), then geometry is a Point.  
+For more complex objects (such as a WallItem or a Zone), geometry refers to a Lua table of points.
+Some objects have a specific number of points.  A TextItem, for example, consists of exactly two points, defining its
+start and endpoints.  Some items (like Zones and \link PolyWall PolyWalls \endlink) must have a minimum of three points.  See the documentation for individual items for details.
+
+The Geom class provides a collection of tools to make common transormations to a point or a table of points. 
+
+* Other datatypes
+
+bool - Either \e true or \e false.  In Lua, both nil and false make a condition false; any other value makes it true.
+
+int - A number that has no decimal component.  Unlike some languages, Lua does not distinguish between integers and floating point numbers -- they are both stored internally as numbers.  When a function requires an integer argument, and you provide a floating point number, the fraction will be silently dropped.
+
+*num - A real (double-precision floating-point) number.  You can also specify an integer without any problems.
+
+@subsection step1 Step 1: Opening the box
+
+@section programming_robots Programming Robots
+
+@section programming_levelgens Programming Levelgens
+
+@section programming_plugins Programming Editor Plugins
+
+Editor plugins can be used to extend the functionality of the editor, and to add new or experimental geometry manipulation functions.
+
+When the user runs a plugin, the editor first tries to call a function called \e getArgsMenu().  If this function exists, it must
+return a table containing the menu name and the various items to be displayed on it.  The values that the user enters for these
+items will be passed to the script in the arg table, Lua's structure for passing command line arguments to a script.  If \e getArgsMenu()
+does not exist, the plugin will be run with no arguments.
+
+Unlike levelgen and bot scripts, plugins do not respond to events, and often consist of only a \e main() function, and, if they require 
+special inputs, a \e getArgsMenu() function.
+
+The following is the getArgsMenu() function from the draw_arcs plugin, which can be found in Bitfighter's \e editor_plugins folder. 
+\code
+function getArgsMenu()
+   
+   return "Create Arc",         -- Title shown on menu
+      {
+         CounterMenuItem.new("Angle",          90, 1,       0,   360, "deg.",       "", "Sweep of arc"),    
+         CounterMenuItem.new("Precision",      16, 1,       4,    62, "divisions",  "", "Number of sections per arc"),
+         CounterMenuItem.new("Radius of arc", 100, 1,       1,   500, "grid units", "", "Radius of the arc"),
+         CounterMenuItem.new("Start of arc",   90, 1,       0,   360, "degrees",    "", "Start angle of arc from the positive x axis"),
+
+         ToggleMenuItem.new ("Type", { "BarrierMaker", "LoadoutZone", "GoalZone" }, 1, true, "Type of item to insert"),
+         
+         CounterMenuItem.new("Barrier Width",  50, 1,       1,    50, "grid units", "", "Width of wall if BarrierMaker is selected above"),
+         CounterMenuItem.new("Center X",        0, 10, -10000, 10000, "",           "", "X coordinate of center of arc"),
+         CounterMenuItem.new("Center Y",        0, 10, -10000, 10000, "",           "", "Y coordinate of center of arc")
+      }
+end
+\endcode
+
+@section events Events
+
+Robots and Levelgens can register to be notified of certain game events.  When the event occurs, a special function in the script is called, which can do anything from 
+add an item to the game (in the case of Levelgens) to changing destinations (for Robots).  Editor plugins cannot subscribe to events.
+
+@section timers Timers
+Timer is a utility class that makes it easier to manage timing periodic or delayed events.  The timer code is based on a very nice library written by Haywood Slap.
+
+A timer object that can be used to schedule arbitrary events to be executed at some time in the future.  All times are given in milliseconds.
+
+etc...
+
+
+@section debugging Debugging Tips
+
+Any of your scripts can print a stack trace to see how you got to a particular execution point.  This can be very helpful if there are several conditions under which a function can be called.
+
+\code
+logprint(debug.traceback())
+\endcode
+
+
+
+@page page1 A documentation page
+  \tableofcontents
+  Leading text.
+  \section sec An example section
+  This page contains the subsections \ref subsection1 and \ref subsection2.
+  For more info see page \ref page2.
+  \subsection subsection1 The first subsection
+  Text.
+  \subsection subsection2 The second subsection
+  More text.
+
+@page page2 Another page
+  Even more info.
+
+
+
+ */
