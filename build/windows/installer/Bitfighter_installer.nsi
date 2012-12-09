@@ -19,11 +19,12 @@ InstallDir "$PROGRAMFILES\Bitfighter"
 ;Get installation folder from registry if available
 InstallDirRegKey HKCU "Software\Bitfighter" ""
 
-;Request application privileges for Windows Vista
+; Request application privileges for Windows Vista
 RequestExecutionLevel admin
 
 
 SetCompressor /SOLID lzma
+
 
 ;--------------------------------
 ; Overall Interface Settings
@@ -37,11 +38,6 @@ BrandingText " "
 !define MUI_WELCOMEFINISHPAGE_BITMAP WelcomePageBanner.bmp
 !define MUI_WELCOMEPAGE_TEXT "\
    This will install Bitfighter version ${curVersion} on your computer. If you previously installed an older version, this will overwrite it.  There is no need to uninstall."
-
-;--------------------------------
-Function LaunchLink
-  ExecShell "" "$INSTDIR\Play Bitfighter.lnk"
-FunctionEnd
 
 
 ; For moving folders:
@@ -69,7 +65,7 @@ Var /GLOBAL switch_overwrite
 !define MUI_UNCONFIRMPAGE_TEXT_TOP "\
    This will remove Bitfighter from your system.  It will not remove your data in $APPDATA\Bitfighter.$\n$\n\
    \
-   Click Uninstall to continue."
+   Click Uninstall to continue.$\n $\n"
 
 ;--------------------------------
 ; Pages
@@ -88,6 +84,13 @@ Var /GLOBAL switch_overwrite
  
    !insertmacro MUI_LANGUAGE "English"
 
+
+;--------------------------------
+Function LaunchLink
+  ExecShell "" "$INSTDIR\Play Bitfighter.lnk"
+FunctionEnd
+
+
 ;--------------------------------
 ; Installer Section
 
@@ -96,8 +99,6 @@ Section "Install"
   SetOutPath "$INSTDIR"
   File "..\..\..\exe\Bitfighter.exe"
   File "..\..\..\exe\joystick_presets.ini"
-  
-  CreateShortCut "$INSTDIR\Play Bitfighter.lnk" "$INSTDIR\Bitfighter.exe"
 
   File "..\..\..\lib\OpenAL32.dll"
   File "..\..\..\lib\ALURE32.dll"
@@ -114,7 +115,7 @@ Section "Install"
   File "..\..\..\End-User License.txt"
   File ".\twoplayers.bat"
   File "..\..\..\resource\bficon.bmp"
-  
+
   SetOutPath "$INSTDIR\updater"
   File /r ".\updater\bfup.exe"
   File /r ".\updater\bfup.xml"
@@ -127,10 +128,10 @@ Section "Install"
 
   SetOutPath "$INSTDIR\music"
   File /r "..\..\..\resource\music\*.*"
-  
+
   SetOutPath "$INSTDIR\editor_plugins"
   File /r "..\..\..\resource\editor_plugins\*.*"
-  
+
   SetOutPath "$INSTDIR\scripts"
   File /r "..\..\..\resource\scripts\*.lua"
 
@@ -141,24 +142,23 @@ Section "Install"
   SetOutPath "$INSTDIR\robots"
   File /r "..\..\..\resource\robots\*.bot" 
 
+
+  CreateShortCut "$INSTDIR\Play Bitfighter.lnk" "$INSTDIR\Bitfighter.exe"
   
-  ;Store installation folder
+  ; Store installation folder
   WriteRegStr HKCU "Software\Bitfighter" "" $INSTDIR
   WriteRegStr HKEY_LOCAL_MACHINE "Software\Microsoft\Windows\CurrentVersion\Uninstall\Bitfighter" "DisplayName" "Bitfighter (remove only)"
   WriteRegStr HKEY_LOCAL_MACHINE "Software\Microsoft\Windows\CurrentVersion\Uninstall\Bitfighter" "UninstallString" '"$INSTDIR\uninstall-bitfighter.exe"'
 
-  ;Create uninstaller
+  ; Create uninstaller
   WriteUninstaller "$INSTDIR\uninstall-bitfighter.exe"
-  
-   MessageBox MB_YESNO|MB_ICONQUESTION "Bitfighter has been installed.  Would you like to add shortcuts in the start menu?"  IDNO NoStartMenu
-      SetOutPath $SMPROGRAMS\Bitfighter
-      WriteINIStr "$SMPROGRAMS\Bitfighter\Bitfighter Home Page.url" "InternetShortcut" "URL" "http://www.bitfighter.org/"
-      CreateShortCut "$SMPROGRAMS\Bitfighter\Uninstall Bitfighter.lnk" "$INSTDIR\uninstall-bitfighter.exe"
-      SetOutPath $INSTDIR
-      CreateShortCut "$SMPROGRAMS\Bitfighter\Bitfighter.lnk" "$INSTDIR\Bitfighter.exe"
-   NoStartMenu:
+  SetOutPath $SMPROGRAMS\Bitfighter
+  WriteINIStr "$SMPROGRAMS\Bitfighter\Bitfighter Home Page.url" "InternetShortcut" "URL" "http://www.bitfighter.org/"
+  CreateShortCut "$SMPROGRAMS\Bitfighter\Uninstall Bitfighter.lnk" "$INSTDIR\uninstall-bitfighter.exe"
+  SetOutPath $INSTDIR
+  CreateShortCut "$SMPROGRAMS\Bitfighter\Bitfighter.lnk" "$INSTDIR\Bitfighter.exe"
    
-   MessageBox MB_YESNO|MB_ICONQUESTION "Would you like to add a desktop icon for Bitfighter?" IDNO NoDesktopIcon
+   MessageBox MB_YESNO|MB_ICONQUESTION "Bitfighter has been installed.  Would you like to add a desktop icon for Bitfighter?" IDNO NoDesktopIcon
       SetOutPath $INSTDIR
       CreateShortCut "$DESKTOP\Bitfighter.lnk" "$INSTDIR\Bitfighter.exe"
    NoDesktopIcon:
@@ -176,6 +176,7 @@ Section "Install"
   ${EndIf}
 
 SectionEnd
+
 
 ;--------------------------------
 ;Uninstaller Section
