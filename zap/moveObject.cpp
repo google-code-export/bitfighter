@@ -1109,6 +1109,7 @@ U32 MountableItem::packUpdate(GhostConnection *connection, U32 updateMask, BitSt
 
 void MountableItem::unpackUpdate(GhostConnection *connection, BitStream *stream)
 {
+
    if(stream->readFlag())     // MountMask
    {
       bool isMounted = stream->readFlag();
@@ -1127,7 +1128,6 @@ void MountableItem::unpackUpdate(GhostConnection *connection, BitStream *stream)
       mIsMounted = isMounted;
       updateExtentInDatabase();
    }
-
    Parent::unpackUpdate(connection, stream);
 }
 
