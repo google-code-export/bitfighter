@@ -887,6 +887,7 @@ void NexusFlagItem::dismount(Dismount_Mode dismountMode)
 {
    if(isGhost())      // Server only
       return;
+  
    if(dismountMode == DISMOUNT_MOUNT_WAS_KILLED)
    {
       // Should getting shot up count as a flag drop event for statistics purposes?

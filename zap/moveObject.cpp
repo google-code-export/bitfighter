@@ -1109,6 +1109,7 @@ U32 MountableItem::packUpdate(GhostConnection *connection, U32 updateMask, BitSt
 
 void MountableItem::unpackUpdate(GhostConnection *connection, BitStream *stream)
 {
+
    if(stream->readFlag())     // MountMask
    {
       bool isMounted = stream->readFlag();
@@ -1127,7 +1128,6 @@ void MountableItem::unpackUpdate(GhostConnection *connection, BitStream *stream)
       mIsMounted = isMounted;
       updateExtentInDatabase();
    }
-
    Parent::unpackUpdate(connection, stream);
 }
 
@@ -1184,11 +1184,13 @@ void MountableItem::dismount(Dismount_Mode dismountMode)
    // On client, we'll wait for a message from the server to set the pos, which may have already happened by the time
    // this code is executed.
    if(!isGhost())
+   {
       setPos(mMount->getActualPos());  
+      mIsMounted = false;     // For client, wait to set this in unpackUpdate
+   }
 
    mMount = NULL;
-   if(!isGhost())
-      mIsMounted = false; // For client, wait to set this in unpackUpdate
+      
    setMaskBits(MountMask | PositionMask | WarpPositionMask);    // Tell packUpdate() to send item location
 
 
@@ -1199,7 +1201,7 @@ void MountableItem::dismount(Dismount_Mode dismountMode)
    {
       GameType *gt = getGame()->getGameType();
       if(gt)
-         gt->itemDropped(ship, this);      // Server-only method
+         gt->itemDropped(ship, this);      // Server-only method; generally broadcasts message and things like that
    }
 
    mDroppedTimer.reset();
