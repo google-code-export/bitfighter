@@ -1524,12 +1524,9 @@ void Ship::unpackUpdate(GhostConnection *connection, BitStream *stream)
       while(stream->readFlag())
       {
          S32 index = stream->readInt(GhostConnection::GhostIdBitSize);
-         NetObject *netObj = connection->resolveGhost(index);
-         if(netObj) // can be NULL?
-         {
-            MountableItem *item = static_cast<MountableItem *>(netObj);
+         MountableItem *item = static_cast<MountableItem *>(connection->resolveGhost(index));
+         if(item)                      // Could be NULL if server hasn't yet sent mounted item to us
             item->mountToShip(this);
-         }
       }
 
    }  // initial update
@@ -1787,7 +1784,7 @@ MountableItem *Ship::unmountItem(U8 objectType)
       if(mMountedItems[i]->getObjectTypeNumber() == objectType)
       {
          MountableItem *item = mMountedItems[i];
-         item->dismount();
+         item->dismount(MountableItem::DISMOUNT_NORMAL);
          return item;
       }
 
@@ -1810,7 +1807,7 @@ void Ship::dismountAll(U8 objectType)
 {
    for(S32 i = mMountedItems.size() - 1; i >= 0; i--)
       if(mMountedItems[i]->getObjectTypeNumber() == objectType)
-         mMountedItems[i]->dismount();
+         mMountedItems[i]->dismount(MountableItem::DISMOUNT_NORMAL);
 }
 
 
