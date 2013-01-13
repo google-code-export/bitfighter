@@ -132,6 +132,14 @@ const char *LuaScriptRunner::getScriptId()
 }
 
 
+// Load the script, execute the chunk to get it in memory, then run its main() function
+// Return false if there was an error, true if not
+bool LuaScriptRunner::runScript()
+{
+   return prepareEnvironment() && loadScript() && runMain(); 
+}
+
+
 // Sets the environment for the function on the top of the stack to that associated with name
 // Starts with a function on the stack
 void LuaScriptRunner::setEnvironment()
@@ -189,7 +197,7 @@ void LuaScriptRunner::pushStackTracer()
    // _stackTracer is a function included in lua_helper_functions that manages the stack trace; it should ALWAYS be present.
    if(!loadFunction(L, getScriptId(), "_stackTracer"))       
       throw LuaException("Method _stackTracer() could not be found!\n"
-                           "Your scripting environment appears corrupted.  Consider reinstalling Bitfighter.");
+                         "Your scripting environment appears corrupted.  Consider reinstalling Bitfighter.");
 }
 
 
@@ -213,7 +221,7 @@ bool LuaScriptRunner::loadScript()
 
    try
    {
-      pushStackTracer();
+      pushStackTracer();            // -- _stackTracer
 
       if(!cacheScripts)
          loadCompileScript(mScriptName.c_str());
@@ -261,7 +269,7 @@ bool LuaScriptRunner::loadScript()
       if(lua_pcall(L, 0, 0, -2))      // Passing 0 args, expecting none back
          throw LuaException("Error starting script:\n" + string(lua_tostring(L, -1)));
 
-      clearStack(L);
+      clearStack(L);    // Remove the _stackTracer from the stack
       return true;
    }
    catch(LuaException &e)
@@ -297,9 +305,9 @@ bool LuaScriptRunner::runCmd(const char *function, S32 returnValues)
 {
    try 
    {
-      S32 args = lua_gettop(L);  // Number of args on stack    -- <<args>>
+      S32 args = lua_gettop(L);  // Number of args on stack     // -- <<args>>
 
-      pushStackTracer();
+      pushStackTracer();                                        // -- <<args>>, _stackTracer
 
       if(!loadFunction(L, getScriptId(), function))             // -- <<args>>, _stackTracer, function
          throw LuaException("Cannot load method" + string(function) +"()!\n");
@@ -315,13 +323,13 @@ bool LuaScriptRunner::runCmd(const char *function, S32 returnValues)
       if(error)
          throw LuaException("In method" + string(function) +"():\n" + string(lua_tostring(L, -1)));
 
-      lua_remove(L, 1);    // Remove _stackTracer                  -- <<return values>>
+      lua_remove(L, 1);    // Remove _stackTracer               // -- <<return values>>
 
       // Do not clear stack -- caller probably wants <<return values>>
       return false;
    }
 
-   catch(LuaException &e)
+   catch(const LuaException &e)
    {
       logprintf(LogConsumer::LogError, "%s\n%s\nTerminating script", getErrorMessagePrefix(), e.msg.c_str());
 
