@@ -1013,9 +1013,14 @@ VersionedGameStats GameType::getGameStats()
          playerStats->kills          = statistics->getKills();
          playerStats->turretKills    = statistics->mTurretsKilled;
          playerStats->ffKills        = statistics->mFFsKilled;
+         playerStats->astKills       = statistics->mAsteroidsKilled;
          playerStats->deaths         = statistics->getDeaths();
          playerStats->suicides       = statistics->getSuicides();
          playerStats->fratricides    = statistics->getFratricides();
+
+         playerStats->turretsEngr    = statistics->mTurretsEngineered;
+         playerStats->ffEngr         = statistics->mFFsEngineered;
+         playerStats->telEngr        = statistics->mTeleportersEngineered;
 
          playerStats->distTraveled   = statistics->getDistanceTraveled();
 
