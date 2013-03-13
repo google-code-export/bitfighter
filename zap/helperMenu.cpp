@@ -93,7 +93,8 @@ F32 HelperMenu::getHelperWidth() const
 }
 
 
-void HelperMenu::drawItemMenu(S32 xPos, S32 yPos, const char *title, const OverlayMenuItem *items, S32 count)
+void HelperMenu::drawItemMenu(S32 xPos, S32 yPos, const char *title, const OverlayMenuItem *items, S32 count,
+                              const char **legendText, const Color **legendColors, S32 legendCount)
 {
    static const Color baseColor(Colors::red);
 
@@ -105,7 +106,8 @@ void HelperMenu::drawItemMenu(S32 xPos, S32 yPos, const char *title, const Overl
          displayItems++;
 
    // Frame the menu
-   S32 interiorMenuHeight = displayItems * (MENU_FONT_SIZE + MENU_FONT_SPACING) + 2 * MENU_PADDING;
+   S32 interiorMenuHeight = displayItems * (MENU_FONT_SIZE + MENU_FONT_SPACING) + 2 * MENU_PADDING + 
+                            (legendCount > 0 ? MENU_LEGEND_FONT_SIZE + 2 * MENU_FONT_SPACING : 0);
 
    drawMenuBorderLine(xPos, yPos,                      baseColor);
    drawMenuBorderLine(xPos, yPos + interiorMenuHeight, baseColor);
@@ -126,39 +128,50 @@ void HelperMenu::drawItemMenu(S32 xPos, S32 yPos, const char *title, const Overl
       // Don't show an option that shouldn't be shown!
       if(!items[i].showOnMenu)
          continue;
-
+      
       // Draw key controls for selecting the object to be created
       U32 joystickIndex = Joystick::SelectedPresetIndex;
 
       if(inputMode == InputModeJoystick)     // Only draw joystick buttons when in joystick mode
-         JoystickRender::renderControllerButton(F32(xPos + (showKeys ? 0 : 20)), (F32)yPos, 
+         JoystickRender::renderControllerButton(F32(xPos + (showKeys ? 5 : 25)), (F32)yPos, 
                                                 joystickIndex, items[i].button, false);
 
       if(showKeys)
       {
-         glColor(Colors::white);             // Render key in white
-         JoystickRender::renderControllerButton((F32)xPos + 20, (F32)yPos, 
+         // Render key in white, or, if there is a legend, in the color of the adjacent item
+         glColor(legendCount > 0 ? items[i].itemColor : &Colors::white); 
+         JoystickRender::renderControllerButton((F32)xPos + 30, (F32)yPos, 
                                                 joystickIndex, items[i].key, false);
       }
 
-      if(items[i].markAsSelected)
-         glColor(1.0, 0.1f, 0.1f);      // Color of already selected item
-      else
-         glColor(0.1f, 1.0, 0.1f);      // Color of not-yet selected item
-
+      glColor(items[i].itemColor);  
 
       S32 x = drawStringAndGetWidth(xPos + 50, yPos, MENU_FONT_SIZE, items[i].name); 
 
-      // Render help string.  Highlight it if the item is not selected
-      if(!items[i].markAsSelected)
-         glColor(.2, .8, .8);    
-
-      drawString(xPos + x, yPos, MENU_FONT_SIZE, items[i].help);
+      // Render help string, if one is available
+      if(strcmp(items[i].help, "") != 0)
+      {
+         glColor(items[i].helpColor);    
+         drawString(xPos + 50 + 5 + x, yPos, MENU_FONT_SIZE, items[i].help);
+      }
 
       yPos += MENU_FONT_SIZE + MENU_FONT_SPACING;
    }
 
-   yPos += MENU_FONT_SIZE + MENU_FONT_SPACING + MENU_PADDING;
+   if(legendCount > 0)
+   {
+      yPos += MENU_FONT_SPACING;
+      S32 x = xPos + 20;
+      for(S32 i = 0; i < legendCount; i++)
+      {
+         glColor(legendColors[i]);
+         x += drawStringAndGetWidth(x, yPos, MENU_LEGEND_FONT_SIZE, legendText[i]);
+      }
+
+      yPos += MENU_LEGEND_FONT_SIZE + MENU_FONT_SPACING;
+   }
+
+   yPos += 2 * MENU_PADDING;
 
    drawMenuCancelText(xPos, yPos, baseColor, MENU_FONT_SIZE);
 }
@@ -176,6 +189,7 @@ void HelperMenu::drawMenuBorderLine(S32 xPos, S32 yPos, const Color &color)
          color.r, color.g, color.b, 1,
          color.r, color.g, color.b, 0,
    };
+
    renderColorVertexArray(vertices, colors, ARRAYSIZE(vertices) / 2, GL_LINES);
 }
 
