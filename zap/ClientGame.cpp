@@ -415,7 +415,7 @@ void ClientGame::updatePlayerNameAndPassword(const string &name, const string &p
 }
 
 
-void ClientGame::displayShipDesignChangedMessage(const Vector<U8> &loadout, const char *msgToShowIfLoadoutsAreTheSame)
+void ClientGame::displayShipDesignChangedMessage(const LoadoutTracker &loadout, const char *msgToShowIfLoadoutsAreTheSame)
 {
    if(!getConnectionToServer())
       return;
@@ -433,7 +433,7 @@ void ClientGame::displayShipDesignChangedMessage(const Vector<U8> &loadout, cons
 
    if(getSettings()->getIniSettings()->verboseHelpMessages)
    {
-      if(ship->isLoadoutSameAsCurrent(loadout))
+      if(ship->isLoadoutSameAsCurrent(loadout.toU8Vector()))
          displayErrorMessage(msgToShowIfLoadoutsAreTheSame);
       else
       {
@@ -1857,7 +1857,7 @@ void ClientGame::renderOverlayMap()
    mapBounds.expand(Point(mapWidth * 2, mapHeight * 2));      //TODO: Fix
 
    rawRenderObjects.clear();
-   if(ship->isModulePrimaryActive(ModuleSensor))
+   if(/*ship->isModulePrimaryActive(ModuleSensor)*/true)
       mGameObjDatabase->findObjects((TestFunc)isVisibleOnCmdrsMapWithSensorType, rawRenderObjects);
    else
       mGameObjDatabase->findObjects((TestFunc)isVisibleOnCmdrsMapType, rawRenderObjects);

@@ -28,6 +28,7 @@
 #include "ClientGame.h"
 #include "ClientInfo.h"
 #include "gameType.h"
+#include "LoadoutTracker.h"
 #include "LevelDatabaseDownloadThread.h"
 
 
@@ -421,15 +422,9 @@ void idleHandler(ClientGame *game, const Vector<string> &words)
 
 void showPresetsHandler(ClientGame *game, const Vector<string> &words)
 {
-   Vector<U8> preset(Zap::ShipModuleCount + Zap::ShipWeaponCount);
-
    for(S32 i = 0; i < LOADOUT_PRESETS; i++)
    {
-      preset.clear();
-      game->getSettings()->getLoadoutPreset(i, preset);
-
-      string loadoutStr = Ship::loadoutToString(preset);
-      
+      string loadoutStr = game->getSettings()->getLoadoutPreset(i).toString();
       string display;
       
       if(loadoutStr != "")
