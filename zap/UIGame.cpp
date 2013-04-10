@@ -684,9 +684,27 @@ void GameUserInterface::activateModule(S32 index)
 
 
 // A new loadout has arrived
-void GameUserInterface::newLoadoutHasArrived(const ShipModule *modules, const WeaponType *weapons)
+void GameUserInterface::newLoadoutHasArrived(const LoadoutTracker &loadout)
 {
-   mLoadoutIndicator.newLoadoutHasArrived(modules, weapons);
+   mLoadoutIndicator.newLoadoutHasArrived(loadout);
+}
+
+
+void GameUserInterface::setActiveWeapon(U32 weaponIndex)
+{
+   mLoadoutIndicator.setActiveWeapon(weaponIndex);
+}
+
+
+void GameUserInterface::setModulePrimary(ShipModule module, bool isActive)
+{
+   mLoadoutIndicator.setModulePrimary(module, isActive);
+}
+
+
+void GameUserInterface::setModuleSecondary(ShipModule module, bool isActive)
+{
+   mLoadoutIndicator.setModuleSecondary(module, isActive);
 }
 
 
@@ -808,32 +826,20 @@ void GameUserInterface::onTextInput(char ascii)
 
 
 // Helper function...
-static void saveLoadoutPreset(ClientGame *game, S32 slot)
+static void saveLoadoutPreset(ClientGame *game, const LoadoutTracker *loadout, S32 slot)
 {
-   GameConnection *conn = game->getConnectionToServer();
-   if(!conn)
-      return;
-
-   Ship *ship = dynamic_cast<Ship *>(conn->getControlObject());
-   if(!ship)
-      return;
-
-   Vector<U8> loadout(ShipModuleCount + ShipWeaponCount);
-   ship->getLoadout(loadout);
-
-   game->getSettings()->setLoadoutPreset(slot, loadout);
+   game->getSettings()->setLoadoutPreset(loadout, slot);
    game->displaySuccessMessage(("Current loadout saved as preset " + itos(slot + 1)).c_str());
 }
 
 
 static void loadLoadoutPreset(ClientGame *game, S32 slot)
 {
-   Vector<U8> loadout(ShipModuleCount + ShipWeaponCount);      // Define it
-   game->getSettings()->getLoadoutPreset(slot, loadout);       // Fill it
+   LoadoutTracker loadout = game->getSettings()->getLoadoutPreset(slot);
 
-   if(loadout.size() == 0)    // Looks like the preset might be empty!
+   if(!loadout.isValid())
    {
-      string msg = "Preset " + itos(slot + 1) + " is undefined -- to define it, try Ctrl-" + itos(slot + 1);
+      string msg = "Preset " + itos(slot + 1) + " is undefined -- to define it, try Ctrl+" + itos(slot + 1);
       game->displayErrorMessage(msg.c_str());
       return;
    }
@@ -842,13 +848,6 @@ static void loadLoadoutPreset(ClientGame *game, S32 slot)
    if(!gameType)
       return;
    
-   string err = gameType->validateLoadout(loadout);
-   
-   if(err != "")
-   {
-      game->displayErrorMessage((err + "; loadout not set").c_str());
-      return;
-   }
 
    GameConnection *conn = game->getConnectionToServer();
    if(!conn)
@@ -860,7 +859,7 @@ static void loadLoadoutPreset(ClientGame *game, S32 slot)
    // Request loadout even if it was the same -- if I have loadout A, with on-deck loadout B, and I enter a new loadout
    // that matches A, it would be better to have loadout remain unchanged if I entered a loadout zone.
    // Tell server loadout has changed.  Server will activate it when we enter a loadout zone.
-   conn->c2sRequestLoadout(loadout);    
+   conn->c2sRequestLoadout(loadout.toU8Vector());    
 }
 
 
@@ -901,15 +900,15 @@ bool GameUserInterface::processPlayModeKey(InputCode inputCode)
    else if(inputCode == KEY_CLOSEBRACKET && InputCodeManager::checkModifier(KEY_CTRL))    // Ctrl+] advances bots by 10 steps if frozen
       EventManager::get()->addSteps(10);
    else if(inputCode == KEY_1 && InputCodeManager::checkModifier(KEY_CTRL))               // Ctrl+1 saves loadout preset in first slot
-      saveLoadoutPreset(getGame(), 0);
+      saveLoadoutPreset(getGame(), mLoadoutIndicator.getLoadout(), 0);
    else if(inputCode == KEY_1 && InputCodeManager::checkModifier(KEY_ALT))                // Alt+1 loads preset from first slot
       loadLoadoutPreset(getGame(), 0);
    else if(inputCode == KEY_2 && InputCodeManager::checkModifier(KEY_CTRL))               // Ctrl+2
-      saveLoadoutPreset(getGame(), 1);
+      saveLoadoutPreset(getGame(), mLoadoutIndicator.getLoadout(), 1);
    else if(inputCode == KEY_2 && InputCodeManager::checkModifier(KEY_ALT))                // Alt+2
       loadLoadoutPreset(getGame(), 1);
    else if(inputCode == KEY_3 && InputCodeManager::checkModifier(KEY_CTRL))               // Ctrl+3
-      saveLoadoutPreset(getGame(), 2);
+      saveLoadoutPreset(getGame(), mLoadoutIndicator.getLoadout(), 2);
    else if(inputCode == KEY_3 && InputCodeManager::checkModifier(KEY_ALT))                // Alt+3
       loadLoadoutPreset(getGame(), 2);
 
