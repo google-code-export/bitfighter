@@ -93,8 +93,6 @@ private:
 
    S32 findClientIndex(const StringTableEntry &name);
 
-   void renderObjectIds();
-
    AbstractTeam *getNewTeam();
 
 public:
@@ -181,7 +179,6 @@ public:
    // Check for permissions
    bool hasAdmin(const char *failureMessage);
    bool hasLevelChange(const char *failureMessage);
-   bool isLocalTestServer(const char *failureMessage);
 
    void gotEngineerResponseEvent(EngineerResponseEvent event);
    void setBusyChatting(bool busy);       // Tell the server we are (or are not) busy chatting
