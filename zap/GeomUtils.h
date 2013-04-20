@@ -157,27 +157,15 @@ Vector<Vector<Point> > downscaleClipperPoints(const Polygons &inputPolygons);
 class Triangulate
 {
 public:
-   // class for output data of the triangulate process methods; hopefully cleans itself up
-   class TriangleData
-   {
-   public:
-      TriangleData();
-      ~TriangleData();
-
-      F32* pointList;
-      S32 pointCount;
-      S32* triangleList;
-      S32 triangleCount;
-   };
 
    // Triangulate a contour/polygon, places results in  Vector as series of triangles
    static bool Process(const Vector<Point> &contour, Vector<Point> &result);
 
    // Triangulate a bounded area with complex polygon holes
-   static bool processComplex(TriangleData& outputData, const Rect& bounds, const Vector<Vector<Point> >& polygonList, Vector<F32>& holeMarkerList);
+   static bool processComplex(Vector<Point> &outputTriangles, const Rect& bounds, const Vector<Vector<Point> >& polygonList);
 
    // Merge triangles into convex polygons
-   static bool mergeTriangles(TriangleData& triangleData, rcPolyMesh& mesh, S32 maxVertices = 6);
+   static bool mergeTriangles(const Vector<Point> &triangleData, rcPolyMesh& mesh, S32 maxVertices = 6);
 
    // Decide if point Px/Py is inside triangle defined by
    // (Ax,Ay) (Bx,By) (Cx,Cy)
