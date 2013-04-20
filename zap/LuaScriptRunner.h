@@ -50,9 +50,11 @@ using namespace TNL;
 namespace Zap
 {
 
-class DatabaseObject;
 class BfObject;
+class DatabaseObject;
+class GridDatabase;
 class LuaPlayerInfo;
+class Rect;
 class Ship;
 class MenuItem;
 
@@ -60,9 +62,6 @@ class MenuItem;
 class LuaObject : public LuaBase
 {
    typedef LuaBase Parent;
-
-public:
-   static bool shouldLuaGarbageCollectThisObject();     
 };
 
 
@@ -128,6 +127,7 @@ protected:
    void registerLooseFunctions(lua_State *L);   // Register some functions not associated with a particular class
 
    S32 findObjectById(lua_State *L, const Vector<DatabaseObject *> *objects);
+   S32 findObjects(lua_State *L, GridDatabase *database, Rect *scope = NULL, Ship *caller = NULL);
 
 
 // Sets a var in the script's environment to give access to the caller's "this" obj, with the var name "name".
