@@ -66,12 +66,14 @@ PickupItem::~PickupItem()
    LUAW_DESTRUCTOR_CLEANUP;
 }
 
+
 void PickupItem::onAddedToGame(Game *game)
 {
    Parent::onAddedToGame(game);
    if(game->isServer())      // At the moment, PickupItem::idle does nothing for client side
       linkToIdleList(&game->idlingObjects);
 }
+
 
 void PickupItem::idle(BfObject::IdleCallPath path)
 {
@@ -102,10 +104,12 @@ bool PickupItem::isVisible()
    return mIsVisible;
 }
 
+
 S32 PickupItem::getRenderSortValue()
 {
    return 1;
 }
+
 
 U32 PickupItem::getRepopDelay()
 {
@@ -196,7 +200,6 @@ void PickupItem::show()
    mIsVisible = true;
    setMaskBits(PickupMask);   // Triggers update
 }
-
 
 
 // Implementations provided to keep class from being abstract; need non-abstract class
@@ -428,10 +431,15 @@ const char *RepairItem::getOnDockName()       { return "Repair";       }
 const char *RepairItem::getPrettyNamePlural() { return "Repair Items"; }
 const char *RepairItem::getEditorHelpString() { return "Repairs damage to ships. [B]"; }
 
+S32 RepairItem::getDockRadius() { return 11; }
 
-S32 RepairItem::getDockRadius()
+
+Vector<string> *RepairItem::getHelpBubbleText() const
 {
-   return 11;
+   static string help[] = { "Pick up Repair Item to heal ship" };
+   static Vector<string> helpBubbleText = Vector<string>(help, ARRAYSIZE(help));
+
+   return &helpBubbleText;
 }
 
 
