@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="..\zap\Point.cpp" />
+    <ClCompile Include="main_test.cpp" />
+    <ClCompile Include="..\zap\stringUtils.cpp" />
+    <ClCompile Include="..\zap\LoadoutTracker.cpp" />
+    <ClCompile Include="..\zap\WeaponInfo.cpp" />
+    <ClCompile Include="..\zap\shipItems.cpp" />
+  </ItemGroup>
+</Project>
