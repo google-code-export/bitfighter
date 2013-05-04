@@ -836,6 +836,20 @@ void ClientGame::playerLeftGlobalChat(const StringTableEntry &playerNick)
 }
 
 
+void ClientGame::sendChat(bool isGlobal, const StringPtr &message)
+{
+   if(getGameType())
+      getGameType()->c2sSendChat(isGlobal, message);
+}
+
+
+void ClientGame::sendCommand(const StringTableEntry &cmd, const Vector<StringPtr> &args)
+{
+   if(getGameType())
+      getGameType()->c2sSendCommand(cmd, args);
+}
+
+
 // A new player has just joined the game; if isLocalClient is true, that new player is us!
 // ClientInfo will be a RemoteClientInfo
 void ClientGame::onPlayerJoined(ClientInfo *clientInfo, bool isLocalClient, bool playAlert, bool showMessage)
@@ -1353,7 +1367,7 @@ void ClientGame::onConnectionTerminated(const Address &serverAddress, NetConnect
       {
          // We have the wrong password, let's make sure it's not saved
          string serverName = getUIManager()->getQueryServersUserInterface()->getLastSelectedServerName();
-         gINI.deleteKey("SavedServerPasswords", serverName);
+         GameSettings::iniFile.deleteKey("SavedServerPasswords", serverName);
    
          ServerPasswordEntryUserInterface *ui = getUIManager()->getServerPasswordEntryUserInterface();
          ui->setConnectServer(serverAddress);
@@ -1486,8 +1500,6 @@ void ClientGame::onConnectionToMasterTerminated(NetConnection::TerminationReason
    }
 }
 
-
-extern CIniFile gINI;
 
 void ClientGame::runCommand(const char *command)
 {
