@@ -1,0 +1,134 @@
+//-----------------------------------------------------------------------------------
+//
+// Bitfighter - A multiplayer vector graphics space game
+// Based on Zap demo released for Torque Network Library by GarageGames.com
+//
+// Derivative work copyright (C) 2008-2009 Chris Eykamp
+// Original work copyright (C) 2004 GarageGames.com, Inc.
+// Other code copyright as noted
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful (and fun!),
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+//
+//------------------------------------------------------------------------------------
+
+#ifndef _TEXTITEM_H_
+#define _TEXTITEM_H_
+
+#include "SimpleLine.h"       // For base class def
+#include "Colors.h"
+
+using namespace std;
+
+namespace Zap
+{
+
+class ClientGame;
+static const S32 MAX_TEXTITEM_LEN = 255;
+
+class TextItem : public SimpleLine
+{
+   typedef SimpleLine Parent;
+
+private:
+   F32 mSize;              // Text size
+   string mText;           // Text itself
+
+#ifndef ZAP_DEDICATED
+   static EditorAttributeMenuUI *mAttributeMenuUI;      // Menu for text editing; since it's static, don't bother with smart pointer
+#endif
+
+public:
+   static const S32 MAX_TEXT_SIZE = 255;
+   static const S32 MIN_TEXT_SIZE = 10;
+
+   explicit TextItem(lua_State *L = NULL);   // Combined Lua / C++ constructor
+   virtual ~TextItem();             // Destructor
+
+   TextItem *clone() const;
+
+   void render();
+   S32 getRenderSortValue();
+
+   bool processArguments(S32 argc, const char **argv, Game *game);  // Create objects from parameters stored in level file
+   string toLevelCode(F32 gridSize) const;
+   void setGeom(const Vector<Point> &points);
+   void setGeom(const Point &pos, const Point &dest);
+   void setGeom(lua_State *L, S32 index);
+   Rect calcExtents();      // Bounding box for display scoping purposes
+
+
+   void onAddedToGame(Game *theGame);  
+
+   static void textEditedCallback(string text, BfObject *obj);
+
+   const Vector<Point> *getCollisionPoly() const;          // More precise boundary for precise collision detection
+   bool collide(BfObject *hitObject);
+   void idle(BfObject::IdleCallPath path);
+   U32 packUpdate(GhostConnection *connection, U32 updateMask, BitStream *stream);
+   void unpackUpdate(GhostConnection *connection, BitStream *stream);
+
+   ///// Editor Methods
+
+   Color getEditorRenderColor();
+
+   void renderEditorItem();
+   F32 getSize();
+
+   string getText();
+   void setText(const string &text);
+   void setText(lua_State *L, S32 index);
+
+   void onAttrsChanging();
+   void onAttrsChanged();
+   void onGeomChanging();
+   void onGeomChanged();
+
+   void recalcTextSize();
+   void setSize(F32 desiredSize);
+
+
+   // Some properties about the item that will be needed in the editor
+   const char *getEditorHelpString();
+   const char *getPrettyNamePlural();
+   const char *getOnDockName();
+   const char *getOnScreenName();
+   const char *getInstructionMsg(S32 attributeCount);
+   bool hasTeam();
+   bool canBeHostile();
+   bool canBeNeutral();
+
+   void fillAttributesVectors(Vector<string> &keys, Vector<string> &values);
+
+   void newObjectFromDock(F32 gridSize);
+
+   TNL_DECLARE_CLASS(TextItem);
+
+   //// Lua interface
+   LUAW_DECLARE_CLASS_CUSTOM_CONSTRUCTOR(TextItem);
+
+	static const char *luaClassName;
+	static const luaL_reg luaMethods[];
+   static const LuaFunctionProfile functionArgs[];
+
+   S32 lua_setText(lua_State *L);
+   S32 lua_getText(lua_State *L);
+};
+
+
+};
+
+#endif
+
+
