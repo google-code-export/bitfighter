@@ -1,0 +1,86 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="..\zap\Point.cpp" />
+    <ClCompile Include="main_test.cpp" />
+    <ClCompile Include="..\zap\stringUtils.cpp" />
+    <ClCompile Include="..\zap\LoadoutTracker.cpp" />
+    <ClCompile Include="..\zap\WeaponInfo.cpp" />
+    <ClCompile Include="..\zap\shipItems.cpp" />
+    <ClCompile Include="..\zap\ship.cpp" />
+    <ClCompile Include="..\zap\moveObject.cpp" />
+    <ClCompile Include="..\zap\item.cpp" />
+    <ClCompile Include="..\zap\EditorObject.cpp" />
+    <ClCompile Include="..\zap\BfObject.cpp" />
+    <ClCompile Include="..\zap\gridDB.cpp" />
+    <ClCompile Include="..\zap\GeomObject.cpp" />
+    <ClCompile Include="..\zap\move.cpp" />
+    <ClCompile Include="..\zap\LuaBase.cpp" />
+    <ClCompile Include="..\zap\Color.cpp" />
+    <ClCompile Include="..\zap\game.cpp" />
+    <ClCompile Include="..\zap\gameObjectRender.cpp" />
+    <ClCompile Include="..\zap\GeomUtils.cpp" />
+    <ClCompile Include="..\zap\Rect.cpp" />
+    <ClCompile Include="..\zap\Timer.cpp" />
+    <ClCompile Include="..\clipper\clipper.cpp">
+      <Filter>Clipper</Filter>
+    </ClCompile>
+    <ClCompile Include="..\recast\RecastAlloc.cpp">
+      <Filter>Recast</Filter>
+    </ClCompile>
+    <ClCompile Include="..\recast\RecastMesh.cpp">
+      <Filter>Recast</Filter>
+    </ClCompile>
+    <ClCompile Include="..\zap\SimpleLine.cpp" />
+    <ClCompile Include="..\zap\ClientGame.cpp" />
+    <ClCompile Include="..\zap\RenderUtils.cpp" />
+    <ClCompile Include="..\zap\gameConnection.cpp" />
+    <ClCompile Include="..\zap\controlObjectConnection.cpp" />
+    <ClCompile Include="..\zap\Geometry.cpp" />
+    <ClCompile Include="..\zap\UIManager.cpp" />
+    <ClCompile Include="..\zap\ClientInfo.cpp" />
+    <ClCompile Include="..\zap\GameSettings.cpp" />
+    <ClCompile Include="..\zap\masterConnection.cpp" />
+    <ClCompile Include="..\zap\UIGame.cpp" />
+    <ClCompile Include="..\zap\barrier.cpp" />
+    <ClCompile Include="..\zap\WallSegmentManager.cpp" />
+    <ClCompile Include="..\zap\polygon.cpp" />
+    <ClCompile Include="..\zap\gameType.cpp" />
+    <ClCompile Include="..\zap\FpsRenderer.cpp" />
+    <ClCompile Include="..\zap\config.cpp" />
+    <ClCompile Include="..\zap\InputCode.cpp" />
+    <ClCompile Include="..\zap\UIQueryServers.cpp" />
+    <ClCompile Include="..\zap\Spawn.cpp" />
+    <ClCompile Include="..\zap\UIChat.cpp" />
+    <ClCompile Include="..\zap\UIErrorMessage.cpp" />
+    <ClCompile Include="..\zap\UIMenus.cpp" />
+    <ClCompile Include="..\zap\UIHighScores.cpp" />
+    <ClCompile Include="..\zap\UI.cpp" />
+    <ClCompile Include="..\zap\UIInstructions.cpp" />
+    <ClCompile Include="..\poly2tri\sweep\advancing_front.cc" />
+    <ClCompile Include="..\zap\textItem.cpp" />
+    <ClCompile Include="..\zap\VideoSystem.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Clipper">
+      <UniqueIdentifier>{f2ae3350-7b88-4c68-bc5c-73393af0c725}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Recast">
+      <UniqueIdentifier>{7ffdaa0c-1d46-4326-bb05-6502d4596f9d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="poly2tri">
+      <UniqueIdentifier>{87329b99-c2ef-46f8-ba8e-818e9390cad4}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\clipper\clipper.h">
+      <Filter>Clipper</Filter>
+    </ClInclude>
+    <ClInclude Include="..\recast\Recast.h">
+      <Filter>Recast</Filter>
+    </ClInclude>
+    <ClInclude Include="..\recast\RecastAlloc.h">
+      <Filter>Recast</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
