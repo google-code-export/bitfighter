@@ -659,8 +659,6 @@ bool NexusGameType::canBeIndividualGame() const { return true;  }
 
 //////////  Client only code:
 
-extern Color gNexusOpenColor;
-extern Color gNexusClosedColor;
 
 #ifndef ZAP_DEDICATED
 
@@ -671,7 +669,7 @@ S32 NexusGameType::renderTimeLeftSpecial(S32 right, S32 bottom) const
    const S32 x = right;
    const S32 y = bottom;
 
-   glColor(mNexusIsOpen ? gNexusOpenColor : gNexusClosedColor);      // Display timer in appropriate color
+   glColor(mNexusIsOpen ? Colors::NexusOpenColor : Colors::NexusClosedColor);      // Display timer in appropriate color
 
    if(mNexusIsOpen && mNexusOpenTime == 0)
       drawStringfr(x, y - size, size, "Nexus never closes");
@@ -709,7 +707,7 @@ void NexusGameType::renderInterfaceOverlay(bool scoreboardVisible, S32 canvasWid
    for(S32 i = 0; i < mYardSaleWaypoints.size(); i++)
       renderObjectiveArrow(mYardSaleWaypoints[i].pos, &Colors::white, canvasWidth, canvasHeight);
 
-   Color *color = mNexusIsOpen ? &gNexusOpenColor : &gNexusClosedColor;
+   const Color *color = mNexusIsOpen ? &Colors::NexusOpenColor : &Colors::NexusClosedColor;
 
    for(S32 i = 0; i < mNexus.size(); i++)
       renderObjectiveArrow(mNexus[i], color, canvasWidth, canvasHeight);

@@ -836,6 +836,13 @@ void ClientGame::sendChat(bool isGlobal, const StringPtr &message)
 }
 
 
+void ClientGame::sendChatSTE(bool global, const StringTableEntry &message) const
+{
+   if(getGameType())
+      getGameType()->c2sSendChatSTE(global, message);;
+}
+
+
 void ClientGame::sendCommand(const StringTableEntry &cmd, const Vector<StringPtr> &args)
 {
    if(getGameType())

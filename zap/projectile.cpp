@@ -1443,7 +1443,7 @@ void Seeker::idle(IdleCallPath path)
          }
 
          // Get current speed
-         F32 speed = WeaponInfo::getWeaponInfo(mWeaponType).projVelocity;
+         F32 speed = (F32)WeaponInfo::getWeaponInfo(mWeaponType).projVelocity;
 
          //F32 speed = getVel().len();
          // Set minimum speed to the default

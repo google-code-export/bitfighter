@@ -42,7 +42,6 @@
 #include "projectile.h"          // For SpyBug
 #include "robot.h"
 
-#include "md5wrapper.h"          // For submission of passwords
 #include "Console.h"             // Our console object
 #include "ScreenInfo.h"
 #include "ClientGame.h"

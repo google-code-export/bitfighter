@@ -59,6 +59,7 @@
 #include "luaLevelGenerator.h"
 #include "LevelDatabaseUploadThread.h"
 #include "gameObjectRender.h"
+#include "SystemFunctions.h"
 
 #include "Console.h"          // Our console object
 #include "ScreenInfo.h"
@@ -1467,8 +1468,6 @@ S32 EditorUserInterface::checkCornersForSnap(const Point &clickPoint, const Vect
 ////////////////////////////////////
 // Rendering routines
 
-extern Color gErrorMessageTextColor;
-
 
 bool EditorUserInterface::showMinorGridLines()
 {
@@ -2112,7 +2111,7 @@ void EditorUserInterface::renderWarnings()
    {
       S32 ypos = vertMargin + 50;
 
-      glColor(gErrorMessageTextColor);
+      glColor(Colors::ErrorMessageTextColor);
 
       for(S32 i = 0; i < mLevelErrorMsgs.size(); i++)
       {
@@ -4404,7 +4403,7 @@ void EditorUserInterface::setWarnMessage(string msg1, string msg2)
    mWarnMsg1 = msg1;
    mWarnMsg2 = msg2;
    mWarnMsgTimer.reset(4000, 4000);    // Display for 4 seconds
-   mWarnMsgColor = gErrorMessageTextColor;
+   mWarnMsgColor = Colors::ErrorMessageTextColor;
 }
 
 
@@ -4508,8 +4507,6 @@ void testLevelStart_local(ClientGame *game)
 }
 
 
-extern void initHostGame(GameSettings *settings, const Vector<string> &levelList, bool testMode, bool dedicatedServer);
-
 void EditorUserInterface::testLevel()
 {
    bool gameTypeError = false;
@@ -4569,7 +4566,7 @@ void EditorUserInterface::testLevelStart()
 
       Vector<string> levelList;
       levelList.push_back(TestFileName);
-      initHostGame(getGame()->getSettings(), levelList, true, false);
+      initHosting(getGame()->getSettings(), levelList, true, false);
    }
 }
 

@@ -124,13 +124,10 @@ void TeamDefUserInterface::idle(U32 timeDelta)
 }
 
 
-extern Color gNeutralTeamColor;
-extern Color gHostileTeamColor;
-
 // TODO: Clean this up a bit...  this menu was two-cols before, and some of that garbage is still here...
 void TeamDefUserInterface::render()
 {
-   const S32 canvasWidth = gScreenInfo.getGameCanvasWidth();
+   const S32 canvasWidth  = gScreenInfo.getGameCanvasWidth();
    const S32 canvasHeight = gScreenInfo.getGameCanvasHeight();
 
    glColor(Colors::white);
@@ -155,9 +152,9 @@ void TeamDefUserInterface::render()
 
 
    // Draw the fixed teams
-   glColor(gNeutralTeamColor);
+   glColor(Colors::NeutralTeamColor);
    drawCenteredStringf(yStart, fontsize, "Neutral Team (can't change)");
-   glColor(gHostileTeamColor);
+   glColor(Colors::HostileTeamColor);
    drawCenteredStringf(yStart + fontsize + fontgap, fontsize, "Hostile Team (can't change)");
 
    for(S32 j = 0; j < size; j++)
