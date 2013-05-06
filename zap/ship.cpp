@@ -545,11 +545,9 @@ void Ship::idle(BfObject::IdleCallPath path)
          mFastRecharging = mFastRechargeTimer.getCurrent() == 0;
       }
 
-
       // Apply impulse vector and reset it
       setActualVel(getActualVel() + mImpulseVector);
       mImpulseVector.set(0,0);
-
 
       // For all other cases, advance the actual state of the object with the current move.
       // Dist is the distance the ship moved this tick.

@@ -81,6 +81,7 @@ U32 NameToAddressThread::run()
 ServerGame *gServerGame = NULL;
 
 static Vector<DatabaseObject *> fillVector2;
+md5wrapper Game::md5;
 
 
 ////////////////////////////////////
@@ -1438,10 +1439,8 @@ void Game::displayMessage(const Color &msgColor, const char *format, ...) const
 
 bool Game::isDedicated() const  
 {
-   TNLAssert(false, "Not implemented for this class!");
    return false;
 }
-
 
 
 };

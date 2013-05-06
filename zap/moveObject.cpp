@@ -2075,11 +2075,13 @@ static bool isCollideableTypeWorm(U8 x)
          x == ForceFieldProjectorTypeNumber;
 }
 
+
 void Worm::onAddedToGame(Game *game)
 {
    Parent::onAddedToGame(game);
    linkToIdleList(&game->idlingObjects);
 }
+
 
 void Worm::idle(BfObject::IdleCallPath path)
 {

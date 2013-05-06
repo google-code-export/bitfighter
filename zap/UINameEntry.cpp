@@ -114,7 +114,7 @@ const char *TextEntryUserInterface::getText()
 
 string TextEntryUserInterface::getSaltedHashText()
 {
-   return md5.getSaltedHashFromString(lineEditor.getString());
+   return Game::md5.getSaltedHashFromString(lineEditor.getString());
 }
 
 

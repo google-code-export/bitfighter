@@ -110,6 +110,7 @@ const U8 ClientInfo::getPlayerFlagstoSendToMaster() const
    return bitmask;
 }
 
+
 void ClientInfo::setName(const StringTableEntry &name)
 {
    mName = name;
