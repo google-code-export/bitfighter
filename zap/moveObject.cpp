@@ -920,7 +920,7 @@ void MoveItem::idle(BfObject::IdleCallPath path)
    float time = mCurrentMove.time * 0.001f;
    move(time, ActualState, false);
 
-   if(path == BfObject::ClientIdleMainRemote)
+   if(path == ClientIdlingNotLocalShip)
    {
       if(mWaitingForMoveToUpdate)
       {
@@ -933,7 +933,7 @@ void MoveItem::idle(BfObject::IdleCallPath path)
       }
    }
 
-   if(path == BfObject::ServerIdleMainLoop)
+   if(path == ServerIdleMainLoop)
    {
       // Only update if it's actually moving...
       if(getActualVel().lenSquared() != 0)
@@ -958,9 +958,6 @@ void MoveItem::idle(BfObject::IdleCallPath path)
    }
    else
       updateInterpolation();
-
-
-   //updateExtentInDatabase();
 }
 
 
