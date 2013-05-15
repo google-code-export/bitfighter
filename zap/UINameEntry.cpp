@@ -309,6 +309,7 @@ PasswordEntryUserInterface::PasswordEntryUserInterface(ClientGame *game) : Paren
    setSecret(true);
 }
 
+
 // Destructor
 PasswordEntryUserInterface::~PasswordEntryUserInterface()
 {
@@ -346,34 +347,33 @@ void PasswordEntryUserInterface::render()
 ////////////////////////////////////////
 
 // Constructor
-PreGamePasswordEntryUserInterface::PreGamePasswordEntryUserInterface(ClientGame *game) :
-      Parent(game)
+ServerAccessPasswordEntryUserInterface::ServerAccessPasswordEntryUserInterface(ClientGame *game) : Parent(game)
 {
    /* Do nothing */
 }
 
 
-PreGamePasswordEntryUserInterface::~PreGamePasswordEntryUserInterface()
+ServerAccessPasswordEntryUserInterface::~ServerAccessPasswordEntryUserInterface()
 {
    // Do nothing
 }
 
 
-void PreGamePasswordEntryUserInterface::onAccept(const char *text)
+void ServerAccessPasswordEntryUserInterface::onAccept(const char *text)
 {
-   getGame()->joinRemoteGame(mConnectAddress, false);  // false: Not from master
+   getGame()->submitServerAccessPassword(mConnectAddress, text);
 }
 
 
-void PreGamePasswordEntryUserInterface::onEscape()
+void ServerAccessPasswordEntryUserInterface::onEscape()
 {
    getUIManager()->activate(MainUI);
 }
 
 
-void PreGamePasswordEntryUserInterface::setAddressToConnectTo(const Address &addr)
+void ServerAccessPasswordEntryUserInterface::setAddressToConnectTo(const Address &address)
 {
-   mConnectAddress = addr;
+   mConnectAddress = address;
 }
 
 
@@ -419,7 +419,7 @@ LevelChangeOrAdminPasswordEntryUserInterface::~LevelChangeOrAdminPasswordEntryUs
 
 void LevelChangeOrAdminPasswordEntryUserInterface::onAccept(const char *text)
 {
-   bool submitting = getGame()->submitPassword(text);
+   bool submitting = getGame()->submitServerPermissionsPassword(text);
 
    if(submitting)
    {
