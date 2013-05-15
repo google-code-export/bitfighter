@@ -1036,12 +1036,11 @@ void InstructionsUserInterface::renderPageCommands(U32 page, const char *msg)
    drawString(cmdCol, ypos, headerSize, "Command");
    drawString(descrCol, ypos, headerSize, "Description");
 
-   //glColor(0,1,0);
    ypos += cmdSize + cmdGap;
 
    F32 vertices[] = {
-         cmdCol, ypos,
-         750,    ypos
+         (F32)cmdCol, (F32)ypos,
+         (F32)750,    (F32)ypos
    };
    renderVertexArray(vertices, ARRAYSIZE(vertices) / 2, GL_LINES);
 
