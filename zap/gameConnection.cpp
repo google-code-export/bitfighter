@@ -195,10 +195,13 @@ TNL_IMPLEMENT_RPC(GameConnection, s2cPlayerSpawnDelayed, (U8 waitTimeInOneTenths
 {
 #ifndef ZAP_DEDICATED
    getClientInfo()->setReturnToGameTimer(waitTimeInOneTenthsSeconds * 100);
+
    getClientInfo()->setSpawnDelayed(true);
    mClientGame->setSpawnDelayed(true);
 #endif
 }
+
+
 TNL_IMPLEMENT_RPC(GameConnection, s2cPlayerSpawnUndelayed, (), (), NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirServerToClient, 0)
 {
 #ifndef ZAP_DEDICATED

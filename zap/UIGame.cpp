@@ -2440,12 +2440,6 @@ void GameUserInterface::setListenerParams(const Point &position, const Point &ve
 }
 
 
-void GameUserInterface::processAudio(U32 timeDelta, F32 sfxVol, F32 musicVol, F32 voiceVol, UIManager *uiManager) const
-{
-   SoundSystem::processAudio(timeDelta, sfxVol, musicVol, voiceVol, uiManager);
-}
-
-
 void GameUserInterface::playNextTrack() const
 {
    SoundSystem::playNextTrack();
