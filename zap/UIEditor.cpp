@@ -2139,7 +2139,7 @@ void EditorUserInterface::renderDockPlugins()
       if(hoveredPlugin == i)
       {
          S32 x = gScreenInfo.getGameCanvasWidth() - mDockWidth - horizMargin;
-         S32 y = 1.5 * vertMargin + PLUGIN_LINE_SPACING*i;
+         S32 y = 1.5 * vertMargin + PLUGIN_LINE_SPACING * i;
          drawHollowRect(x + horizMargin / 3, y, x + mDockWidth - horizMargin / 3, y + PLUGIN_LINE_SPACING, Colors::white);
       }
 
@@ -4742,7 +4742,7 @@ void EditorUserInterface::findPlugins()
    const Vector<PluginBinding> &bindings = *getGame()->getSettings()->getPluginBindings();
    for(S32 i = 0; i < plugins.size(); i++)
    {
-      // try to find the title
+      // Try to find the title
       string title;
       Vector<MenuItem*> menu;
       EditorPlugin plugin(dirName + "/" + plugins[i], Vector<string>(), getGame()->getGridSize(), mLoadTarget, getGame());
