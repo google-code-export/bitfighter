@@ -17,7 +17,10 @@
 #include "../zap/VideoSystem.h"
 
 #include "../zap/UIEditorMenus.h"
+#include "../zap/UIMenus.h"
 #include "../zap/LoadoutIndicator.h"
+
+#include "../zap/stringUtils.h"
 
 #include "tnlNetObject.h"
 #include "tnlGhostConnection.h"
@@ -42,6 +45,96 @@ class BfTest : public testing::Test
 {
    // Config code can go here
 };
+
+
+TEST_F(BfTest, StringUtilsTests)
+{
+   ASSERT_TRUE(stringContainsAllTheSameCharacter("A"));
+   ASSERT_TRUE(stringContainsAllTheSameCharacter("AA"));
+   ASSERT_TRUE(stringContainsAllTheSameCharacter("AAA"));
+   ASSERT_TRUE(stringContainsAllTheSameCharacter(""));
+
+   ASSERT_FALSE(stringContainsAllTheSameCharacter("Aa"));
+   ASSERT_FALSE(stringContainsAllTheSameCharacter("AB"));
+} 
+
+TEST_F(BfTest, LevelMenuSelectUserInterfaceTests) 
+{
+   Address addr;
+   GameSettings settings;
+
+   // Need to initialize FontManager to use ClientGame... use false to avoid hassle of locating font files.
+   // False will tell the FontManager to only use internally defined fonts; any TTF fonts will be replaced with Roman.
+   FontManager::initialize(&settings, false);   
+   ClientGame game(addr, &settings);
+
+   // Want to test getIndexOfNext(), which is a slightly complex function.  Need to start by setting up a menu.
+   LevelMenuSelectUserInterface ui(&game);
+
+   // These should be alphabetically sorted
+   ui.addMenuItem(new MenuItem("Aardvark"));    //  0
+   ui.addMenuItem(new MenuItem("Assinine"));    //  1
+   ui.addMenuItem(new MenuItem("Bouy"));        //  2
+   ui.addMenuItem(new MenuItem("Boy"));         //  3
+   ui.addMenuItem(new MenuItem("C"));           //  4
+   ui.addMenuItem(new MenuItem("Cat"));         //  5
+   ui.addMenuItem(new MenuItem("Cc"));          //  6
+   ui.addMenuItem(new MenuItem("Chop"));        //  7
+   ui.addMenuItem(new MenuItem("Chump"));       //  8
+   ui.addMenuItem(new MenuItem("Dog"));         //  9
+   ui.addMenuItem(new MenuItem("Doug"));        // 10
+   ui.addMenuItem(new MenuItem("Eat"));         // 11
+   ui.addMenuItem(new MenuItem("Eating"));      // 12
+   ui.addMenuItem(new MenuItem("Eel"));         // 13
+   ui.addMenuItem(new MenuItem("Eels"));        // 14
+   ui.addMenuItem(new MenuItem("Eggs"));        // 15
+
+
+   // Some random checks
+   ui.selectedIndex = 1;
+   ASSERT_EQ(ui.getIndexOfNext("a"), 0);
+   ASSERT_EQ(ui.getIndexOfNext("boy"), 3);
+   ASSERT_EQ(ui.getIndexOfNext("c"), 4);
+   ASSERT_EQ(ui.getIndexOfNext("ch"), 7);
+   ASSERT_EQ(ui.getIndexOfNext("cho"), 7);
+   ASSERT_EQ(ui.getIndexOfNext("chop"), 7);
+
+   // Check cycling of the Cs
+   ui.selectedIndex = 3;
+   ASSERT_EQ(ui.getIndexOfNext("c"), 4);
+   ui.selectedIndex = 4;
+   ASSERT_EQ(ui.getIndexOfNext("c"), 5);
+   ui.selectedIndex = 5;
+   ASSERT_EQ(ui.getIndexOfNext("c"), 6);
+   ui.selectedIndex = 6;
+   ASSERT_EQ(ui.getIndexOfNext("c"), 7);
+   ui.selectedIndex = 7;
+   ASSERT_EQ(ui.getIndexOfNext("c"), 8);
+   ui.selectedIndex = 8;
+   ASSERT_EQ(ui.getIndexOfNext("c"), 4);
+
+   // Check wrapping
+   ui.selectedIndex = 9;
+   ASSERT_EQ(ui.getIndexOfNext("a"), 0);
+   ui.selectedIndex = 15;     // last item
+   ASSERT_EQ(ui.getIndexOfNext("a"), 0);
+
+   // Check repeated hammering on current item
+   ui.selectedIndex = 12;
+   ASSERT_EQ(ui.getIndexOfNext("e"), 13);    // Single letter advances to next of that letter
+   ASSERT_EQ(ui.getIndexOfNext("ea"), 12);
+   ASSERT_EQ(ui.getIndexOfNext("eat"), 12);
+   ASSERT_EQ(ui.getIndexOfNext("eati"), 12);
+   ASSERT_EQ(ui.getIndexOfNext("eatin"), 12);
+   ASSERT_EQ(ui.getIndexOfNext("eating"), 12);
+
+   // Check for not found items -- should return current index
+   ASSERT_EQ(ui.getIndexOfNext("eatingx"), 12); 
+   ASSERT_EQ(ui.getIndexOfNext("flummoxed"), 12); 
+
+   ui.selectedIndex = 8;
+   ASSERT_EQ(ui.getIndexOfNext("chop"), 7); 
+}
 
 
 TEST_F(BfTest, LoadoutTrackerTests) 
