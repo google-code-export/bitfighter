@@ -1,0 +1,59 @@
+-------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+--
+-- OrbitBot, a simple robot that finds the nearest TestItem and orbits it
+-- Note that this relies on line-of-sight navigation, so only good for open levels
+--
+-------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+-- This is called by the robot's idle routine each tick.
+-- This function must be present for the robot to work!
+
+-------------------------------------------------------------------------------
+-- This function is called once and should return the robot's name
+
+function getName()
+    return("AegisBot")
+end
+
+
+function main()
+    -- Not much to do
+end
+
+-------------------------------------------------------------------------------
+-- This function called every tick
+
+items = {}       -- Reusable container for finding objects
+
+function onTick()
+
+    local loc = bot:getLoc()
+    table.clear(items)
+    bot:findObjects(items, ObjType.Burst, ObjType.Seeker, ObjType.Mine, ObjType.SpyBug)   -- Find a suitable target
+
+    local closestItem = findClosest(items)
+
+    if(closestItem == nil) then   -- Didn't find any bullets
+        return
+    end
+
+    local angle = getFiringSolution(closestItem)
+
+    if(angle == nil) then
+        return
+    end
+
+    bot:setAngle(angle)
+    bot:fire()
+
+    local weap = closestItem:getWeapon()
+    local weapInfo = WeaponInfo(weap)
+    logprint("Targeting " .. weapInfo:getName())
+
+end
+
+
