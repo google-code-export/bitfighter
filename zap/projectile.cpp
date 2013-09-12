@@ -686,7 +686,7 @@ bool Burst::collided(BfObject *hitObject, U32 stateIndex)
 void Burst::damageObject(DamageInfo *damageInfo)
 {
    // If we're being damaged by another burst, explode...
-   if(damageInfo->damageType == DamageTypeArea || damageInfo->damagingObject->getObjectTypeNumber() == SeekerTypeNumber)
+   if(damageInfo->damageType == DamageTypeArea)
    {
       explode(getActualPos());
       return;
@@ -1426,6 +1426,9 @@ U32 Seeker::TargetAcquisitionRadius = 400;
 F32 Seeker::MaximumAngleChangePerSecond = FloatTau / 2;
 F32 Seeker::TargetSearchAngle = FloatTau * .6f;     // Anglular spread in front of ship to search for targets
 
+const S32 Seeker::InnerBlastRadius = 80;
+const S32 Seeker::OuterBlastRadius = 230;
+
 // Runs on client and server
 void Seeker::idle(IdleCallPath path)
 {
@@ -1704,26 +1707,30 @@ void Seeker::handleCollision(BfObject *hitObject, Point collisionPoint)
    if(exploded)  // Rare, but can happen
       return;
 
+   // Must set exploded to true immediately here or we risk a stack overflow when two
+   // area-damage objects hit each other and call radiusDamage on each other over and over
+   exploded = true;
+
    // Damage the object we hit
    if(hitObject)
    {
-      DamageInfo theInfo;
+      DamageInfo damageInfo;
 
-      theInfo.collisionPoint = collisionPoint;
-      theInfo.damageAmount = WeaponInfo::getWeaponInfo(mWeaponType).damageAmount;
-      theInfo.damageType = DamageTypePoint;
-      theInfo.damagingObject = this;
-      theInfo.impulseVector = getVel();
-      theInfo.damageSelfMultiplier = WeaponInfo::getWeaponInfo(mWeaponType).damageSelfMultiplier;
+      damageInfo.collisionPoint = collisionPoint;
+      damageInfo.damageAmount = WeaponInfo::getWeaponInfo(mWeaponType).damageAmount;
+      damageInfo.damageType = DamageTypeArea;
+      damageInfo.damagingObject = this;
+      damageInfo.damageSelfMultiplier = WeaponInfo::getWeaponInfo(mWeaponType).damageSelfMultiplier;
 
-      hitObject->damageObject(&theInfo);
+      // impulseVector handled in radiusDamage, set force to 0 here so we have no kickback
+      S32 hits = radiusDamage(collisionPoint, InnerBlastRadius, OuterBlastRadius, (TestFunc)isDamageableType, damageInfo, 0);
 
       if(getOwner())
-         getOwner()->getStatistics()->countHit(mWeaponType);
+         for(S32 i = 0; i < hits; i++)
+            getOwner()->getStatistics()->countHit(mWeaponType);
    }
 
    mTimeRemaining = 0;
-   exploded = true;
    setMaskBits(ExplodedMask);
 
    disableCollision();
