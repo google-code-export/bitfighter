@@ -1056,7 +1056,7 @@ void GameUserInterface::selectWeapon(U32 indx)
 void GameUserInterface::activateModule(S32 index)
 {
    // Still active, just return
-   if(mModPrimaryActivated[index])
+   if(!getGame() || !getGame()->getLocalPlayerShip() || mModPrimaryActivated[index])
       return;
 
    // Activate module primary component
