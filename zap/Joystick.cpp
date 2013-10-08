@@ -113,16 +113,8 @@ bool Joystick::initJoystick(GameSettings *settings)
          return false;
       }
 #  else
-      // Close if already open
-      if(sdlJoystick)
-      {
-         SDL_JoystickClose(sdlJoystick);
-         sdlJoystick = NULL;
-      }
-
       // Will need to shutdown and init, to allow SDL_NumJoysticks to count new joysticks
-      if(SDL_WasInit(SDL_INIT_JOYSTICK))
-         SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
+      shutdownJoystick();
 
       // Initialize the SDL subsystem
       if(SDL_InitSubSystem(SDL_INIT_JOYSTICK))
@@ -213,7 +205,6 @@ void Joystick::shutdownJoystick()
 {
 #if SDL_VERSION_ATLEAST(2,0,0)
    if(sdlJoystick != NULL) {
-      TNLAssert(SDL_JoystickGetAttached(sdlJoystick), "xx");
       SDL_JoystickClose(sdlJoystick);
       sdlJoystick = NULL;
    }
