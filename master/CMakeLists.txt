@@ -1,13 +1,16 @@
 set(MASTER_SOURCES
+   database.cpp
+   main.cpp
 	master.cpp
 	masterInterface.cpp
-	config.cpp
-	database.cpp
+   MasterServerConnection.cpp
 	../zap/ChatCheck.cpp
 	../zap/Color.cpp
 	../zap/gameStats.cpp
 	../zap/IniFile.cpp
+   ../zap/Settings.cpp
 	../zap/stringUtils.cpp
+   ../zap/Timer.cpp
 	../zap/WeaponInfo.cpp
 	../sqlite/sqlite3.c
 )
