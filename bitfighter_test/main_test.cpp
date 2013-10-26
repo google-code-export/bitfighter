@@ -37,6 +37,8 @@
 #include "LevelFilesForTesting.h"      // Contains sample levelcode for testing purposes
 #include "EventKeyDefs.h"              // One big ugly macro for defining a bunch of vars related to key input events
 
+#include "../master/master.h"
+
 #include "tnlNetObject.h"
 #include "tnlGhostConnection.h"
 #include "tnlPlatform.h"
@@ -117,6 +119,16 @@ TEST_F(BfTest, IniSettingsPackUnpack)
 
    IniSettings::iniStringToBitArray(vals, items, count);
    ASSERT_EQ(IniSettings::bitArrayToIniString(items, count), vals);
+}
+
+
+using namespace Master;
+TEST_F(BfTest, MasterTests)
+{
+   // First off, can we get a master server going here?
+   MasterSettings settings;
+   MasterServer master(&settings);
+
 }
 
 
@@ -208,6 +220,7 @@ static void checkTeleporter(Game *game, const string &geomString, S32 expectedDe
       EXPECT_FLOAT_EQ(centroid.y, teleporter->getOrigin().y);
    }
 }
+
 
 
 static void checkTeleporter(GamePair &gamePair, Teleporter *teleporter, Point *pts, S32 pointCount)
