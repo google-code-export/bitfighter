@@ -1,27 +1,7 @@
-//-----------------------------------------------------------------------------------
-//
-// Bitfighter - A multiplayer vector graphics space game
-// Based on Zap demo released for Torque Network Library by GarageGames.com
-//
-// Derivative work copyright (C) 2008-2009 Chris Eykamp
-// Original work copyright (C) 2004 GarageGames.com, Inc.
-// Other code copyright as noted
-//
-// This program is free software; you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation; either version 2 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful (and fun!),
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program; if not, write to the Free Software
-// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-//
-//------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// Copyright Chris Eykamp
+// See LICENSE.txt for full copyright information
+//------------------------------------------------------------------------------
 
 #include "NexusGame.h"
 
@@ -348,10 +328,10 @@ Vector<string> NexusGameType::getGameParameterMenuKeys()
 boost::shared_ptr<MenuItem> NexusGameType::getMenuItem(const string &key)
 {
    if(key == "Nexus Time to Open")
-      return boost::shared_ptr<MenuItem>(new TimeCounterMenuItem("Time for Nexus to Open:", mNexusClosedTime, 99*60, "Never", 
+      return boost::shared_ptr<MenuItem>(new TimeCounterMenuItem("Time for Nexus to Open:", mNexusClosedTime, MaxMenuScore*60, "Never",
                                                                  "Time it takes for the Nexus to open"));
    else if(key == "Nexus Time Remain Open")
-      return boost::shared_ptr<MenuItem>(new TimeCounterMenuItemSeconds("Time Nexus Remains Open:", mNexusOpenTime, 99*60, "Always", 
+      return boost::shared_ptr<MenuItem>(new TimeCounterMenuItemSeconds("Time Nexus Remains Open:", mNexusOpenTime, MaxMenuScore*60, "Always",
                                                                         "Time that the Nexus will remain open"));
    else if(key == "Nexus Win Score")
       return boost::shared_ptr<MenuItem>(new CounterMenuItem("Score to Win:", getWinningScore(), 100, 100, 20000, "points", "", 
@@ -903,7 +883,9 @@ void NexusFlagItem::dismount(DismountMode dismountMode)
 {
    if(isGhost())      // Server only
       return;
-  
+   if(getDatabase() == NULL)  // must be in database, switching levels makes database NULL
+      return;
+
    if(dismountMode == DISMOUNT_MOUNT_WAS_KILLED)
    {
       // Should getting shot up count as a flag drop event for statistics purposes?

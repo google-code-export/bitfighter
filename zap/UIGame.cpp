@@ -1,27 +1,7 @@
-//-----------------------------------------------------------------------------------
-//
-// Bitfighter - A multiplayer vector graphics space game
-// Based on Zap demo released for Torque Network Library by GarageGames.com
-//
-// Derivative work copyright (C) 2008-2009 Chris Eykamp
-// Original work copyright (C) 2004 GarageGames.com, Inc.
-// Other code copyright as noted
-//
-// This program is free software; you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation; either version 2 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful (and fun!),
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program; if not, write to the Free Software
-// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-//
-//------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// Copyright Chris Eykamp
+// See LICENSE.txt for full copyright information
+//------------------------------------------------------------------------------
 
 // Use this for testing the scoreboard
 //#define USE_DUMMY_PLAYER_SCORES
@@ -2224,6 +2204,8 @@ void GameUserInterface::renderScoreboard()
                      (canvasWidth - horizMargin) + gap, scoreboardTop + totalHeight + 23,
                      13, Colors::black, 0.85f, Colors::blue);
 
+   FontManager::pushFontContext(ScoreboardContext);
+
    for(S32 i = 0; i < teams; i++)
    {
       const S32 yt = scoreboardTop + (i >> 1) * sectionHeight;    // Top edge of team render area
@@ -2243,6 +2225,7 @@ void GameUserInterface::renderScoreboard()
          glColor(Colors::white);
          drawString (xl + 40,  yt + 2, teamFontSize, getGame()->getTeamName(i).getString());
          drawStringf(xr - 140, yt + 2, teamFontSize, "%d", ((Team *)(getGame()->getTeam(i)))->getScore());
+         FontManager::popFontContext();
       }
 
       // Now for player scores.  First build a list.  Then sort it.  Then display it.
@@ -2298,6 +2281,7 @@ void GameUserInterface::renderScoreboard()
 
          curRowY += maxHeight;
       }
+      FontManager::popFontContext();
 
       // Go back and render the column headers, now that we know the widths.  These will be different for team and solo games.
 

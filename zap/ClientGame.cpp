@@ -1,26 +1,7 @@
-//
-// Bitfighter - A multiplayer vector graphics space game
-// Based on Zap demo released for Torque Network Library by GarageGames.com
-//
-// Derivative work copyright (C) 2008-2009 Chris Eykamp
-// Original work copyright (C) 2004 GarageGames.com, Inc.
-// Other code copyright as noted
-//
-// This program is free software; you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation; either version 2 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program; if not, write to the Free Software
-// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-//
-//------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// Copyright Chris Eykamp
+// See LICENSE.txt for full copyright information
+//------------------------------------------------------------------------------
 
 #include "ClientGame.h"
 
@@ -84,8 +65,6 @@ ClientGame::ClientGame(const Address &bindAddress, GameSettingsPtr settings, UIM
    mUIManager->setClientGame(this);       // Need to do this before we can use it
 
    mClientInfo = new FullClientInfo(this, NULL, mSettings->getPlayerName(), false);  // Will be deleted in destructor
-
-   mScreenSaverTimer.reset(59 * 1000);    // Fire screen saver supression every 59 seconds
 
    for(S32 i = 0; i < JoystickAxesDirectionCount; i++)
       mJoystickInputs[i] = 0;
@@ -743,12 +722,6 @@ void ClientGame::idle(U32 timeDelta)
    processDeleteList(timeDelta);                         // Delete any objects marked for deletion
    
    mNetInterface->processConnections();                  // Pass updated ship info to the server
-
-   if(mScreenSaverTimer.update(timeDelta))               // Attempt, vainly, I'm afraid, to suppress screensavers
-   {
-      supressScreensaver();
-      mScreenSaverTimer.reset();
-   }
 
    mUIManager->idle(timeDelta);
 }
@@ -1504,31 +1477,6 @@ void ClientGame::displaySuccessMessage(const char *format, ...) const
 
    getUIManager()->displaySuccessMessage(message);
 }
-
-// Fire keyboard event to suppress screen saver
-void ClientGame::supressScreensaver()
-{
-
-#if defined(TNL_OS_WIN32) && (_WIN32_WINNT > 0x0400)     // Windows only for now, sadly...
-   // _WIN32_WINNT is needed in case of compiling for old windows 98 (this code won't work for windows 98)
-
-   // Code from Tom Revell's Caffeine screen saver suppression product
-
-   // Build keypress
-   tagKEYBDINPUT keyup;
-   keyup.wVk = VK_MENU;     // Some key that GLUT doesn't recognize
-   keyup.wScan = NULL;
-   keyup.dwFlags = KEYEVENTF_KEYUP;
-   keyup.time = NULL;
-   keyup.dwExtraInfo = NULL;
-
-   tagINPUT array[1];
-   array[0].type = INPUT_KEYBOARD;
-   array[0].ki = keyup;
-   SendInput(1, array, sizeof(INPUT));
-#endif
-}
-
 
 // We need to let the server know we are in cmdrs map because it needs to send extra data
 void ClientGame::setUsingCommandersMap(bool usingCommandersMap)
