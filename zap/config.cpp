@@ -1,27 +1,7 @@
-//-----------------------------------------------------------------------------------
-//
-// Bitfighter - A multiplayer vector graphics space game
-// Based on Zap demo released for Torque Network Library by GarageGames.com
-//
-// Derivative work copyright (C) 2008-2009 Chris Eykamp
-// Original work copyright (C) 2004 GarageGames.com, Inc.
-// Other code copyright as noted
-//
-// This program is free software; you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation; either version 2 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful (and fun!),
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program; if not, write to the Free Software
-// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-//
-//------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// Copyright Chris Eykamp
+// See LICENSE.txt for full copyright information
+//------------------------------------------------------------------------------
 
 #include "config.h"
 
@@ -138,6 +118,7 @@ IniSettings::IniSettings()
    wallFillColor.set(0,0,.15);
    wallOutlineColor.set(Colors::blue);
    clientPortNumber = 0;
+   disableScreenSaver = true;
 
    randomLevels = false;
    skipUploads = false;
@@ -545,6 +526,7 @@ static void loadTestSettings(CIniFile *ini, IniSettings *iniSettings)
    iniSettings->wallOutlineColor.set(ini->GetValue("Testing", "WallOutlineColor", iniSettings->wallOutlineColor.toRGBString()));
    iniSettings->oldGoalFlash = ini->GetValueYN("Testing", "OldGoalFlash", iniSettings->oldGoalFlash);
    iniSettings->clientPortNumber = (U16) ini->GetValueI("Testing", "ClientPortNumber", iniSettings->clientPortNumber);
+   iniSettings->disableScreenSaver = ini->GetValueYN("Testing", "DisableScreenSaver", iniSettings->disableScreenSaver);
 }
 
 
@@ -1769,6 +1751,7 @@ static void writeTesting(CIniFile *ini, GameSettings *settings)
       ini->sectionComment("Testing", " WallOutlineColor - Color used locally for rendering wall outlines (r,g,b), (values between 0 and 1)");
       ini->sectionComment("Testing", " WallFillColor - Color used locally for rendering wall fill (r,g,b), (values between 0 and 1)");
       ini->sectionComment("Testing", " ClientPortNumber - Only helps when punching through firewall when using router's port forwarded for client port number");
+      ini->sectionComment("Testing", " DisableScreenSaver - Disable ScreenSaver from having no input from keyboard/mouse, useful when using joystick");
       ini->sectionComment("Testing", "----------------");
    }
 
@@ -1780,6 +1763,7 @@ static void writeTesting(CIniFile *ini, GameSettings *settings)
 
    ini->setValueYN("Testing", "OldGoalFlash", iniSettings->oldGoalFlash);
    ini->SetValueI ("Testing", "ClientPortNumber", iniSettings->clientPortNumber);
+   ini->setValueYN("Testing", "DisableScreenSaver", iniSettings->disableScreenSaver);
 }
 
 
