@@ -646,8 +646,23 @@ void EditorUserInterface::runLevelGenScript()
 }
 
 
+static void openConsole()
+{
+#ifndef BF_NO_CONSOLE
+   if(gConsole.isOk())
+   {
+      gConsole.show();
+      return;
+   }
+   // else
+#endif
+   // show error message  <== TODO DO ThiS!
+}
+
+
 // Runs an arbitrary lua script.  Command is first item in cmdAndArgs, subsequent items are the args, if any
-void EditorUserInterface::runScript(GridDatabase *database, const FolderManager *folderManager, const string &scriptName, const Vector<string> &args)
+void EditorUserInterface::runScript(GridDatabase *database, const FolderManager *folderManager, 
+                                    const string &scriptName, const Vector<string> &args)
 {
    string name = folderManager->findLevelGenScript(scriptName);  // Find full name of levelgen script
 
@@ -658,8 +673,8 @@ void EditorUserInterface::runScript(GridDatabase *database, const FolderManager 
 #else
       fprintf(stderr,
 #endif
-                      "Could not find script %s; looked in folders: %s\n",
-                      scriptName.c_str(), concatenate(folderManager->getScriptFolderList()).c_str());
+               "Could not find script %s; looked in folders: %s\n",
+               scriptName.c_str(), concatenate(folderManager->getScriptFolderList()).c_str());
       return;
    }
    
@@ -675,8 +690,11 @@ void EditorUserInterface::runScript(GridDatabase *database, const FolderManager 
 
       ui->reset();
       ui->setTitle("SCRIPT ERROR");
-      ui->setMessage("The levelgen script you ran threw an error.\n\n"
+      ui->setMessage("The levelgen script you ran encountered an error.\n\n"
                      "See the console (press [[/]]) or the logfile for details.");
+      ui->setInstr("Press [[Esc]] to return to the editor");
+
+      ui->registerKey(KEY_SLASH, &openConsole);
       getUIManager()->activate(ui);
    }
 
@@ -1241,7 +1259,7 @@ void EditorUserInterface::renderMasterStatus()
 }
 
 
-bool EditorUserInterface::usesEditorScreenMode()
+bool EditorUserInterface::usesEditorScreenMode() const
 {
    return true;
 }
@@ -3757,13 +3775,7 @@ bool EditorUserInterface::onKeyDown(InputCode inputCode)
    else if(inputString == "V")            // Flip vertical
       flipSelectionVertical();
    else if(inputString == "/" || inputString == "Keypad /")
-   {
-#ifndef BF_NO_CONSOLE
-      if(gConsole.isOk())
-         gConsole.show();
-      //else do what???
-#endif
-   }
+      openConsole();
    else if(inputString == "Ctrl+Shift+L") // Reload level
    {
       loadLevel();                        
@@ -4691,7 +4703,6 @@ bool EditorUserInterface::saveLevel(bool showFailMessages, bool showSuccessMessa
 {
    string filename = getLevelFileName();
    TNLAssert(filename != "", "Need file name here!");
-
 
    if(!doSaveLevel(filename, showFailMessages))
       return false;
