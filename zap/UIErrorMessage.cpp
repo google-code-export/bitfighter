@@ -98,18 +98,44 @@ void AbstractMessageUserInterface::reset()
       mMessage[i] =  SymbolShapePtr(new SymbolBlank());
 
    mMaxLines = MAX_LINES;
+   mKeyRegistrations.clear();
+   mRenderUnderlyingUi = true;
+}
+
+
+void AbstractMessageUserInterface::registerKey(InputCode key, void(*callback)(ClientGame *))
+{
+   mKeyRegistrations[key] = callback;
+}
+
+
+void AbstractMessageUserInterface::setRenderUnderlyingUi(bool render)
+{
+   mRenderUnderlyingUi = render;
 }
 
 
 bool AbstractMessageUserInterface::onKeyDown(InputCode inputCode)
 {
-   return Parent::onKeyDown(inputCode);
+   bool handled = Parent::onKeyDown(inputCode);
+
+   if(handled)
+      return true;
+
+   if(mKeyRegistrations.find(inputCode) != mKeyRegistrations.end())
+   {
+      mKeyRegistrations[inputCode](getGame());
+      quit();
+      return true;
+   }
+
+   return false;
 }
 
 
 void AbstractMessageUserInterface::render()
 {
-   if(getUIManager()->getPrevUI() != this)
+   if(mRenderUnderlyingUi && getUIManager()->getPrevUI() != this)
       getUIManager()->renderPrevUI(this);
 
    renderMessageBox(mTitle, mInstr, mMessage, mMaxLines);
@@ -130,6 +156,16 @@ ErrorMessageUserInterface::ErrorMessageUserInterface(ClientGame *game) : Parent(
 ErrorMessageUserInterface::~ErrorMessageUserInterface()
 {
    // Do nothing
+}
+
+
+bool ErrorMessageUserInterface::usesEditorScreenMode() const
+{
+   if(getUIManager()->getCurrentUI() == this)
+      return getUIManager()->getPrevUI()->usesEditorScreenMode();
+   else
+      return getUIManager()->getCurrentUI()->usesEditorScreenMode();
+
 }
 
 
