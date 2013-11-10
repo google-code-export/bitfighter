@@ -87,8 +87,6 @@ S32 QSORT_CALLBACK pluginInfoSort(EditorUserInterface::PluginInfo *a, EditorUser
    return stricmp((a)->prettyName.c_str(), (b)->prettyName.c_str());
 }
 
-//Vector<string> EditorUserInterface::robots;        // List of robot lines in the level file
-
 
 static void saveLevelCallback(ClientGame *game)
 {
@@ -646,8 +644,24 @@ void EditorUserInterface::runLevelGenScript()
 }
 
 
+// game is an unused parameter needed to make the method fit the signature of the callbacks used by UIMenus
+static void openConsole(ClientGame *game)
+{
+#ifndef BF_NO_CONSOLE
+   if(gConsole.isOk())
+   {
+      gConsole.show();
+      return;
+   }
+   // else
+#endif
+   // show error message  <== TODO DO ThiS!
+}
+
+
 // Runs an arbitrary lua script.  Command is first item in cmdAndArgs, subsequent items are the args, if any
-void EditorUserInterface::runScript(GridDatabase *database, const FolderManager *folderManager, const string &scriptName, const Vector<string> &args)
+void EditorUserInterface::runScript(GridDatabase *database, const FolderManager *folderManager, 
+                                    const string &scriptName, const Vector<string> &args)
 {
    string name = folderManager->findLevelGenScript(scriptName);  // Find full name of levelgen script
 
@@ -658,8 +672,8 @@ void EditorUserInterface::runScript(GridDatabase *database, const FolderManager 
 #else
       fprintf(stderr,
 #endif
-                      "Could not find script %s; looked in folders: %s\n",
-                      scriptName.c_str(), concatenate(folderManager->getScriptFolderList()).c_str());
+               "Could not find script %s; looked in folders: %s\n",
+               scriptName.c_str(), concatenate(folderManager->getScriptFolderList()).c_str());
       return;
    }
    
@@ -675,8 +689,11 @@ void EditorUserInterface::runScript(GridDatabase *database, const FolderManager 
 
       ui->reset();
       ui->setTitle("SCRIPT ERROR");
-      ui->setMessage("The levelgen script you ran threw an error.\n\n"
+      ui->setMessage("The levelgen script you ran encountered an error.\n\n"
                      "See the console (press [[/]]) or the logfile for details.");
+      ui->setInstr("Press [[Esc]] to return to the editor");
+
+      ui->registerKey(KEY_SLASH, &openConsole);
       getUIManager()->activate(ui);
    }
 
@@ -1241,7 +1258,7 @@ void EditorUserInterface::renderMasterStatus()
 }
 
 
-bool EditorUserInterface::usesEditorScreenMode()
+bool EditorUserInterface::usesEditorScreenMode() const
 {
    return true;
 }
@@ -1930,6 +1947,7 @@ void EditorUserInterface::render()
    {
       renderSaveMessage();
       renderWarnings();
+      renderLingeringMessage();
    }
 
    renderConsole();        // Rendered last, so it's always on top
@@ -2102,7 +2120,7 @@ void EditorUserInterface::renderDockPlugins()
 }
 
 
-void EditorUserInterface::renderSaveMessage()
+void EditorUserInterface::renderSaveMessage() const
 {
    if(mSaveMsgTimer.getCurrent())
    {
@@ -2133,7 +2151,7 @@ void EditorUserInterface::renderSaveMessage()
 }
 
 
-void EditorUserInterface::renderWarnings()
+void EditorUserInterface::renderWarnings() const
 {
    if(mWarnMsgTimer.getCurrent())
    {
@@ -2169,6 +2187,13 @@ void EditorUserInterface::renderWarnings()
       }
    }
 }
+
+
+void EditorUserInterface::renderLingeringMessage() const
+{
+   mLingeringMessage.render(horizMargin, vertMargin + mLingeringMessage.getHeight(), AlignmentLeft);
+}
+
 
 ////////////////////////////////////////
 ////////////////////////////////////////
@@ -3757,13 +3782,7 @@ bool EditorUserInterface::onKeyDown(InputCode inputCode)
    else if(inputString == "V")            // Flip vertical
       flipSelectionVertical();
    else if(inputString == "/" || inputString == "Keypad /")
-   {
-#ifndef BF_NO_CONSOLE
-      if(gConsole.isOk())
-         gConsole.show();
-      //else do what???
-#endif
-   }
+      openConsole(NULL);
    else if(inputString == "Ctrl+Shift+L") // Reload level
    {
       loadLevel();                        
@@ -4658,7 +4677,19 @@ void EditorUserInterface::idle(U32 timeDelta)
 }
 
 
-void EditorUserInterface::setSaveMessage(string msg, bool savedOK)
+void EditorUserInterface::setLingeringMessage(const string &msg)
+{
+   mLingeringMessage.setSymbolsFromString(msg, NULL, HelpContext, 12, &Colors::red);
+}
+
+
+void EditorUserInterface::clearLingeringMessage()
+{
+   mLingeringMessage.clear();
+}
+
+
+void EditorUserInterface::setSaveMessage(const string &msg, bool savedOK)
 {
    mSaveMsg = msg;
    mSaveMsgTimer.reset();
@@ -4672,7 +4703,7 @@ void EditorUserInterface::clearSaveMessage()
 }
 
 
-void EditorUserInterface::setWarnMessage(string msg1, string msg2)
+void EditorUserInterface::setWarnMessage(const string &msg1, const string &msg2)
 {
    mWarnMsg1 = msg1;
    mWarnMsg2 = msg2;
@@ -4691,7 +4722,6 @@ bool EditorUserInterface::saveLevel(bool showFailMessages, bool showSuccessMessa
 {
    string filename = getLevelFileName();
    TNLAssert(filename != "", "Need file name here!");
-
 
    if(!doSaveLevel(filename, showFailMessages))
       return false;
@@ -5057,8 +5087,12 @@ void quitEditorCallback(ClientGame *game, U32 unused)
                      "Do you want to?");
       ui->setInstr("Press [[Y]] to save,  [[N]] to quit,  [[Esc]] to cancel");
 
-      ui->registerYesFunction(saveLevelCallback);
-      ui->registerNoFunction(backToMainMenuCallback);
+      //ui->registerYesFunction(saveLevelCallback);
+      //ui->registerNoFunction(backToMainMenuCallback);
+
+      ui->registerKey(KEY_Y, saveLevelCallback);
+      ui->registerKey(KEY_N, backToMainMenuCallback);
+      ui->setRenderUnderlyingUi(false);
 
       game->getUIManager()->activate(ui);
    }

@@ -164,7 +164,6 @@ void FontManager::drawTTFString(BfFont *font, const char *string, F32 size)
 
    sth_begin_draw(mStash);
 
-   // 152.381f is what I stole from the bottom of FontStrokeRoman.h as the font size
    sth_draw_text(mStash, font->getStashFontId(), size, 0.0, 0.0, string, &outPos);
 
    sth_end_draw(mStash);
@@ -239,11 +238,6 @@ void FontManager::setFontContext(FontContext fontContext)
          break;
    }
 }
-// FontRoman,
-// FontOrbitronLightStroke,
-// FontOrbitronMedStroke,
-// FontOrbitronLight,
-// FontOrbitronMedium,
 
 
 static Vector<FontId> contextStack;
