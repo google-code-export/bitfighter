@@ -193,6 +193,8 @@ void exitToOs()
 // All levels loaded, we're ready to go
 void hostGame(ServerGame *serverGame)
 {
+   TNLAssert(serverGame, "Need a ServerGame to host, silly!");
+
    if(!serverGame->startHosting())
    {
       abortHosting_noLevels(serverGame);
@@ -200,10 +202,10 @@ void hostGame(ServerGame *serverGame)
    }
 
 #ifndef ZAP_DEDICATED
-   for(S32 i = 0; i < gClientGames.size(); i++)      // Should be true if this isn't a dedicated server...
+   for(S32 i = 0; i < gClientGames.size(); i++)
    {
       gClientGames[i]->getUIManager()->disableLevelLoadDisplay(true);
-      gClientGames[i]->joinLocalGame(serverGame->getNetInterface());  // ...then we'll play, too!
+      gClientGames[i]->joinLocalGame(serverGame->getNetInterface(), serverGame->getHostingModePhase());  // ...then we'll play, too!
    }
 #endif
 }
@@ -265,24 +267,6 @@ void display()
 void shutdownBitfighter(ServerGame *serverGame);    // Forward declaration
 
 
-// There is a lot of weird ickiness in this function
-// This function could be moved anywhere... onto Game?
-void gameIdle(const Vector<ClientGame *> &clientGames, ServerGame *serverGame, U32 timeDelta)
-{
-   // Don't idle games during level load... if serverGame exists, it means we're hosting locally
-   if(!(serverGame && serverGame->hostingModePhase == ServerGame::LoadingLevels))    
-   {
-#ifndef ZAP_DEDICATED
-      for(S32 i = 0; i < clientGames.size(); i++)
-         clientGames[i]->idle(timeDelta);
-#endif
-
-      if(serverGame)
-         serverGame->idle(timeDelta);
-   }
-}
-
-
 // If the server game exists, and is shutting down, close any ClientGame connections we might have to it, then delete it.
 // If there are no client games, delete it and return to the OS.
 void checkIfServerGameIsShuttingDown(const Vector<ClientGame *> &clientGames, ServerGame *serverGame, U32 timeDelta)
@@ -306,66 +290,90 @@ void checkIfServerGameIsShuttingDown(const Vector<ClientGame *> &clientGames, Se
 }
 
 
+// This function could be moved anywhere... onto Game? No, not there, as that creates an #include loop with ClientGame.h
+void gameIdle(const Vector<ClientGame *> &clientGames, ServerGame *serverGame, U32 timeDelta)
+{
+
+#ifndef ZAP_DEDICATED
+   for(S32 i = 0; i < clientGames.size(); i++)
+      clientGames[i]->idle(timeDelta);
+#endif
+
+   if(serverGame)
+      serverGame->idle(timeDelta);
+}
+
+
+// Need to do this here because this is really the only place where we can pass information from
+// a ServerGame directly to a ClientGame without any overly gross stuff.  But man, is this ugly!
+void loadAnotherLevelOrStartHosting()
+{
+   if(!gServerGame)
+      return;
+
+   if(gServerGame->getHostingModePhase() == Game::LoadingLevels)
+   {
+      string levelName = gServerGame->loadNextLevelInfo();
+
+#ifndef ZAP_DEDICATED
+      // Notify any client UIs on the hosting machine that the server has loaded a level
+      for(S32 i = 0; i < gClientGames.size(); i++)
+         gClientGames[i]->getUIManager()->serverLoadedLevel(levelName, gServerGame->getHostingModePhase());
+#endif
+   }
+
+   else if(gServerGame->getHostingModePhase() == Game::DoneLoadingLevels)
+      hostGame(gServerGame);
+}
+
+
 // This is the master idle loop that is called on every game tick.
 // This in turn calls the idle functions for all other objects in the game.
 void idle()
 {
+   loadAnotherLevelOrStartHosting();
+
+   // Acquire a settings object... from somewhere
    GameSettings *settings;
 
    if(gServerGame)
-   {
       settings = gServerGame->getSettings();
-
-      if(gServerGame->hostingModePhase == ServerGame::LoadingLevels)
-      {
-         string levelName = gServerGame->loadNextLevelInfo();
-
 #ifndef ZAP_DEDICATED
-         // Notify any client UIs on the hosting machine that the server has loaded a level
-         if(levelName != "")
-            for(S32 i = 0; i < gClientGames.size(); i++)
-               gClientGames[i]->getUIManager()->serverLoadedLevel(levelName);
-#endif
-      }
-
-      else if(gServerGame->hostingModePhase == ServerGame::DoneLoadingLevels)
-         hostGame(gServerGame);
-   }
-#ifndef ZAP_DEDICATED
-   else     // If there is no server game, and this code is running, there *MUST* be a client game.
+   else     // If there is no server game, and this code is running, there *MUST* be a client game
       settings = gClientGames[0]->getSettings();
 #endif
 
-   static S32 integerTime = 0;   // static, as we need to keep holding the value that was set... probably some reason this is S32?
+   static S32 deltaT = 0;     // static, as we need to keep holding the value that was set... probably some reason this is S32?
    static U32 prevTimer = 0;
 
    U32 currentTimer = Platform::getRealMilliseconds();
-   integerTime += currentTimer - prevTimer;
+   deltaT += currentTimer - prevTimer;    // Time elapsed since previous tick
    prevTimer = currentTimer;
 
    // Do some sanity checks
-   if(integerTime < -500 || integerTime > 5000)
-      integerTime = 10;
+   if(deltaT < -500 || deltaT > 5000)
+      deltaT = 10;
 
    U32 sleepTime = 1;
 
    bool dedicated = gServerGame && gServerGame->isDedicated();
 
-   if( ( dedicated && integerTime >= S32(1000 / settings->getIniSettings()->maxDedicatedFPS)) || 
-       (!dedicated && integerTime >= S32(1000 / settings->getIniSettings()->maxFPS)) )
+   U32 maxFPS = dedicated ? settings->getIniSettings()->maxDedicatedFPS : settings->getIniSettings()->maxFPS;
+
+   if(deltaT >= S32(1000 / maxFPS))
    {
 #ifdef ZAP_DEDICATED
       // Probably wrong, but at least dedicated can build without errors.
       static Vector<ClientGame *> gClientGames;
 #endif
-      checkIfServerGameIsShuttingDown(gClientGames, gServerGame, U32(integerTime));
-      gameIdle(gClientGames, gServerGame, U32(integerTime));
+      checkIfServerGameIsShuttingDown(gClientGames, gServerGame, U32(deltaT));
+      gameIdle(gClientGames, gServerGame, U32(deltaT));
 
 #ifndef ZAP_DEDICATED
       if(!dedicated)
          display();          // Draw the screen if not dedicated
 #endif
-      integerTime = 0;
+      deltaT = 0;
 
       if(!dedicated)
          sleepTime = 0;      
@@ -1135,8 +1143,9 @@ int main(int argc, char **argv)
 
    settings->runCmdLineDirectives();            // If we specified a directive on the cmd line, like -help, attend to that now
 
+   // Even dedicated server needs sound these days
    SoundSystem::init(settings->getIniSettings()->sfxSet, folderManager->sfxDir, 
-                     folderManager->musicDir, settings->getIniSettings()->getMusicVolLevel());  // Even dedicated server needs sound these days
+                     folderManager->musicDir, settings->getIniSettings()->getMusicVolLevel());  
    
    if(settings->isDedicatedServer())
    {
