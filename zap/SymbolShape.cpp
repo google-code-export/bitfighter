@@ -211,6 +211,16 @@ SymbolString::SymbolString(const SymbolShapePtr &symbol, Alignment alignment)
 }
 
 
+// Convenience constructor, just pass in a string, we'll do the rest!
+SymbolString::SymbolString(const string &str, const InputCodeManager *inputCodeManager, FontContext context, 
+                           S32 textSize, bool blockMode, Alignment alignment)
+{
+   SymbolString::symbolParse(inputCodeManager, str, mSymbols, context, textSize, blockMode);
+   mWidth = computeWidth(mSymbols);
+   mHeight = computeHeight(mSymbols);
+}
+
+
 // Constructor -- symbols will be provided later
 SymbolString::SymbolString()
 {
@@ -235,7 +245,7 @@ void SymbolString::setSymbols(const Vector<SymbolShapePtr> &symbols)
 }
 
 
-void SymbolString::setSymbolsFromString(const string &string, InputCodeManager *inputCodeManager, 
+void SymbolString::setSymbolsFromString(const string &string, const InputCodeManager *inputCodeManager, 
                                         FontContext fontContext, S32 textSize, const Color *color)
 {
    Vector<SymbolShapePtr> symbols;
@@ -707,9 +717,14 @@ static void getSymbolShape(const InputCodeManager *inputCodeManager, const strin
 }
 
 
+// Pass true for block if this is part of a block of text, and empty lines should be accorded their full height.
+// Pass false if this is a standalone string where and empty line should have zero height.
 void SymbolString::symbolParse(const InputCodeManager *inputCodeManager, const string &str, Vector<SymbolShapePtr> &symbols,
-                              FontContext fontContext, S32 fontSize, const Color *textColor, const Color *symbolColor)
+                              FontContext fontContext, S32 fontSize, bool block, const Color *textColor, const Color *symbolColor)
 {
+   if(!block && str == "")
+      return;
+
    std::size_t offset = 0;
 
    if(!symbolColor)
