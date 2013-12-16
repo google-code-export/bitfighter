@@ -1626,15 +1626,15 @@ void RobotOptionsMenuUserInterface::setupMenus()
 
    IniSettings *iniSettings = getGame()->getSettings()->getIniSettings();
 
-   addMenuItem(new YesNoMenuItem("ROBOTS BALANCE TEAMS:", iniSettings->botsBalanceTeams,
-         "Toggle to have robots automatically added to the game and balance the teams",  KEY_B));
+   addMenuItem(new YesNoMenuItem("PLAY WITH BOTS:", iniSettings->playWithBots,
+         "Add robots to balance the teams?",  KEY_B, KEY_P));
 
     // This doesn't have a callback so we'll handle it in onEscape - make sure to set the correct index!
    addMenuItem(new CounterMenuItem("MINIMUM PLAYERS:", iniSettings->minBalancedPlayers,
          1, 2, 32, "bots", "", "Bots will be added until total player count meets this value", KEY_M));
 
-   addMenuItem(new YesNoMenuItem("FORCE TEAM BALANCE:", iniSettings->botsAlwaysBalanceTeams,
-         "Force teams to balance, even if the minimum player count has been met",  KEY_F));
+   addMenuItem(new YesNoMenuItem("AUTO BALANCE TEAMS:", iniSettings->botsAlwaysBalanceTeams,
+         "Force teams to balance, even if the minimum player count has been met",  KEY_A, KEY_T));
 }
 
 
@@ -1649,7 +1649,7 @@ void RobotOptionsMenuUserInterface::onEscape()
 void RobotOptionsMenuUserInterface::saveSettings()
 {
    // Save our minimum players, get the correct index of the appropriate menu item
-   getGame()->getSettings()->getIniSettings()->botsBalanceTeams = getMenuItem(0)->getIntValue() == 1;
+   getGame()->getSettings()->getIniSettings()->playWithBots = getMenuItem(0)->getIntValue() == 1;
    getGame()->getSettings()->getIniSettings()->minBalancedPlayers = getMenuItem(1)->getIntValue();
    getGame()->getSettings()->getIniSettings()->botsAlwaysBalanceTeams = getMenuItem(2)->getIntValue() == 1;
 
@@ -2182,6 +2182,7 @@ static void moreRobotsAcceptCallback(ClientGame *game, U32 index)
 
    // Find largest team player count
    S32 largestTeamCount = 0;
+
    for(S32 i = 0; i < teamCount; i++)
    {
       TNLAssert(dynamic_cast<Team *>(game->getTeam(i)), "Invalid team");
@@ -2192,8 +2193,9 @@ static void moreRobotsAcceptCallback(ClientGame *game, U32 index)
    }
 
    // Determine if there are uneven teams; if so, count up the bots we'll need to add.  We'll
-   // add bots until all teams are even
+   // add bots until all teams are even.
    S32 neededBotCount = 0;
+
    for(S32 i = 0; i < teamCount; i++)
    {
       Team *team = static_cast<Team *>(game->getTeam(i));
@@ -2201,14 +2203,12 @@ static void moreRobotsAcceptCallback(ClientGame *game, U32 index)
          neededBotCount += largestTeamCount - team->getPlayerBotCount();
    }
 
-   // Add bots to fill up the teams
-   if(neededBotCount != 0)
+   if(neededBotCount != 0)       // Add bots to fill up the teams
       game->getGameType()->c2sAddBots(neededBotCount, Vector<StringTableEntry>());
-   // Else add a bot to every team
-   else
+   else                          // Add a bot to every team
       game->getGameType()->c2sAddBots(teamCount, Vector<StringTableEntry>());
 
-
+   
    GameUserInterface *gameUI = game->getUIManager()->getUI<GameUserInterface>();
 
    // Player has demonstrated ability to add bots... no need to show help item
@@ -2283,8 +2283,8 @@ void RobotsMenuUserInterface::onActivate()
 
    clearMenuItems();
 
-   addMenuItem(new MenuItem("MORE ROBOTS", moreRobotsAcceptCallback, "Add a robot to each team", KEY_M));
-   addMenuItem(new MenuItem("FEWER ROBOTS", fewerRobotsAcceptCallback, "Remove a robot from each team", KEY_F));
+   addMenuItem(new MenuItem("MORE ROBOTS",       moreRobotsAcceptCallback,   "Add a robot to each team",        KEY_M));
+   addMenuItem(new MenuItem("FEWER ROBOTS",      fewerRobotsAcceptCallback,  "Remove a robot from each team",   KEY_F));
    addMenuItem(new MenuItem("REMOVE ALL ROBOTS", removeRobotsAcceptCallback, "Remove all robots from the game", KEY_R));
 }
 
