@@ -86,7 +86,7 @@ GameType::GameType(S32 winningScore) : mScoreboardUpdateTimer(3000), mGameTimeUp
    mEngineerEnabled = false;
    mEngineerUnrestrictedEnabled = false;
    mBotsAllowed = true;
-   mBotBalancingDisabled = false;
+   mBotBalancingEnabled = true;
 
    mTotalGamePlay = 0;
    mEndingGamePlay = DefaultGameTime;
@@ -589,9 +589,10 @@ void GameType::idle_server(U32 deltaT)
       mGameTimeUpdateTimer.reset();
    }
 
-   // Analyze if we need to re-balance teams with bots
-   if(!mBotBalancingDisabled &&
-         getGame()->getSettings()->getIniSettings()->botsBalanceTeams &&
+   // Analyze if we need to re-balance teams with bots 
+   // Wouldn't this be better triggered when players join/quit server rather than in the idle loop?
+   if(mBotBalancingEnabled &&
+         getGame()->getAutoAddBots() &&
          mBotBalanceAnalysisTimer.update(deltaT))
    {
       balanceTeams();
@@ -602,7 +603,8 @@ void GameType::idle_server(U32 deltaT)
    EventManager::get()->update();
 
    // If game time has expired... game is over, man, it's over
-   if(!isTimeUnlimited() && U32(mEndingGamePlay - mTotalGamePlay) + 5000 <= 5000)
+   // Add 5000 to each side to handle U32 underflow
+   if(!isTimeUnlimited() && mEndingGamePlay <= mTotalGamePlay)
       gameOverManGameOver();
 }
 
@@ -2772,6 +2774,8 @@ void GameType::addBotFromClient(Vector<StringTableEntry> args)
 
    static const S32 ABSOLUTE_MAX_BOTS = 255;    // Hard limit on number of bots on the server
 
+   const S32 maxBots = clientInfo->isAdmin() ? ABSOLUTE_MAX_BOTS : settings->getIniSettings()->maxBots;
+
    if(mBotZoneCreationFailed)
       conn->s2cDisplayErrorMessage("!!! Zone creation failed for this level -- bots disabled");
 
@@ -2786,9 +2790,8 @@ void GameType::addBotFromClient(Vector<StringTableEntry> args)
    else if(!clientInfo->isLevelChanger())
       return;  // Error message handled client-side
 
-   else if((getGame()->getBotCount() >= settings->getIniSettings()->maxBots && !clientInfo->isAdmin()) ||
-           (getGame()->getBotCount() >= ABSOLUTE_MAX_BOTS))
-      conn->s2cDisplayErrorMessage("!!! Can't add more bots -- this server is full");
+   else if(getGame()->getBotCount() >= maxBots)
+      conn->s2cDisplayErrorMessage("!!! Can't add more bots -- this server can only have " + itos(maxBots));
 
    else if(args.size() >= 2 && !safeFilename(args[1].getString()))
       conn->s2cDisplayErrorMessage("!!! Invalid filename");
@@ -2802,7 +2805,7 @@ void GameType::addBotFromClient(Vector<StringTableEntry> args)
       else
       {
          // Disable bot balancing
-         mBotBalancingDisabled = true;
+         mBotBalancingEnabled = false;
 
          StringTableEntry msg = StringTableEntry("Robot added by %e0");
          messageVals.clear();
@@ -2872,6 +2875,8 @@ GAMETYPE_RPC_C2S(GameType, c2sAddBots,
       prevRobotSize = getGame()->getBotCount();
       addBotFromClient(args);
    }
+
+   getGame()->setAutoAddBots(true);
 }
 
 
@@ -2970,7 +2975,7 @@ GAMETYPE_RPC_C2S(GameType, c2sKickBot, (), ())
    getGame()->deleteBotFromTeam(findLargestTeamWithBots());
 
    // Disable bot balancing
-   mBotBalancingDisabled = true;
+   mBotBalancingEnabled = false;
 
    StringTableEntry msg = StringTableEntry("Robot kicked by %e0");
    messageVals.clear();
@@ -3001,7 +3006,7 @@ GAMETYPE_RPC_C2S(GameType, c2sKickBots, (), ())
    getGame()->deleteAllBots();
 
    // Disable bot balancing
-   mBotBalancingDisabled = true;
+   mBotBalancingEnabled = false;
 
    StringTableEntry msg = StringTableEntry("All robots kicked by %e0");
    messageVals.clear();

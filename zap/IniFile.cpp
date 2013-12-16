@@ -27,9 +27,7 @@
 
 #include "IniFile.h"
 
-#include "tnlJournal.h"       // For journaling support
 #include "stringUtils.h"      // for lcase, itos, etc.
-#include "zapjournal.h"
 #include "tnlTypes.h"
 
 #include <stdio.h>
@@ -67,8 +65,6 @@ CIniFile::~CIniFile()
 }
 
 
-extern Zap::ZapJournal gZapJournal;
-
 void CIniFile::ReadFile()
 {
    // Normally you would use ifstream, but the SGI CC compiler has
@@ -76,31 +72,26 @@ void CIniFile::ReadFile()
    fstream f;
    string line;
 
-   Vector<StringPtr> iniLines;
-   if(gZapJournal.getCurrentMode() != TNL::Journal::Playback)
+   Vector<string> iniLines;
+   string x = path;
+   string y(x.begin(), x.end());
+   y.assign(x.begin(), x.end());
+
+   f.open(y.c_str(), ios::in);
+
+   if(!f.fail())    // This is true if the file cannot be opened or something... in which case we don't want to read the file!
    {
-      string x = path;
-      string y(x.begin(), x.end());
-      y.assign(x.begin(), x.end());
-
-      f.open(y.c_str(), ios::in);
-
-      // To better handle our journaling requirements, we'll read the INI file,
-      // then pass those off to a journaled routine for processing.
-      if(!f.fail())    // This is true if the file cannot be opened or something... in which case we don't want to read the file!
-      {
-         while(getline(f, line))
-            if(line.length() > 2)                   // Anything shorter can't be useful...  strip these out here to reduce journaling burden
-               iniLines.push_back(line.c_str());
-         f.close();
-      }
+      while(getline(f, line))
+         if(line.length() > 2)                   // Anything shorter can't be useful...  
+            iniLines.push_back(line);
+      f.close();
    }
 
    lineCount = iniLines.size();      // Set our INI vector length
    
    // Process our INI lines, will provide sensible defaults for any missing or malformed entries
    for(S32 i = 0; i < lineCount; i++)
-      processLine(iniLines[i].getString());
+      processLine(iniLines[i]);
 }
 
 
@@ -200,7 +191,7 @@ S32 CIniFile::findSection(const string &sectionName) const
 }
 
 
-S32 CIniFile::FindValue(S32 const sectionId, const string &keyName) const
+S32 CIniFile::findKey(S32 const sectionId, const string &keyName) const
 {
    if(!sections.size() || sectionId >= sections.size())
       return noID;
@@ -208,6 +199,7 @@ S32 CIniFile::FindValue(S32 const sectionId, const string &keyName) const
    for(S32 keyID = 0; keyID < sections[sectionId].keys.size(); ++keyID)
       if(checkCase(sections[sectionId].keys[keyID], keyName))
          return keyID;
+
    return noID;
 }
 
@@ -278,7 +270,7 @@ bool CIniFile::SetValue(const string &section, const string &key, const string &
          return false;
    }
 
-   S32 valueID = FindValue(sectionId, key);
+   S32 valueID = findKey(sectionId, key);
 
    if(valueID == noID) 
    {
@@ -347,7 +339,7 @@ string CIniFile::GetValue(S32 const sectionId, S32 const keyID, const string &de
 
 string CIniFile::GetValue(S32 const sectionId, const string &keyName, const string &defValue) const
 {
-   S32 valueID = FindValue(sectionId, keyName);
+   S32 valueID = findKey(sectionId, keyName);
    if(valueID == noID)
       return defValue;
 
@@ -361,7 +353,7 @@ string CIniFile::GetValue(const string &section, const string &keyName, const st
    if(sectionId == noID)
       return defValue;
 
-   S32 valueID = FindValue(sectionId, keyName);
+   S32 valueID = findKey(sectionId, keyName);
    if(valueID == noID)
       return defValue;
 
@@ -433,7 +425,7 @@ bool CIniFile::GetValueYN(const string &section, const string &key, bool defValu
 
 bool CIniFile::GetValueYN(S32 const sectionId, const string &keyName, const bool &defValue) const
 {
-   S32 valueID = FindValue(sectionId, keyName);
+   S32 valueID = findKey(sectionId, keyName);
    if(valueID == noID)
       return defValue;
 
@@ -455,7 +447,7 @@ bool CIniFile::deleteKey(const string &section, const string &key)
    if(sectionId == noID)
       return false;
 
-   S32 valueID = FindValue(sectionId, key);
+   S32 valueID = findKey(sectionId, key);
    if(valueID == noID)
       return false;
 
@@ -678,15 +670,20 @@ void CIniFile::Reset()
 }
 
 
-S32 CIniFile::NumSections() const
+S32 CIniFile::GetNumSections() const
 {
    return sectionNames.size();
 }
 
 
-S32 CIniFile::GetNumSections() const
+bool CIniFile::hasKey(const string &section, const string &key) const
 {
-   return NumSections();
+   S32 sectionId = findSection(section);
+
+   if(sectionId == noID)
+      return false;
+
+   return findKey(sectionId, key) != noID;
 }
 
 
@@ -705,9 +702,9 @@ S32 CIniFile::GetNumEntries(S32 const sectionId) const
 }
 
 
-S32 CIniFile::GetNumEntries(const string &keyName) const
+S32 CIniFile::GetNumEntries(const string &section) const
 {
-   S32 sectionId = findSection(keyName);
+   S32 sectionId = findSection(section);
 
    if(sectionId == noID)
       return 0;
