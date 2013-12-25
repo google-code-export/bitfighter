@@ -1626,15 +1626,15 @@ void RobotOptionsMenuUserInterface::setupMenus()
 
    IniSettings *iniSettings = getGame()->getSettings()->getIniSettings();
 
-   addMenuItem(new YesNoMenuItem("ROBOTS BALANCE TEAMS:", iniSettings->botsBalanceTeams,
-         "Toggle to have robots automatically added to the game and balance the teams",  KEY_B));
+   addMenuItem(new YesNoMenuItem("PLAY WITH BOTS:", iniSettings->playWithBots,
+         "Add robots to balance the teams?",  KEY_B, KEY_P));
 
     // This doesn't have a callback so we'll handle it in onEscape - make sure to set the correct index!
    addMenuItem(new CounterMenuItem("MINIMUM PLAYERS:", iniSettings->minBalancedPlayers,
          1, 2, 32, "bots", "", "Bots will be added until total player count meets this value", KEY_M));
 
-   addMenuItem(new YesNoMenuItem("FORCE TEAM BALANCE:", iniSettings->botsAlwaysBalanceTeams,
-         "Force teams to balance, even if the minimum player count has been met",  KEY_F));
+   addMenuItem(new YesNoMenuItem("AUTO BALANCE TEAMS:", iniSettings->botsAlwaysBalanceTeams,
+         "Force teams to balance, even if the minimum player count has been met",  KEY_A, KEY_T));
 }
 
 
@@ -1649,7 +1649,7 @@ void RobotOptionsMenuUserInterface::onEscape()
 void RobotOptionsMenuUserInterface::saveSettings()
 {
    // Save our minimum players, get the correct index of the appropriate menu item
-   getGame()->getSettings()->getIniSettings()->botsBalanceTeams = getMenuItem(0)->getIntValue() == 1;
+   getGame()->getSettings()->getIniSettings()->playWithBots = getMenuItem(0)->getIntValue() == 1;
    getGame()->getSettings()->getIniSettings()->minBalancedPlayers = getMenuItem(1)->getIntValue();
    getGame()->getSettings()->getIniSettings()->botsAlwaysBalanceTeams = getMenuItem(2)->getIntValue() == 1;
 
@@ -2174,98 +2174,40 @@ RobotsMenuUserInterface::~RobotsMenuUserInterface()
 }
 
 
+// Can only get here if the player has the appropriate permissions, so no need for a further check
 static void moreRobotsAcceptCallback(ClientGame *game, U32 index)
 {
-   game->countTeamPlayers();
+   GameType *gameType = game->getGameType();
 
-   S32 teamCount = game->getTeamCount();
-
-   // Find largest team player count
-   S32 largestTeamCount = 0;
-   for(S32 i = 0; i < teamCount; i++)
+   if(gameType)
    {
-      TNLAssert(dynamic_cast<Team *>(game->getTeam(i)), "Invalid team");
-      S32 currentCount = static_cast<Team *>(game->getTeam(i))->getPlayerBotCount();
-
-      if(currentCount > largestTeamCount)
-         largestTeamCount = currentCount;
+      Vector<StringPtr> args;
+      gameType->c2sSendCommand("MoreBots", args);
    }
-
-   // Determine if there are uneven teams; if so, count up the bots we'll need to add.  We'll
-   // add bots until all teams are even
-   S32 neededBotCount = 0;
-   for(S32 i = 0; i < teamCount; i++)
-   {
-      Team *team = static_cast<Team *>(game->getTeam(i));
-      if(team->getPlayerBotCount() < largestTeamCount)
-         neededBotCount += largestTeamCount - team->getPlayerBotCount();
-   }
-
-   // Add bots to fill up the teams
-   if(neededBotCount != 0)
-      game->getGameType()->c2sAddBots(neededBotCount, Vector<StringTableEntry>());
-   // Else add a bot to every team
-   else
-      game->getGameType()->c2sAddBots(teamCount, Vector<StringTableEntry>());
-
-
-   GameUserInterface *gameUI = game->getUIManager()->getUI<GameUserInterface>();
 
    // Player has demonstrated ability to add bots... no need to show help item
-   gameUI->removeInlineHelpItem(AddBotsItem, true);
+   game->getUIManager()->getUI<GameUserInterface>()->removeInlineHelpItem(AddBotsItem, true);
 
-   // Back to the game!
-   game->getUIManager()->reactivate(gameUI);
+   // Back to the game!   
+   game->getUIManager()->reactivateGameUI();
 }
 
 
+// Can only get here if the player has the appropriate permissions, so no need for a further check
 static void fewerRobotsAcceptCallback(ClientGame *game, U32 index)
 {
-   game->countTeamPlayers();
+   if(game->getBotCount() == 0)
+      game->displayErrorMessage("!!! There are no robots to kick");
 
-   S32 teamCount = game->getTeamCount();
+   GameType *gameType = game->getGameType();
 
-   // Find smallest team player count
-   S32 smallestTeamCount = S32_MAX;
-   for(S32 i = 0; i < teamCount; i++)
+   if(gameType)
    {
-      TNLAssert(dynamic_cast<Team *>(game->getTeam(i)), "Invalid team");
-      S32 currentCount = static_cast<Team *>(game->getTeam(i))->getPlayerBotCount();
-
-      if(currentCount < smallestTeamCount)
-         smallestTeamCount = currentCount;
+      Vector<StringPtr> args;
+      gameType->c2sSendCommand("FewerBots", args);
    }
 
-   // Determine if we should remove some bots because teams are uneven
-   S32 numBotsToRemove = 0;
-   for(S32 i = 0; i < teamCount; i++)
-   {
-      Team *team = static_cast<Team *>(game->getTeam(i));
-
-      // Determine how many bots we can remove from this team if it more players than
-      // the smallest team
-      S32 surplus = team->getPlayerBotCount() - smallestTeamCount;
-      if(surplus > team->getBotCount())
-         surplus = team->getBotCount();
-
-      if(surplus > 0)
-         numBotsToRemove += surplus;
-   }
-
-   // Now remove bots.  Note that this assumes bots will be removed from the team with
-   // the greatest amount
-   //
-   // Remove bots if uneven teams
-   if(numBotsToRemove != 0)
-      for(S32 i = 0; i < numBotsToRemove; i++)
-         game->getGameType()->c2sKickBot();
-
-   // Else remove a bot from every team that has one.  This isn't perfect, but it'll do
-   else
-      for(S32 i = 0; i < teamCount; i++)
-         if(static_cast<Team *>(game->getTeam(i))->getBotCount() > 0)
-            game->getGameType()->c2sKickBot();
-
+   // Back to the game!
    game->getUIManager()->reactivateGameUI();
 }
 
@@ -2283,8 +2225,8 @@ void RobotsMenuUserInterface::onActivate()
 
    clearMenuItems();
 
-   addMenuItem(new MenuItem("MORE ROBOTS", moreRobotsAcceptCallback, "Add a robot to each team", KEY_M));
-   addMenuItem(new MenuItem("FEWER ROBOTS", fewerRobotsAcceptCallback, "Remove a robot from each team", KEY_F));
+   addMenuItem(new MenuItem("MORE ROBOTS",       moreRobotsAcceptCallback,   "Add a robot to each team",        KEY_M));
+   addMenuItem(new MenuItem("FEWER ROBOTS",      fewerRobotsAcceptCallback,  "Remove a robot from each team",   KEY_F));
    addMenuItem(new MenuItem("REMOVE ALL ROBOTS", removeRobotsAcceptCallback, "Remove all robots from the game", KEY_R));
 }
 

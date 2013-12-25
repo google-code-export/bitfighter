@@ -13,6 +13,7 @@
 #include "../zap/SystemFunctions.h"
 
 #include "../zap/stringUtils.h"
+#include "gtest/gtest.h"
 
 #include <string>
 
@@ -44,7 +45,7 @@ ClientGame *newClientGame(const GameSettingsPtr &settings)
 }
 
 
-// Create a new ServerGame with one dummy team
+// Create a new ServerGame with one dummy team -- be sure to delete this somewhere!
 ServerGame *newServerGame()
 {
    Address addr;
@@ -58,11 +59,23 @@ ServerGame *newServerGame()
 }
 
 
+GamePair::GamePair(GameSettingsPtr settings)
+{
+   initialize(settings, "", 0);
+}
+
+
 // Create a pair of games suitable for testing client/server interaction.  Provide some levelcode to get things started.
-GamePair::GamePair(const string &levelCode, S32 clients)
+GamePair::GamePair(const string &levelCode, S32 clientCount)
 {
    GameSettingsPtr settings = GameSettingsPtr(new GameSettings());
 
+   initialize(settings, levelCode, clientCount);
+}
+
+
+void GamePair::initialize(GameSettingsPtr settings, const string &levelCode, S32 clientCount)
+{
    LevelSourcePtr levelSource = LevelSourcePtr(new StringLevelSource(levelCode));
    initHosting(settings, levelSource, true, false);      // Creates a game and adds it to GameManager
 
@@ -71,26 +84,13 @@ GamePair::GamePair(const string &levelCode, S32 clients)
    GameType *gt = new GameType();    // Cleaned up by database
    gt->addToGame(server, server->getGameObjDatabase());
 
-   server->startHosting();     // This will load levels and wipe out any teams
+   server->startHosting();          // This will load levels and wipe out any teams
 
-   for(S32 i = 0; i < clients; i++)
-   {
-      client = newClientGame(settings);
-      GameManager::addClientGame(client);
-
-      client->userEnteredLoginCredentials("TestPlayer" + itos(i), "password", false);    // Simulates entry from NameEntryUserInterface
-
-      client->joinLocalGame(server->getNetInterface());
-
-      // This is a bit hacky, but we need to turn off TNL's bandwidth controls so our tests can run faster.  FASTER!!@!
-      client->getConnectionToServer()->useZeroLatencyForTesting();
-   }
+   for(S32 i = 0; i < clientCount; i++)
+      addClient("TestPlayer" + itos(i));
 
    LuaScriptRunner::setScriptingDir(settings->getFolderManager()->luaDir);
    LuaScriptRunner::startLua();
-
-   for(S32 i = 0; i < server->getClientCount(); i++)
-      server->getClientInfo(i)->getConnection()->useZeroLatencyForTesting();
 }
 
 
@@ -116,6 +116,56 @@ void GamePair::idle(U32 timeDelta, U32 cycles)
 {
    for(U32 i = 0; i < cycles; i++)
       GameManager::idle(timeDelta);
+}
+
+
+void GamePair::addClient(const string &name, S32 team)
+{
+   ClientGame *client = newClientGame(server->getSettingsPtr());
+   GameManager::addClientGame(client);
+
+   client->userEnteredLoginCredentials(name, "password", false);    // Simulates entry from NameEntryUserInterface
+
+   client->joinLocalGame(server->getNetInterface());
+
+
+   // This is a bit hacky, but we need to turn off TNL's bandwidth controls so our tests can run faster.  FASTER!!@!
+   client->getConnectionToServer()->useZeroLatencyForTesting();
+
+   clients.push_back(client);
+
+   ClientInfo *clientInfo = server->getClientInfo(server->getClientInfos()->size() - 1);
+
+   if(!clientInfo->isRobot())
+      clientInfo->getConnection()->useZeroLatencyForTesting();
+
+   if(team != NO_TEAM)
+   {
+      TNLAssert(team < server->getTeamCount(), "Bad team!");
+      clientInfo->setTeamIndex(team);
+   }
+}
+
+
+void GamePair::removeClient(const string &name)
+{
+   // Do something witty here
+}
+
+
+void GamePair::addBotClient(const string &name, S32 team)
+{
+   server->addBot(Vector<const char *>());
+   // Get most recently added clientInfo
+   ClientInfo *clientInfo = server->getClientInfo(server->getClientInfos()->size() - 1);
+   ASSERT_TRUE(clientInfo->isRobot()) << "This is supposed to be a robot!";
+
+   // Normally, in a game, a ship or bot would be destroyed and would respawn when their team changes, and upon
+   // respawning the BfObject representing that ship would be on the correct team.  Not so here (where we are
+   // taking lots of shortcuts); here we need to manually assign a new team to the robot object in addition to
+   // it's more "official" setting on the ClientInfo.
+   clientInfo->setTeamIndex(team);
+   clientInfo->getShip()->setTeam(team);
 }
 
 
