@@ -7,6 +7,8 @@
 #define _TEST_UTILS_H
 
 #include "GameSettings.h"    // For GameSettingsPtr def
+#include "TeamConstants.h"
+
 #include <tnl.h>
 #include <tnlGhostConnection.h>
 
@@ -46,10 +48,21 @@ void packUnpack(T input, T &output, U32 mask = 0xFFFFFFFF)
 struct GamePair
 {
 	GamePair(const string &levelCode = "", S32 clients = 1);
+   GamePair(GameSettingsPtr settings);
+
 	~GamePair();
+
+   void initialize(GameSettingsPtr settings, const string &levelcode, S32 clientCount);
+
+
 	static void idle(U32 timeDelta, U32 cycles = 1);
-	ClientGame *client;
 	ServerGame *server;
+   Vector<ClientGame *> clients;
+
+   void addClient(const string &name, S32 team = NO_TEAM);
+   void addBotClient(const string &name, S32 team = NO_TEAM);
+
+   void removeClient(const string &name);
 };
 
 

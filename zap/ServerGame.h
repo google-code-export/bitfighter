@@ -12,6 +12,9 @@
 #include "dataConnection.h"
 #include "LevelSource.h"         // For LevelSourcePtr def
 #include "LevelSpecifierEnum.h"
+#include "RobotManager.h"
+
+#include "Intervals.h"
 
 using namespace std;
 
@@ -35,9 +38,9 @@ class ServerGame : public Game
 
 private:
    enum {
-      UpdateServerStatusTime = 20000,    // How often we update our status on the master server (ms)
-      CheckServerStatusTime = 5000,      // If it did not send updates, recheck after ms
-      BotControlTickInterval = 33,       // Interval for how often should we let bots fire the onTick event (ms)
+      UpdateServerStatusTime = TWENTY_SECONDS,    // How often we update our status on the master server (ms)
+      CheckServerStatusTime = FIVE_SECONDS,       // If it did not send updates, recheck after ms
+      BotControlTickInterval = 33,                // Interval for how often should we let bots fire the onTick event (ms)
    };
 
    bool mTestMode;                        // True if being tested from editor
@@ -54,19 +57,20 @@ private:
    SafePtr<GameConnection> mShutdownOriginator;   // Who started the shutdown?
 
    bool mDedicated;
-
    S32 mLevelLoadIndex;                   // For keeping track of where we are in the level loading process.  NOT CURRENT LEVEL IN PLAY!
 
-   SafePtr<GameConnection> mSuspendor;            // Player requesting suspension if game suspended by request
+   SafePtr<GameConnection> mSuspendor;    // Player requesting suspension if game suspended by request
    Timer mTimeToSuspend;
 public:
-   static const U32 PreSuspendSettlingPeriod = 2000;
+   static const U32 PreSuspendSettlingPeriod = TWO_SECONDS;
 private:
 
    // For simulating CPU stutter
    Timer mStutterTimer;                   
    Timer mStutterSleepTimer;
    U32 mAccumulatedSleepTime;
+
+   RobotManager mRobotManager;
 
    Vector<LuaLevelGenerator *> mLevelGens;
    Vector<LuaLevelGenerator *> mLevelGenDeleteList;
@@ -94,8 +98,6 @@ private:
    RefPtr<NetEvent> mSendLevelInfoDelayNetInfo;
    Timer mSendLevelInfoDelayCount;
 
-   void clearBotMoves();
-
    Timer botControlTickTimer;
 
    LuaGameInfo *mGameInfo;
@@ -119,8 +121,8 @@ public:
    };
 
    // These are public so this can be accessed by tests
-   static const U32 MaxTimeDelta = 2000;     
-   static const U32 LevelSwitchTime = 5000;
+   static const U32 MaxTimeDelta = TWO_SECONDS;     
+   static const U32 LevelSwitchTime = FIVE_SECONDS;
 
    U32 mVoteTimer;
    VoteType mVoteType;
@@ -164,9 +166,29 @@ public:
 
    void onConnectedToMaster();
 
+   /////
+   // Bot related
    void startAllBots();                            // Loop through all our bots and run thier main() functions
-   void addBot(Robot *robot);
+   
    S32 getBotCount() const;
+
+   void balanceTeams();
+
+   Robot *getBot(S32 index);
+   string addBot(const Vector<const char *> &args);
+   void addBot(Robot *robot);
+   void removeBot(Robot *robot);
+   void deleteBot(const StringTableEntry &name);
+   void deleteBot(S32 i);
+   void deleteBotFromTeam(S32 teamIndex);
+   void deleteAllBots();
+   Robot *findBot(const char *id);
+   void moreBots();
+   void fewerBots();
+   void kickSingleBotFromLargestTeamWithBots();
+
+   /////
+
 
    StringTableEntry getLevelNameFromIndex(S32 indx);
    S32 getAbsoluteLevelIndex(S32 indx);            // Figures out the level index if the input is a relative index

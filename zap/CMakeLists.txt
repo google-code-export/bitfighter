@@ -79,6 +79,7 @@ set(SHARED_SOURCES
 	Rect.cpp
 	retrieveGame.cpp
 	robot.cpp
+	RobotManager.cpp
 	ScreenInfo.cpp
 	ServerGame.cpp
 	Settings.cpp
@@ -350,6 +351,7 @@ set(TEST_SOURCES
 	${CMAKE_SOURCE_DIR}/bitfighter_test/TestPolylineGeometry.cpp
 	${CMAKE_SOURCE_DIR}/bitfighter_test/TestRenderUtils.cpp
 	${CMAKE_SOURCE_DIR}/bitfighter_test/TestRobot.cpp
+	${CMAKE_SOURCE_DIR}/bitfighter_test/TestRobotManager.cpp
 	${CMAKE_SOURCE_DIR}/bitfighter_test/TestServerGame.cpp
 	${CMAKE_SOURCE_DIR}/bitfighter_test/TestSettings.cpp
 	${CMAKE_SOURCE_DIR}/bitfighter_test/TestShip.cpp

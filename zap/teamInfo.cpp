@@ -106,7 +106,6 @@ void AbstractTeam::alterBlue(F32 amt)
 }
 
 
-
 ////////////////////////////////////////
 ////////////////////////////////////////
 
@@ -194,6 +193,7 @@ S32 Team::getPlayerCount() const
 
 S32 Team::getBotCount() const
 {
+   TNLAssert(mBotCount >= 0, "No on expects the Spanish Inquisition!");
    return mBotCount;
 }
 
