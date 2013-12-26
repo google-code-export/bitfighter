@@ -58,17 +58,17 @@ BindingSet::~BindingSet()
 }
 
 
-InputCode BindingSet::getBinding(InputCodeManager::BindingNameEnum bindingName) const
+InputCode BindingSet::getBinding(BindingNameEnum bindingName) const
 {
    // Produces a block of code that looks like this:
    // if(false) { }
-   // else if(bindingName == InputCodeManager::BINDING_SELWEAP1) return inputSELWEAP1;
+   // else if(bindingName == BINDING_SELWEAP1) return inputSELWEAP1;
    // else if...
    // TNLAssert(false);
    // return KEY_NONE;
 
     if(false) { }     // Dummy conditional to let us use else if below
-#define BINDING(enumName, b, c, memberName, e, f) else if(bindingName == InputCodeManager::enumName) return memberName;
+#define BINDING(enumName, b, c, memberName, e, f) else if(bindingName == enumName) return memberName;
     BINDING_TABLE
 #undef BINDING
 
@@ -78,16 +78,16 @@ InputCode BindingSet::getBinding(InputCodeManager::BindingNameEnum bindingName) 
 }
 
 
-void BindingSet::setBinding(InputCodeManager::BindingNameEnum bindingName, InputCode key)
+void BindingSet::setBinding(BindingNameEnum bindingName, InputCode key)
 {
    // Produces a block of code that looks like this:
    // if(false) { }
-   // else if(bindingName == InputCodeManager::BINDING_SELWEAP1) inputSELWEAP1 = key;
+   // else if(bindingName == BINDING_SELWEAP1) inputSELWEAP1 = key;
    // else if...
    // else TNLAssert(false);
 
    if(false) { }     // Dummy conditional to let us use else if below
-#define BINDING(enumName, b, c, memberName, e, f) else if(bindingName == InputCodeManager::enumName) memberName = key;
+#define BINDING(enumName, b, c, memberName, e, f) else if(bindingName == enumName) memberName = key;
     BINDING_TABLE
 #undef BINDING
    else 
@@ -114,12 +114,83 @@ bool BindingSet::hasKeypad()
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-// Generates an array of bindingNames
+// Generates an array of bindingNames for the game
 static const string BindingNames[] = {
 #define BINDING(a, bindingName, c, d, e, f) bindingName, 
     BINDING_TABLE
 #undef BINDING
 };
+
+
+// Generates an array of bindingNames for the editor
+static const string EditorBindingNames[] = {
+#define EDITOR_BINDING(a, bindingName, c, d) bindingName,
+    EDITOR_BINDING_TABLE
+#undef EDITOR_BINDING
+};
+
+
+////////////////////////////////////////
+////////////////////////////////////////
+
+// Constructor
+EditorBindingSet::EditorBindingSet()
+{
+   // These bindings will be overwritten by config::setDefaultEditorKeyBindings()...
+   // we provide default values here just for the sake of sanity.  And testing.
+   // Sanity and testing.  And just because.  Sanity, testing, and just because.
+   // Also remember that we have multiple BindingSets (one for keyboard, one for
+   // joystick, for example), so these defaults may not even apply in all cases.
+
+
+   // Generates a block of code that looks like this:
+   // FlipItemHorizontal = "H";
+   // PasteSelection = "Ctrl+V";
+   // ...
+
+#define EDITOR_BINDING(a, b, memberName, defaultKeyboardBinding) memberName = defaultKeyboardBinding;
+    EDITOR_BINDING_TABLE
+#undef EDITOR_BINDING
+}
+
+
+EditorBindingSet::~EditorBindingSet()
+{
+   // Do nothing
+}
+
+
+string EditorBindingSet::getEditorBinding(EditorBindingNameEnum bindingName) const
+{
+   // Produces a block of code that looks like this:
+   // if(editorBindingName == BINDING_FLIP_HORIZ) return keyFlipItemHoriz;
+   // if...
+   // TNLAssert(false);
+   // return "";
+
+#define EDITOR_BINDING(enumName, b, memberName, d) if(bindingName == enumName) return memberName;
+   EDITOR_BINDING_TABLE
+#undef EDITOR_BINDING
+   // Just in case:
+   TNLAssert(false, "Invalid key binding!");
+   return "";
+}
+
+
+void EditorBindingSet::setEditorBinding(EditorBindingNameEnum bindingName, const string &key)
+{
+     // Produces a block of code that looks like this:
+     // if(false) { }
+     // else if(bindingName == BINDING_FLIP_HORIZ) keyFlipItemHoriz = key;
+     // else if...
+     // else TNLAssert(false);
+     if(false) { }     // Dummy conditional to let us use else if below
+#define EDITOR_BINDING(enumName, b, memberName, d) else if(bindingName == enumName) memberName = key;
+    EDITOR_BINDING_TABLE
+#undef EDITOR_BINDING
+   else 
+      TNLAssert(false, "Invalid key binding!");
+}
 
 
 ////////////////////////////////////////
@@ -136,9 +207,6 @@ InputCodeManager::InputCodeManager()
 
    // Set the first to be our current one
    mCurrentBindingSet = &mBindingSets[0];     
-
-   // Check to make sure we haven't fouled things up somehow
-   TNLAssert(ARRAYSIZE(BindingNames) == BINDING_DEFINEABLE_KEY_COUNT, "Problem somewhere!");
 }
 
 
@@ -152,7 +220,7 @@ InputCodeManager::~InputCodeManager()
 // Initialize state of keys... assume none are depressed, or even sad
 void InputCodeManager::resetStates()
 {
-   for(int i = 0; i < MAX_INPUT_CODES; i++)
+   for(S32 i = 0; i < MAX_INPUT_CODES; i++)
       inputCodeIsDown[i] = false;
 }
 
@@ -182,7 +250,7 @@ bool InputCodeManager::getState(InputCode inputCode)
 
 
 static const InputCode modifiers[] = { KEY_CTRL, KEY_ALT, KEY_SHIFT, KEY_META, KEY_SUPER };
-
+static const char InputStringJoiner = '+';
 
 // At any given time, for any combination of keys being pressed, there will be an official "input string" that looks a bit like [Ctrl+T] or whatever.  
 // This may be different than the keys actually being pressed.  For example, if the A and B keys are down, the inputString will be [A].
@@ -213,11 +281,10 @@ string InputCodeManager::getCurrentInputString(InputCode inputCode)
       return "";
       
    string inputString = "";
-   string joiner = "+";
 
    for(S32 i = 0; i < S32(ARRAYSIZE(modifiers)); i++)
       if(getState(modifiers[i]))
-         inputString += inputCodeToString(modifiers[i]) + joiner;
+         inputString += inputCodeToString(modifiers[i]) + InputStringJoiner;
    
    inputString += inputCodeToString(baseKey);
    return inputString;
@@ -275,6 +342,86 @@ bool InputCodeManager::checkModifier(InputCode mod1, InputCode mod2, InputCode m
       }
 
    return foundCount == 3;
+}
+
+
+// Returns "" if inputString is unparsable
+string InputCodeManager::normalizeInputString(const string &inputString)
+{
+   static const string INVALID = "";
+   Vector<string> words;
+   parseString(inputString, words, InputStringJoiner);
+
+   // Modifiers will be first words... sort them, normalize capitalization, get them organized
+   bool hasModifier[ARRAYSIZE(modifiers)];
+   for(S32 i = 0; i < ARRAYSIZE(modifiers); i++)
+      hasModifier[i] = false;
+
+   for(S32 i = 0; i < words.size() - 1; i++)
+   {
+      InputCode inputCode = stringToInputCode(words[i].c_str());
+      if(inputCode == KEY_UNKNOWN)     // Encountered something unexpected
+         return INVALID;
+
+      bool found = false;
+      for(S32 i = 0; i < ARRAYSIZE(modifiers); i++)
+         if(inputCode == modifiers[i])
+         {
+            hasModifier[i] = true;
+            found = true;
+            break;
+         }
+
+      if(!found)     // InputCode we found was not a modifier, but was in a modifier position
+         return INVALID;
+   }
+
+   // Now examine base key itself
+   InputCode baseCode = stringToInputCode(words.last().c_str());
+   if(baseCode == KEY_UNKNOWN)     // Unknown base key
+      return INVALID;
+
+   // baseCode cannot be a modifier -- "Ctrl" is not a valid inputString
+   for(S32 i = 0; i < ARRAYSIZE(modifiers); i++)
+      if(baseCode == modifiers[i])
+         return INVALID;
+
+   string normalizedInputString = "";
+   for(S32 i = 0; i < ARRAYSIZE(modifiers); i++)
+      if(hasModifier[i])
+         normalizedInputString += string(inputCodeToString(modifiers[i])) + InputStringJoiner;
+
+   normalizedInputString += string(inputCodeToString(baseCode));
+   return normalizedInputString;
+}
+
+
+// A valid input string will consist of one or modifiers, seperated by "+", followed by a valid inputCode.
+// Modifier order and case are significant!!  Use normalizeInputString to get case and modifiers fixed up.
+bool InputCodeManager::isValidInputString(const string &inputString)
+{
+   Vector<string> words;
+   parseString(inputString, words, InputStringJoiner);
+
+   S32 startMod = 0;    
+
+   // Make sure all but the last word are modifiers
+   for(S32 i = 0; i < words.size() - 1; i++)
+   {
+      bool found = false;
+      for(S32 j = startMod; j < S32(ARRAYSIZE(modifiers)); j++)
+         if(words[i] == inputCodeToString(modifiers[j]))
+         {
+            found = true;
+            startMod = j + 1;     // Helps ensure modifiers are in the correct order
+            break;
+         }
+
+         if(!found)
+            return false;
+   }
+
+   return stringToInputCode(words.last().c_str()) != KEY_UNKNOWN;
 }
 
 
@@ -453,6 +600,12 @@ InputCode InputCodeManager::getBinding(BindingNameEnum bindingName, InputMode in
 }
 
 
+string InputCodeManager::getEditorBinding(EditorBindingNameEnum bindingName) const
+{
+   return mEditorBindingSet.getEditorBinding(bindingName);
+}
+
+
 void InputCodeManager::setBinding(BindingNameEnum bindingName, InputCode key)
 {
    setBinding(bindingName, mInputMode, key);
@@ -476,6 +629,12 @@ void InputCodeManager::setBinding(BindingNameEnum bindingName, InputMode inputMo
       else
          mBindingsHaveKeypadEntry = checkIfBindingsHaveKeypad();
    }
+}
+
+
+void InputCodeManager::setEditorBinding(EditorBindingNameEnum bindingName, const string &inputString)
+{
+	mEditorBindingSet.setEditorBinding(bindingName, inputString);
 }
 
 
@@ -885,7 +1044,6 @@ InputCode InputCodeManager::sdlKeyToInputCode(SDL_Keycode key)
 		   return KEY_KEYPAD8;
 	   case SDLK_KP9:
 		   return KEY_KEYPAD9;
-
 	   case SDLK_KP_PERIOD:
 		   return KEY_KEYPAD_PERIOD;
 	   case SDLK_KP_DIVIDE:
@@ -1706,15 +1864,23 @@ string InputCodeManager::getBindingName(BindingNameEnum bindingName)
    TNLAssert(index >= 0 && index < ARRAYSIZE(BindingNames), "Invalid value for bindingName!");
 
    return BindingNames[index];
+}
 
-   return "";
+
+string InputCodeManager::getEditorBindingName(EditorBindingNameEnum editorBindingName)
+{
+   U32 editorIndex = (U32)editorBindingName;
+
+   TNLAssert(editorIndex >= 0 && editorIndex < ARRAYSIZE(EditorBindingNames), "Invalid value for bindingName!");
+
+   return EditorBindingNames[editorIndex];
 }
 
 
 // i.e. return KEY_1 when passed "SelWeapon1"
 InputCode InputCodeManager::getKeyBoundToBindingCodeName(const string &name) const
 {
-   // Linear search not at all efficient, but this will be called very infrequently, in non-performance sensitive area
+   // Linear search is not at all efficient, but this will be called very infrequently, in non-performance sensitive area
    // Note that for some reason the { }s are needed below... without them this code does not work right.
    for(U32 i = 0; i < ARRAYSIZE(BindingNames); i++)
    {
@@ -1723,6 +1889,21 @@ InputCode InputCodeManager::getKeyBoundToBindingCodeName(const string &name) con
    }
 
    return KEY_UNKNOWN;
+}
+
+
+// i.e. return "H" when passed "FlipItemHorizontal"
+string InputCodeManager::getEditorKeyBoundToBindingCodeName(const string &name) const
+{
+   // Linear search is of O(n) speed and therefore is not really efficient, but this will be called very infrequently,
+   // Note that for some reason the { }s are needed below... without them this code does not work right.
+   for(U32 i = 0; i < ARRAYSIZE(EditorBindingNames); i++)
+   {
+      if(caseInsensitiveStringCompare(EditorBindingNames[i], name))
+         return this->getEditorBinding(EditorBindingNameEnum(i));
+   }
+
+   return "";
 }
 
 
@@ -1758,9 +1939,9 @@ void InputCodeManager::initializeKeyNames()
    keyNames[S32(KEY_G)]               = "G";                
    keyNames[S32(KEY_H)]               = "H";                
    keyNames[S32(KEY_I)]               = "I";                
-   keyNames[S32(KEY_J)]               = "J";                
-   keyNames[S32(KEY_K)]               = "K";                
-   keyNames[S32(KEY_L)]               = "L";                
+   keyNames[S32(KEY_J)]               = "J";
+   keyNames[S32(KEY_K)]               = "K";
+   keyNames[S32(KEY_L)]               = "L";
    keyNames[S32(KEY_M)]               = "M";                
    keyNames[S32(KEY_N)]               = "N";                
    keyNames[S32(KEY_O)]               = "O";                
@@ -1887,13 +2068,11 @@ void InputCodeManager::initializeKeyNames()
    keyNames[S32(KEY_KEYPAD_ENTER)]    = "Keypad Enter";     
    keyNames[S32(KEY_LESS)]            = "Less";    
 
-
    modifierNames.push_back(keyNames[S32(KEY_SHIFT)]);            
    modifierNames.push_back(keyNames[S32(KEY_ALT)]);            
    modifierNames.push_back(keyNames[S32(KEY_CTRL)]);            
    modifierNames.push_back(keyNames[S32(KEY_META)]);            
    modifierNames.push_back(keyNames[S32(KEY_SUPER)]);  
-
 }
 
 
