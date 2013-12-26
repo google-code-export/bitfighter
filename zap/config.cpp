@@ -7,6 +7,7 @@
 
 #include "GameSettings.h"
 #include "IniFile.h"
+#include "InputCode.h"
 #include "version.h"
 #include "BanList.h"
 #include "Colors.h"
@@ -345,8 +346,8 @@ static void writePluginBindings(CIniFile *ini, IniSettings *iniSettings)
       addComment(" Plugin1=Key1|ScriptName.lua|Script help string");
       addComment(" ... etc ...");
       addComment(" The names of the presets are not important, and can be changed. Key combos follow the general form of");
-      addComment(" Ctrl+Alt+Shift+Meta+Super+key (omit unneeded modifiers, you can get correct Input Strings from the ");
-      addComment(" diagnostics screen).  Scripts should be stored in the plugins folder  in the install directory. Please")
+      addComment(" Ctrl+Alt+Shift+Meta+Super+key (omit unneeded modifiers, you can get correct Input Strings from the");
+      addComment(" diagnostics screen).  Scripts should be stored in the plugins folder in the install directory. Please")
       addComment(" see the Bitfighter wiki for details.");
       addComment("----------------");
    }
@@ -632,19 +633,19 @@ static void loadHostConfiguration(CIniFile *ini, IniSettings *iniSettings)
    iniSettings->hostaddr  = ini->GetValue(section, "ServerAddress", iniSettings->hostaddr);
    iniSettings->hostdescr = ini->GetValue(section, "ServerDescription", iniSettings->hostdescr);
 
-   iniSettings->serverPassword      = ini->GetValue  (section, "ServerPassword", iniSettings->serverPassword);
-   iniSettings->ownerPassword       = ini->GetValue  (section, "OwnerPassword", iniSettings->ownerPassword);
-   iniSettings->adminPassword       = ini->GetValue  (section, "AdminPassword", iniSettings->adminPassword);
-   iniSettings->levelChangePassword = ini->GetValue  (section, "LevelChangePassword", iniSettings->levelChangePassword);
-   iniSettings->levelDir            = ini->GetValue  (section, "LevelDir", iniSettings->levelDir);
-   iniSettings->maxPlayers          = ini->GetValueI (section, "MaxPlayers", iniSettings->maxPlayers);
-   iniSettings->maxBots             = ini->GetValueI (section, "MaxBots", iniSettings->maxBots);
-   iniSettings->playWithBots        = ini->GetValueYN(section, "AddRobots", iniSettings->playWithBots);
-   iniSettings->minBalancedPlayers  = ini->GetValueI (section, "MinBalancedPlayers", iniSettings->minBalancedPlayers);
-   iniSettings->botsAlwaysBalanceTeams   = ini->GetValueYN(section, "BotsAlwaysBalanceTeams", iniSettings->botsAlwaysBalanceTeams);
-   iniSettings->enableServerVoiceChat = ini->GetValueYN (section, "EnableServerVoiceChat", iniSettings->enableServerVoiceChat);
+   iniSettings->serverPassword         = ini->GetValue  (section, "ServerPassword", iniSettings->serverPassword);
+   iniSettings->ownerPassword          = ini->GetValue  (section, "OwnerPassword", iniSettings->ownerPassword);
+   iniSettings->adminPassword          = ini->GetValue  (section, "AdminPassword", iniSettings->adminPassword);
+   iniSettings->levelChangePassword    = ini->GetValue  (section, "LevelChangePassword", iniSettings->levelChangePassword);
+   iniSettings->levelDir               = ini->GetValue  (section, "LevelDir", iniSettings->levelDir);
+   iniSettings->maxPlayers             = ini->GetValueI (section, "MaxPlayers", iniSettings->maxPlayers);
+   iniSettings->maxBots                = ini->GetValueI (section, "MaxBots", iniSettings->maxBots);
+   iniSettings->playWithBots           = ini->GetValueYN(section, "AddRobots", iniSettings->playWithBots);
+   iniSettings->minBalancedPlayers     = ini->GetValueI (section, "MinBalancedPlayers", iniSettings->minBalancedPlayers);
+   iniSettings->botsAlwaysBalanceTeams = ini->GetValueYN(section, "BotsAlwaysBalanceTeams", iniSettings->botsAlwaysBalanceTeams);
+   iniSettings->enableServerVoiceChat  = ini->GetValueYN (section, "EnableServerVoiceChat", iniSettings->enableServerVoiceChat);
 
-   iniSettings->alertsVolLevel = (float) ini->GetValueI(section, "AlertsVolume", (S32) (iniSettings->alertsVolLevel * 10)) / 10.0f;
+   iniSettings->alertsVolLevel       = (F32) ini->GetValueI(section, "AlertsVolume", (S32) (iniSettings->alertsVolLevel * 10)) / 10.0f;
    iniSettings->allowGetMap          = ini->GetValueYN (section, "AllowGetMap", iniSettings->allowGetMap);
    iniSettings->allowDataConnections = ini->GetValueYN (section, "AllowDataConnections", iniSettings->allowDataConnections);
 
@@ -709,10 +710,46 @@ static InputCode getInputCode(CIniFile *ini, const string &section, const string
 }
 
 
+// Returns a string like "Ctrl+L"
+static string getInputString(CIniFile *ini, const string &section, const string &key, const string &defaultValue)
+{
+   string inputStringFromIni = ini->GetValue(section, key, defaultValue);
+   string normalizedInputString = InputCodeManager::normalizeInputString(inputStringFromIni);
+
+   // Check if inputString is valid -- we could get passed any ol' garbage that got put in the INI file
+   if(InputCodeManager::isValidInputString(normalizedInputString))
+   {
+      // If normalized binding is different than what is in the INI file, replace the INI version with the good version
+      if(normalizedInputString != inputStringFromIni)
+         ini->SetValue(section, key, normalizedInputString);
+
+      return normalizedInputString;
+   }
+
+   // We don't understand what is in the INI file... print a warning, and fall back to the default
+   logprintf(LogConsumer::ConfigurationError, "Invalid key binding in INI section [%s]: %s=%s", 
+             section.c_str(), key.c_str(), inputStringFromIni.c_str());
+   return defaultValue;
+}
+
+
+// Only called while loading keys from the INI
+void setDefaultEditorKeyBindings(CIniFile *ini, InputCodeManager *inputCodeManager)
+{
+#define EDITOR_BINDING(editorEnumVal, b, c, defaultEditorKeyboardBinding)                                       \
+      inputCodeManager->setEditorBinding(editorEnumVal,                                                         \
+                                          getInputString(ini, "EditorKeyboardKeyBindings",                      \
+                                                         InputCodeManager::getEditorBindingName(editorEnumVal), \
+                                                         defaultEditorKeyboardBinding)); 
+    EDITOR_BINDING_TABLE
+#undef EDITOR_BINDING
+}
+
 
 // Remember: If you change any of these defaults, you'll need to rebuild your INI file to see the results!
 static void setDefaultKeyBindings(CIniFile *ini, InputCodeManager *inputCodeManager)
 {                                
+   ///// BINDING_TABLE
    ///// KEYBOARD
 
    // Generates a block of code that looks like this:
@@ -723,8 +760,8 @@ static void setDefaultKeyBindings(CIniFile *ini, InputCodeManager *inputCodeMana
 
 #define BINDING(enumVal, b, savedInIni, d, defaultKeyboardBinding, f)                                             \
       if(savedInIni)                                                                                              \
-         inputCodeManager->setBinding(InputCodeManager::enumVal, InputModeKeyboard,                               \
-            getInputCode(ini, "KeyboardKeyBindings", InputCodeManager::getBindingName(InputCodeManager::enumVal), \
+         inputCodeManager->setBinding(enumVal, InputModeKeyboard,                            						   \
+            getInputCode(ini, "KeyboardKeyBindings", InputCodeManager::getBindingName(enumVal), 						\
                          defaultKeyboardBinding));
     BINDING_TABLE
 #undef BINDING
@@ -733,14 +770,13 @@ static void setDefaultKeyBindings(CIniFile *ini, InputCodeManager *inputCodeMana
    ///// JOYSTICK
 
    // Basically the same, except that we use the default joystick binding column... generated code will look pretty much the same
-#define BINDING(enumVal, b, savedInIni, d, e, defaultJoystickBinding)                                             \
-      if(savedInIni)                                                                                              \
-         inputCodeManager->setBinding(InputCodeManager::enumVal, InputModeJoystick,                               \
-            getInputCode(ini, "JoystickKeyBindings", InputCodeManager::getBindingName(InputCodeManager::enumVal), \
+#define BINDING(enumVal, b, savedInIni, d, e, defaultJoystickBinding)                           \
+      if(savedInIni)                                                                            \
+         inputCodeManager->setBinding(enumVal, InputModeJoystick,                               \
+            getInputCode(ini, "JoystickKeyBindings", InputCodeManager::getBindingName(enumVal), \
                          defaultJoystickBinding));
     BINDING_TABLE
 #undef BINDING
-
 
    // Keys where savedInIni is false are not user-defineable at the moment, mostly because we want consistency
    // throughout the game, and that would require some real constraints on what keys users could choose.
@@ -750,7 +786,6 @@ static void setDefaultKeyBindings(CIniFile *ini, InputCodeManager *inputCodeMana
    // keyDIAG = KEY_F7;
 }
 
-
 static void writeKeyBindings(CIniFile *ini, InputCodeManager *inputCodeManager, const string &section, InputMode mode)
 {
    // Top line evaluates to:
@@ -759,18 +794,37 @@ static void writeKeyBindings(CIniFile *ini, InputCodeManager *inputCodeManager, 
    //                           InputCodeManager::inputCodeToString(inputCodeManager->getBinding(InputCodeManager::BINDING_SELWEAP1, mode)));
 
 #define BINDING(enumVal, b, savedInIni, d, e, f)  \
-      if(savedInIni)                                                                                                                \
-         ini->SetValue(section, InputCodeManager::getBindingName(InputCodeManager::enumVal),                                        \
-                                InputCodeManager::inputCodeToString(inputCodeManager->getBinding(InputCodeManager::enumVal, mode))); 
+      if(savedInIni)                                                                                               \
+         ini->SetValue(section, InputCodeManager::getBindingName(enumVal),                                         \
+                                InputCodeManager::inputCodeToString(inputCodeManager->getBinding(enumVal, mode))); 
     BINDING_TABLE
 #undef BINDING
 }
 
+static void writeEditorKeyBindings(CIniFile *ini, InputCodeManager *inputCodeManager, const string &section)
+{
+   string key;
+
+   // Expands to:
+   // key = InputCodeManager::getEditorBindingName(FlipItemHorizontal); 
+   // if(!ini->hasKey(section, key))
+   //   ini->SetValue(section, key, inputCodeManager->getEditorBinding(editorEnumVal));
+
+   // Don't overwrite existing bindings for now... there is no way to modify them in-game, and if the user has
+   // specified an invalid binding, leaving it wrong will make it easier for them to find and fix the error
+#define EDITOR_BINDING(editorEnumVal, b, c, d)  \
+      key = InputCodeManager::getEditorBindingName(editorEnumVal); \
+      if(!ini->hasKey(section, key))                               \
+         ini->SetValue(section, key, inputCodeManager->getEditorBinding(editorEnumVal));
+    EDITOR_BINDING_TABLE
+#undef EDITOR_BINDING
+}
 
 static void writeKeyBindings(CIniFile *ini, InputCodeManager *inputCodeManager)
 {
    writeKeyBindings(ini, inputCodeManager, "KeyboardKeyBindings", InputModeKeyboard);
    writeKeyBindings(ini, inputCodeManager, "JoystickKeyBindings", InputModeJoystick);
+   writeEditorKeyBindings(ini, inputCodeManager, "EditorKeyboardKeyBindings");
 }
 
 
@@ -787,7 +841,7 @@ static void writeKeyBindings(CIniFile *ini, InputCodeManager *inputCodeManager)
    Message=Our flag is not in the base!
    MessageType=Team     -or-     MessageType=Global
 
-   == or, a top tiered message might look like this ==
+   == or, a top-tiered message might look like this ==
 
    [QuickChat_Message1]
    Key=A
@@ -818,7 +872,7 @@ static void loadQuickChatMessages(CIniFile *ini)
 
    messages.sort(alphaSort);
 
-   for(S32 i = messages.size()-1; i >= 0; i--)
+   for(S32 i = messages.size() - 1; i >= 0; i--)
    {
       QuickChatNode node;
       node.depth = 1;   // This is a top-level message node
@@ -1411,6 +1465,8 @@ void loadSettingsFromINI(CIniFile *ini, GameSettings *settings)
    loadTestSettings(ini, iniSettings);
 
    setDefaultKeyBindings(ini, inputCodeManager);
+   setDefaultEditorKeyBindings(ini, inputCodeManager);
+
    loadForeignServerInfo(ini, iniSettings);     // Info about other servers
    loadLevels(ini, iniSettings);                // Read levels, if there are any
    loadLevelSkipList(ini, settings);            // Read level skipList, if there are any
@@ -2271,5 +2327,3 @@ void CmdLineSettings::init()
 
 
 };
-
-
