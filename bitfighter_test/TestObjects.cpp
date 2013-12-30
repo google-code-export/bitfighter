@@ -147,6 +147,7 @@ TEST_F(ObjectTest, GhostingSanity)
          else
             bfobj->GeomObject::setGeom(geom);
          bfobj->addToGame(serverGame, serverGame->getGameObjDatabase());
+
          ghostingRecords[i].server = true;
       }
       else
