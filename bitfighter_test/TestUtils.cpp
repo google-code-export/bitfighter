@@ -107,7 +107,8 @@ GamePair::~GamePair()
    const Vector<ClientGame *> *clientGames = GameManager::getClientGames();
 
    for(S32 i = 0; i < clientGames->size(); i++)
-      clientGames->get(i)->getConnectionToServer()->disconnect(NetConnection::ReasonSelfDisconnect, "");
+      if(clientGames->get(i)->getConnectionToServer())
+         clientGames->get(i)->getConnectionToServer()->disconnect(NetConnection::ReasonSelfDisconnect, "");
 
    idle(10, 5);
 
@@ -127,6 +128,7 @@ void GamePair::idle(U32 timeDelta, U32 cycles)
 
 void GamePair::addClient(const string &name, S32 team)
 {
+   ServerGame *server = GameManager::getServerGame();
    ClientGame *client = newClientGame(server->getSettingsPtr());
    GameManager::addClientGame(client);
 
@@ -134,13 +136,10 @@ void GamePair::addClient(const string &name, S32 team)
 
    client->joinLocalGame(server->getNetInterface());
 
-
    // We need to turn off TNL's bandwidth controls so our tests can run faster.  FASTER!!@!
    client->getConnectionToServer()->useZeroLatencyForTesting();
 
-   clients.push_back(client);
-
-   ClientInfo *clientInfo = server->getClientInfo(server->getClientInfos()->size() - 1);
+   ClientInfo *clientInfo = server->findClientInfo(name.c_str());
 
    if(!clientInfo->isRobot())
       clientInfo->getConnection()->useZeroLatencyForTesting();
@@ -148,8 +147,14 @@ void GamePair::addClient(const string &name, S32 team)
    if(team != NO_TEAM)
    {
       TNLAssert(team < server->getTeamCount(), "Bad team!");
-      clientInfo->setTeamIndex(team);
+      server->getGameType()->changeClientTeam(clientInfo, team);
    }
+}
+
+
+ClientGame *GamePair::getClient(S32 index)
+{
+   return GameManager::getClientGames()->get(0);
 }
 
 
@@ -168,12 +173,28 @@ void GamePair::removeClient(S32 index)
 
 void GamePair::removeClient(const string &name)
 {
-   // Do something witty here
+   S32 index = -1;
+
+   const Vector<ClientGame *> *clients = GameManager::getClientGames();
+
+   for(S32 i = 0; i < clients->size(); i++)
+   {
+      if(clients->get(i)->getClientInfo() && string(clients->get(i)->getClientInfo()->getName().getString()) == name)
+      {
+         index = i;
+         break;
+      }
+   }
+
+   TNLAssert(index >= 0, "Could not find specified player!");
+   removeClient(index);
 }
 
 
 void GamePair::addBotClient(const string &name, S32 team)
 {
+   ServerGame *server = GameManager::getServerGame();
+
    server->addBot(Vector<const char *>());
    // Get most recently added clientInfo
    ClientInfo *clientInfo = server->getClientInfo(server->getClientInfos()->size() - 1);
