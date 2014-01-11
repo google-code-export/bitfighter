@@ -18,15 +18,13 @@ using namespace DbWriter;
 using namespace std;
 
 
-// No GameJolt for Windows, or when phpbb is disabled -- can also disable GameJolt in the INI file
-#if defined VERIFY_PHPBB3 && !defined TNL_OS_WIN32    
-#  define GAME_JOLT
-#endif
-
 // Uncomment to test compiling on Windows
 //#define GAME_JOLT
 //#define fork() false;
 //#define execl() 
+//#ifndef TNL_OS_WIN32
+//#  error -- need to comment this block out to build!
+//#endif
 
 
 namespace GameJolt
