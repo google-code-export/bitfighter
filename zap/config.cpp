@@ -325,7 +325,7 @@ static void writeLoadoutPresets(CIniFile *ini, GameSettings *settings)
 
    for(S32 i = 0; i < GameSettings::LoadoutPresetCount; i++)
    {
-      string presetStr = settings->getLoadoutPreset(i).toString();
+      string presetStr = settings->getLoadoutPreset(i).toString(true);
 
       if(presetStr != "")
          ini->SetValue(section, "Preset" + itos(i + 1), presetStr);
@@ -380,7 +380,7 @@ static void writeConnectionsInfo(CIniFile *ini, IniSettings *iniSettings)
    }
 
    // Creates comma delimited list
-   ini->SetValue(section, "AlwaysPingList", listToString(iniSettings->alwaysPingList, ','));
+   ini->SetValue(section, "AlwaysPingList", listToString(iniSettings->alwaysPingList, ","));
 }
 
 
