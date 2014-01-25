@@ -3,13 +3,14 @@
 // See LICENSE.txt for full copyright information
 //------------------------------------------------------------------------------
 
-#include "textItem.h"
+#include "TextItem.h"
 
 #include "game.h"
 #include "ship.h"
 #include "stringUtils.h"
+
 #ifndef ZAP_DEDICATED
-#include "ClientGame.h"
+#  include "ClientGame.h"
 #endif
 
 #include "gameObjectRender.h"    // For renderTextItem()
