@@ -65,25 +65,24 @@ static void prevButtonClickedCallback(ClientGame *game)
 
 
 // Constructor
-QueryServersUserInterface::ServerRef::ServerRef()
+QueryServersUserInterface::ServerRef::ServerRef(State initialState)
 {
    pingTimedOut = false;
    everGotQueryResponse = false;
    passwordRequired = false;
    test = false;
    dedicated = false;
-   isFromMaster = false;
+   isFromMaster = false;      
    sendCount = 0;
    pingTime = 9999;
-   playerCount = -1;
-   maxPlayers = -1;
-   botCount = -1;
+   setPlayerBotMax(-1, 01, -1);
 
-   id = 0;
+   id = getNextId();
    identityToken = 0;
    lastSendTime = 0;
-   state = Start;
+   state = initialState;
 }
+
 
 // Destructor
 QueryServersUserInterface::ServerRef::~ServerRef()
@@ -91,6 +90,33 @@ QueryServersUserInterface::ServerRef::~ServerRef()
    // Do nothing
 }
 
+
+void QueryServersUserInterface::ServerRef::setNameDescr(const string &name, const string &descr, const Color &color)
+{
+   this->serverName = name.substr(0, MaxServerNameLen);
+   this->serverDescr = descr.substr(0, MaxServerDescrLen);
+   this->msgColor = color;
+}
+
+
+void QueryServersUserInterface::ServerRef::setPlayerBotMax(U32 playerCount, U32 botCount, U32 maxPlayers)
+{
+   this->playerCount = playerCount;
+   this->maxPlayers = maxPlayers;
+   this->botCount = botCount;
+}
+
+
+U32 QueryServersUserInterface::ServerRef::getNextId()
+{
+   static U32 nextId = 0;
+
+   nextId++;
+   return nextId;
+}
+
+////////////////////////////////////////
+////////////////////////////////////////
 
 // Constructor
 QueryServersUserInterface::ColumnInfo::ColumnInfo(const char *nm, U32 xs)
@@ -107,10 +133,15 @@ QueryServersUserInterface::ColumnInfo::~ColumnInfo()
 }
 
 
+////////////////////////////////////////
+////////////////////////////////////////
+
 // Constructor
-QueryServersUserInterface::QueryServersUserInterface(ClientGame *game) : UserInterface(game), ChatParent(game)
+QueryServersUserInterface::QueryServersUserInterface(ClientGame *game) : 
+   UserInterface(game), 
+   ChatParent(game),
+   mLastSelectedServer(ServerRef::Start)
 {
-   mLastUsedServerId = 0;
    mSortColumn = getGame()->getSettings()->getQueryServerSortColumn();
    mSortAscending = getGame()->getSettings()->getQueryServerSortAscending();
    mLastSortColumn = mSortColumn;
@@ -187,18 +218,16 @@ void QueryServersUserInterface::onActivate()
       char name[128];
       dSprintf(name, MaxServerNameLen, "Dummy Svr%8x", Random::readI());
 
-      ServerRef s;
-      s.serverName = name;
-      s.id = i;
+      ServerRef s(ServerRef::ReceivedPing);
+
+      s.setNameDescr(name, "This is my description.  There are many like it, but this one is mine.", Colors::yellow);
+      s.setPlayerBotMax(Random::readF() * max / 2, Random::readF() * max / 2, max);
       s.pingTime = Random::readF() * 512;
       s.serverAddress.port = GameSettings::DEFAULT_GAME_PORT;
       s.serverAddress.netNum[0] = Random::readI();
-      s.maxPlayers = Random::readF() * 16 + 8;
-      s.playerCount = Random::readF() * s.maxPlayers;
+      U32 max = Random::readF() * 16 + 8;
       s.pingTimedOut = false;
       s.everGotQueryResponse = false;
-      s.serverDescr = "This is my description.  There are many like it, but this one is mine.";
-      s.msgColor = Colors::yellow;
       servers.push_back(s);
    }
 #endif
@@ -310,16 +339,14 @@ void QueryServersUserInterface::addPingServers(const Vector<IPAddress> &ipList)
 
       if(!found)  // It's a new server!
       {
-         ServerRef s;
-         s.state = ServerRef::Start;
-         s.id = ++mLastUsedServerId;
+         ServerRef s(ServerRef::Start);
+
+         s.setNameDescr("Internet Server",  "Internet Server -- attempting to connect", Colors::white);
+
          s.sendNonce.getRandom();
          s.isFromMaster = true;
          s.serverAddress.set(ipList[i]);
 
-         s.serverName = "Internet Server";
-         s.serverDescr = "Internet Server -- attempting to connect";
-         s.msgColor = Colors::white;   // white messages
          servers.push_back(s);
          mShouldSort = true;
       }
@@ -337,28 +364,27 @@ void QueryServersUserInterface::gotServerListFromMaster(const Vector<IPAddress> 
 }
 
 
-void QueryServersUserInterface::gotPingResponse(const Address &theAddress, const Nonce &theNonce, U32 clientIdentityToken)
+void QueryServersUserInterface::gotPingResponse(const Address &theAddress, const Nonce &nonce, U32 clientIdentityToken)
 {
    // See if this ping is a server from the local broadcast ping:
-   if(mNonce == theNonce)
+   if(mNonce == nonce)
    {
       for(S32 i = 0; i < servers.size(); i++)
-         if(servers[i].serverAddress == theAddress)      // servers[i].sendNonce == theNonce &&
+         if(servers[i].serverAddress == theAddress)      // servers[i].sendNonce == nonce &&
             return;
 
       // Yes, it was from a local ping
-      ServerRef s;
+      ServerRef s(ServerRef::ReceivedPing);
+
+      s.setNameDescr("LAN Server", "LAN Server -- attempting to connect", Colors::white);
+
       s.pingTime = Platform::getRealMilliseconds() - mBroadcastPingSendTime;
-      s.state = ServerRef::ReceivedPing;
-      s.id = ++mLastUsedServerId;
-      s.sendNonce = theNonce;
+      s.sendNonce = nonce;
       s.identityToken = clientIdentityToken;
       s.serverAddress = theAddress;
       s.isFromMaster = false;
-      s.serverName = "LAN Server";
-      s.serverDescr = "LAN Server -- attempting to connect";
-      s.msgColor = Colors::white;   // white messages
       servers.push_back(s);
+
       return;
    }
 
@@ -366,7 +392,7 @@ void QueryServersUserInterface::gotPingResponse(const Address &theAddress, const
    for(S32 i = 0; i < servers.size(); i++)
    {
       ServerRef &s = servers[i];
-      if(s.sendNonce == theNonce && s.serverAddress == theAddress && s.state == ServerRef::SentPing)
+      if(s.sendNonce == nonce && s.serverAddress == theAddress && s.state == ServerRef::SentPing)
       {
          s.pingTime = Platform::getRealMilliseconds() - s.lastSendTime;
          s.identityToken = clientIdentityToken;
@@ -391,22 +417,23 @@ void QueryServersUserInterface::gotQueryResponse(const Address &theAddress, cons
       ServerRef &s = servers[i];
       if(s.sendNonce == clientNonce && s.serverAddress == theAddress && s.state == ServerRef::SentQuery)
       {
-         s.playerCount = playerCount;
-         s.maxPlayers = maxPlayers;
-         s.botCount = botCount;
+         s.setNameDescr(serverName, serverDescr, Colors::yellow);
+         s.setPlayerBotMax(playerCount, botCount, maxPlayers);
+         s.pingTime = Platform::getRealMilliseconds() - s.lastSendTime;
+
          s.dedicated = dedicated;
          s.test = test;
          s.passwordRequired = passwordRequired;
-         if(!s.isFromMaster)
-            s.pingTimedOut = false;       // Cures problem with local servers incorrectly displaying ?s for first 15 seconds
-         s.sendCount = 0;  // Fix random "Query/ping timed out"
+         s.sendCount = 0;              // Fix random "Query/ping timed out"
          s.everGotQueryResponse = true;
 
-         s.serverName = string(serverName).substr(0, MaxServerNameLen);
-         s.serverDescr = string(serverDescr).substr(0, MaxServerDescrLen);
-         s.msgColor = Colors::yellow;   // yellow server details
-         s.pingTime = Platform::getRealMilliseconds() - s.lastSendTime;
-         s.lastSendTime = Platform::getRealMilliseconds();     // Record time our last query was received, so we'll know when to send again
+         // Record time our last query was received, so we'll know when to send again
+         s.lastSendTime = Platform::getRealMilliseconds();     
+
+         if(!s.isFromMaster)
+            s.pingTimedOut = false;    // Cures problem with local servers incorrectly displaying ?s for first 15 seconds
+
+
          if(s.state == ServerRef::SentQuery)
          {
             s.state = ServerRef::ReceivedQuery;
@@ -414,6 +441,7 @@ void QueryServersUserInterface::gotQueryResponse(const Address &theAddress, cons
          }
       }
    }
+      
    mShouldSort = true;
 }
 
@@ -455,16 +483,14 @@ void QueryServersUserInterface::idle(U32 timeDelta)
             s.sendCount++;
             if(s.sendCount > PingQueryRetryCount)     // Ping has timed out, sadly
             {
+               s.setNameDescr("Ping Timed Out", "No information: Server not responding to pings", Colors::red);
+               s.setPlayerBotMax(0, 0, 0);
                s.pingTime = 999;
-               s.serverName = "Ping Timed Out";
-               s.serverDescr = "No information: Server not responding to pings";
-               s.msgColor = Colors::red;   // red for errors
-               s.playerCount = 0;
-               s.maxPlayers = 0;
-               s.botCount = 0;
+
                s.state = ServerRef::ReceivedQuery;    // In effect, this will tell app not to send any more pings or queries to this server
-               mShouldSort = true;
                s.pingTimedOut = true;
+
+               mShouldSort = true;
             }
             else
             {
@@ -473,6 +499,7 @@ void QueryServersUserInterface::idle(U32 timeDelta)
                s.sendNonce.getRandom();
                getGame()->getNetInterface()->sendPing(s.serverAddress, s.sendNonce);
                pendingPings++;
+
                if(pendingPings >= MaxPendingPings)
                   break;
             }
@@ -482,7 +509,7 @@ void QueryServersUserInterface::idle(U32 timeDelta)
 
    // When all pings have been answered or have timed out, send out server status queries ... too slow
    // Want to start query immediately, to display server name / current players faster
-   for(S32 i = servers.size()-1; i >= 0 ; i--)
+   for(S32 i = servers.size() - 1; i >= 0; i--)
    {
       if(pendingQueries < MaxPendingQueries)
       {
@@ -500,13 +527,11 @@ void QueryServersUserInterface::idle(U32 timeDelta)
                   continue;
                }
                // Otherwise, we can deal with timeouts on remote servers
-               s.serverName = "Query Timed Out";
-               s.serverDescr = "No information: Server not responding to status query";
-               s.msgColor = Colors::red;   // red for errors
-               s.playerCount = s.maxPlayers = s.botCount = 0;
+               s.setNameDescr("Query Timed Out", "No information: Server not responding to status query", Colors::red);
+               s.setPlayerBotMax(0, 0, 0);
+
                s.state = ServerRef::Start;//ReceivedQuery;
                mShouldSort = true;
-
             }
             else
             {
@@ -514,6 +539,7 @@ void QueryServersUserInterface::idle(U32 timeDelta)
                s.lastSendTime = time;
                getGame()->getNetInterface()->sendQuery(s.serverAddress, s.sendNonce, s.identityToken);
                pendingQueries++;
+
                if(pendingQueries >= MaxPendingQueries)
                   break;
             }
@@ -528,9 +554,7 @@ void QueryServersUserInterface::idle(U32 timeDelta)
       if(s.state == ServerRef::ReceivedQuery && time - s.lastSendTime > RequeryTime)
       {
          if(s.pingTimedOut)
-         {
             s.state = ServerRef::Start;            // Will trigger a new round of pinging
-         }
          else
             s.state = ServerRef::ReceivedPing;     // Will trigger a new round of querying
 
@@ -546,7 +570,6 @@ void QueryServersUserInterface::idle(U32 timeDelta)
    // Go to previous page if a server has gone away and the last server has disappeared from the current screen
    while(getFirstServerIndexOnCurrentPage() >= servers.size() && mPage > 0)
        mPage--;
-
 
    if(mShouldSort)
    {
@@ -646,6 +669,42 @@ static void renderLockIcon()
 }
 
 
+static void setLocalRemoteColor(bool isRemote)
+{
+   if(isRemote)
+      glColor(Colors::white);
+   else
+      glColor(Colors::cyan);
+}
+
+
+// Set color based on ping time
+static void setPingTimeColor(U32 pingTime)
+{
+   if(pingTime < 100)
+      glColor(Colors::green);
+   else if(pingTime < 250)
+      glColor(Colors::yellow);
+   else
+      glColor(Colors::red);
+}
+
+
+// Set color by number of players
+static void setPlayerCountColor(S32 players, S32 maxPlayers)
+{
+   Color color;
+   if(players == maxPlayers)
+      color = Colors::red;       // max players
+   else if(players == 0)
+      color = Colors::yellow;    // no players
+   else
+      color = Colors::green;     // 1 or more players
+
+   glColor(color * 0.5);         // dim color
+}
+
+
 void QueryServersUserInterface::render()
 {
    const S32 canvasWidth =  DisplayManager::getScreenInfo()->getGameCanvasWidth();
@@ -717,14 +776,28 @@ void QueryServersUserInterface::render()
 
       S32 colwidth = columns[1].xStart - columns[0].xStart;    
 
+      // Color background of local servers
+      S32 lastServer = min(servers.size() - 1, (mPage + 1) * getServersPerPage() - 1);
+
+      for(S32 i = getFirstServerIndexOnCurrentPage(); i <= lastServer; i++)
+      {
+         U32 y = TOP_OF_SERVER_LIST + (i - getFirstServerIndexOnCurrentPage()) * SERVER_ENTRY_HEIGHT + 1;
+         ServerRef &s = servers[i];
+
+         if(!s.isFromMaster)
+         {
+            glColor(Colors::red, .25);
+            drawFilledRect(0, y, canvasWidth, y + SERVER_ENTRY_TEXTSIZE + 4);
+         }
+      }
+
+
       U32 y = TOP_OF_SERVER_LIST + (selectedIndex - getFirstServerIndexOnCurrentPage()) * SERVER_ENTRY_HEIGHT;
 
       // Render box behind selected item -- do this first so that it will not obscure descenders on letters like g in the column above
       bool disabled = composingMessage() && !mJustMovedMouse;
       drawMenuItemHighlight(0, y, canvasWidth, y + SERVER_ENTRY_TEXTSIZE + 4, disabled);
 
-
-      S32 lastServer = min(servers.size() - 1, (mPage + 1) * getServersPerPage() - 1);
 
       for(S32 i = getFirstServerIndexOnCurrentPage(); i <= lastServer; i++)
       {
@@ -752,7 +825,8 @@ void QueryServersUserInterface::render()
                else
                   break;
 
-         glColor(Colors::white);
+         setLocalRemoteColor(s.isFromMaster);
+
          drawString(columns[0].xStart, y, SERVER_ENTRY_TEXTSIZE, sname.c_str());
 
          // Render icons
@@ -783,33 +857,16 @@ void QueryServersUserInterface::render()
             glPopMatrix();
          }
 
-         // Set color based on ping time
-         if(s.pingTime < 100)
-            glColor(Colors::green);
-         else if(s.pingTime < 250)
-            glColor(Colors::yellow);
-         else
-            glColor(Colors::red);
-
+         setPingTimeColor(s.pingTime);
          drawStringf(columns[2].xStart, y, SERVER_ENTRY_TEXTSIZE, "%d", s.pingTime);
 
-         // Color by number of players
-         Color color;
-         if(s.playerCount == s.maxPlayers)
-            color = Colors::red;       // max players
-         else if(s.playerCount == 0)
-            color = Colors::yellow;    // no players
-         else
-            color = Colors::green;     // 1 or more players
+         setPlayerCountColor(s.playerCount, s.maxPlayers);
 
-         glColor(color * 0.5);         // dim color
          drawStringf(columns[3].xStart + 30, y, SERVER_ENTRY_TEXTSIZE, "/%d", s.maxPlayers);
+         drawStringf(columns[3].xStart,      y, SERVER_ENTRY_TEXTSIZE, "%d",  s.playerCount);
+         drawStringf(columns[3].xStart + 78, y, SERVER_ENTRY_TEXTSIZE, "%d",  s.botCount);
 
-         glColor(color);
-         drawStringf(columns[3].xStart, y, SERVER_ENTRY_TEXTSIZE, "%d", s.playerCount);
-         drawStringf(columns[3].xStart + 78, y, SERVER_ENTRY_TEXTSIZE, "%d", s.botCount);
-
-         glColor(Colors::white);
+         setLocalRemoteColor(s.isFromMaster);
          drawString(columns[4].xStart, y, SERVER_ENTRY_TEXTSIZE, s.serverAddress.toString());
       }
    }
@@ -1286,49 +1343,65 @@ bool QueryServersUserInterface::isMouseOverDivider()
 }
 
 
+#define CAST_AB_TO_SERVERAB_AND_PUT_LOCAL_SERVERS_ON_TOP                                        \
+   QueryServersUserInterface::ServerRef *serverA = (QueryServersUserInterface::ServerRef *) a;  \
+   QueryServersUserInterface::ServerRef *serverB = (QueryServersUserInterface::ServerRef *) b;  \
+                                                                                                \
+   if(serverA->isFromMaster != serverB->isFromMaster)                                           \
+   {                                                                                            \
+      if(!serverA->isFromMaster) return -1;                                                     \
+      if(!serverB->isFromMaster) return 1;                                                      \
+   }                                                                 
+
+
 // Sort server list by various columns
 static S32 QSORT_CALLBACK compareFuncName(const void *a, const void *b)
 {
-   return stricmp(((QueryServersUserInterface::ServerRef *) a)->serverName.c_str(),
-                  ((QueryServersUserInterface::ServerRef *) b)->serverName.c_str());
+   CAST_AB_TO_SERVERAB_AND_PUT_LOCAL_SERVERS_ON_TOP;
+
+   return stricmp(serverA->serverName.c_str(), serverB->serverName.c_str());
 }
 
 
 static S32 QSORT_CALLBACK compareFuncPing(const void *a, const void *b)
 {
-   return S32(((QueryServersUserInterface::ServerRef *) a)->pingTime -
-              ((QueryServersUserInterface::ServerRef *) b)->pingTime);
+   CAST_AB_TO_SERVERAB_AND_PUT_LOCAL_SERVERS_ON_TOP;
+
+   return S32(serverA->pingTime - serverB->pingTime);
 }
 
 
 static S32 QSORT_CALLBACK compareFuncPlayers(const void *a, const void *b)
 {
-   S32 pc = S32(((QueryServersUserInterface::ServerRef *) a)->playerCount -
-                ((QueryServersUserInterface::ServerRef *) b)->playerCount);
+   CAST_AB_TO_SERVERAB_AND_PUT_LOCAL_SERVERS_ON_TOP;
+
+   S32 pc = S32(serverA->playerCount - serverB->playerCount);
+
    if(pc)
       return pc;
 
-   return S32(((QueryServersUserInterface::ServerRef *) a)->maxPlayers -
-              ((QueryServersUserInterface::ServerRef *) b)->maxPlayers);
+   return S32(serverA->maxPlayers - serverB->maxPlayers);
 }
 
 
 // First compare IPs, then, if equal, port numbers
 static S32 QSORT_CALLBACK compareFuncAddress(const void *a, const void *b)
 {
-   U32 netNumA = ((QueryServersUserInterface::ServerRef *) a)->serverAddress.netNum[0];
-   U32 netNumB = ((QueryServersUserInterface::ServerRef *) b)->serverAddress.netNum[0];
+   CAST_AB_TO_SERVERAB_AND_PUT_LOCAL_SERVERS_ON_TOP;
+
+   U32 netNumA = serverA->serverAddress.netNum[0];
+   U32 netNumB = serverB->serverAddress.netNum[0];
 
    if(netNumA == netNumB)
-      return (S32)(((QueryServersUserInterface::ServerRef *) a)->serverAddress.port - 
-                   ((QueryServersUserInterface::ServerRef *) b)->serverAddress.port);
-   // else
+      return (S32)(serverA->serverAddress.port - serverB->serverAddress.port);
+   
    return S32(netNumA - netNumB);
 }
 
 
 void QueryServersUserInterface::sort()
 {
+   // In all cases, put local servers at the top of the list
    switch(mSortColumn)
    {
       case 0:
