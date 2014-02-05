@@ -352,12 +352,11 @@ string ServerGame::loadNextLevelInfo()
 {
    FolderManager *folderManager = getSettings()->getFolderManager();
 
-   string levelName;
    string filename = folderManager->findLevelFile(mLevelSource->getLevelFileName(mLevelLoadIndex));
-
    TNLAssert(filename != "", "Expected a filename here!");
 
    // populateLevelInfoFromSource() will return true if the level was processed successfully
+   string levelName;
    if(mLevelSource->populateLevelInfoFromSource(filename, mLevelLoadIndex))
    {
       levelName = mLevelSource->getLevelName(mLevelLoadIndex);    // This will be the name specified in the level file we just populated
@@ -425,21 +424,6 @@ bool ServerGame::processPseudoItem(S32 argc, const char **argv, const string &le
          addPolyWall(&polywall, NULL);
 
    }
-   //else if(!stricmp(argv[0], "Zone")) 
-   //{
-   //   Zone *zone = new Zone();
-
-   //   if(zone->processArguments(argc - 1, argv + 1, this))
-   //   {
-   //      zone->setUserAssignedId(id, false);
-   //      getGameType()->addZone(zone);
-   //   }
-   //   else
-   //   {
-   //      logprintf(LogConsumer::LogWarning, "Invalid arguments in object \"%s\" in level \"%s\"", argv[0], levelFileName.c_str());
-   //      delete zone;
-   //   }
-   //}
 
    else 
       return false;
@@ -563,8 +547,11 @@ void ServerGame::cycleLevel(S32 nextLevel)
          {
             // No more working levels to load...  quit?
             logprintf(LogConsumer::LogError, "All the levels I was asked to load are corrupt.  Exiting!");
-            mShutdownTimer.reset(1); // nothing to load...
+
+            mShutdownTimer.reset(1); 
             mShuttingDown = true;
+            mShutdownReason = "All the levels I was asked to load are corrupt or missing; "
+                              "Sorry dude -- hosting mode shutting down.";
 
             // To avoid crashing...
             if(!getGameType())
@@ -574,7 +561,7 @@ void ServerGame::cycleLevel(S32 nextLevel)
             }
             getGameType()->makeSureTeamCountIsNotZero();
 
-            break;  // exit out of loop
+            return;
          }
       }
    }
@@ -676,7 +663,8 @@ void ServerGame::onConnectedToMaster()
 
    sendLevelStatsToMaster();    // We're probably in a game, and we should send the level details to the master
 
-   logprintf(LogConsumer::MsgType(LogConsumer::LogConnection | LogConsumer::ServerFilter), "Server established connection with Master Server");
+   logprintf(LogConsumer::MsgType(LogConsumer::LogConnection | LogConsumer::ServerFilter), 
+             "Server established connection with Master Server");
 }
 
 
@@ -1262,8 +1250,9 @@ bool ServerGame::isFull()
 
 
 // Only called from outside ServerGame
-bool ServerGame::isReadyToShutdown(U32 timeDelta)
+bool ServerGame::isReadyToShutdown(U32 timeDelta, string &reason)
 {
+   reason = mShutdownReason;
    return mShuttingDown && (mShutdownTimer.update(timeDelta) || onlyClientIs(mShutdownOriginator));
 }
 

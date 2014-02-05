@@ -276,11 +276,13 @@ void checkIfServerGameIsShuttingDown(U32 timeDelta)
    const Vector<ClientGame *> *clientGames = GameManager::getClientGames();
    ServerGame *serverGame = GameManager::getServerGame();
 
-   if(serverGame && serverGame->isReadyToShutdown(timeDelta))
+   string shutdownReason;
+   if(serverGame && serverGame->isReadyToShutdown(timeDelta, shutdownReason))
    {
 #ifndef ZAP_DEDICATED
+      // Disconnect any local clients, passing whatever reason string we have
       for(S32 i = 0; i < clientGames->size(); i++)
-         clientGames->get(i)->closeConnectionToGameServer();    // ...disconnect any local clients
+         clientGames->get(i)->closeConnectionToGameServer(shutdownReason.c_str());  
 
       if(clientGames->size() > 0)       // If there are any clients running...
          GameManager::deleteServerGame();
@@ -1169,9 +1171,11 @@ int main(int argc, char **argv)
       // Dedicated ClientGame needs fonts, but not external ones
       FontManager::initialize(settings.get(), false);
 #endif
-      LevelSourcePtr levelSource = LevelSourcePtr(
-               new FolderLevelSource(settings->getLevelList(), settings->getFolderManager()->levelDir)
-                                                 );
+      ServerGame *serverGame = GameManager::getServerGame();
+      
+      // Now even the dedicated server can make use of playlist files...
+      // TODO: test if playlist files work with the dedicated server
+      LevelSourcePtr levelSource = LevelSourcePtr(settings->chooseLevelSource(serverGame));
 
       // Figure out what levels we'll be playing with, and start hosting  
       initHosting(settings, levelSource, false, true);     
