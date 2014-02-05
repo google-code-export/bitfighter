@@ -9,6 +9,7 @@
 #include "IniFile.h"             // For CIniFile def
 #include "shipItems.h"           // For EngineerBuildObjects enum
 #include "masterConnection.h"    // For MasterServerConnection def
+#include "GameSettings.h"
 #include "BanList.h"
 #include "gameNetInterface.h"
 #include "gameType.h"
@@ -490,13 +491,17 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSubmitPassword, (StringPtr pass), (pass),
 
 
 // Allow admins to change the passwords and other parameters on their systems
-TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, (StringPtr param, RangedU32<0, GameConnection::ParamTypeCount> paramType), (param, paramType),
+TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, 
+                  (StringPtr param, RangedU32<0, GameConnection::ParamTypeCount> paramType), 
+                  (param, paramType),
                   NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirClientToServer, 0)
 {
    ParamType type = (ParamType) paramType.value;
 
-   if(!mClientInfo->isAdmin())   // Do nothing --> non-admins have no pull here.  Note that this should never happen; client should filter out
-      return;                    // non-admins before we get here, but we'll check anyway in case the client has been hacked.
+   if(!mClientInfo->isAdmin())   // Do nothing --> non-admins have no pull here.  Note that this should never happen; 
+                                 // client should filter out non-admins before we get here, but we'll check anyway in 
+                                 // case the client has been hacked.  But we have no obligation to notify client if 
+                                 // this has happened.
 
    // Check for forbidden blank parameters -- the following commands require a value to be passed in param
    if( (type == AdminPassword || type == OwnerPassword || type == ServerName || type == ServerDescr || type == LevelDir) &&
@@ -555,6 +560,8 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, (StringPtr param, RangedU32<0, Ga
          mServerGame->getConnectionToMaster()->s2mServerDescription(StringTableEntry(param.getString()));
    }
 
+   // TODO: Add option here for type == Playlist
+
    else if(type == LevelDir)
    {
       FolderManager *folderManager = mSettings->getFolderManager();
@@ -573,7 +580,6 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, (StringPtr param, RangedU32<0, Ga
          return;
       }
 
-
       Vector<string> levelList = LevelSource::findAllLevelFilesInFolder(folder);
 
       if(levelList.size() == 0)
@@ -582,14 +588,13 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, (StringPtr param, RangedU32<0, Ga
          return;
       }
 
-
-      FolderLevelSource *newLevelSource = new FolderLevelSource(levelList, folder);
+      LevelSource *newLevelSource =  mSettings->chooseLevelSource(mServerGame);
 
       bool anyLoaded = newLevelSource->loadLevels(folderManager);    // Populates all our levelInfos by loading each file in turn
 
       if(!anyLoaded)
       {
-         s2cDisplayErrorMessage("!!! Specified folder contains no valid levels.  See server log for details.");
+         s2cDisplayErrorMessage("!!! Specified location contains no valid levels.  See server log for details.");
          return;
       }
 
@@ -611,6 +616,7 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, (StringPtr param, RangedU32<0, Ga
       s2cDisplaySuccessMessage("Level folder changed");
 
    }  // end change leveldir
+
 
    else if(type == DeleteLevel)
       markCurrentLevelAsDeleted();
