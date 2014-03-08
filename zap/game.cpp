@@ -18,9 +18,6 @@
 #include "ServerGame.h"
 #include "gameNetInterface.h"
 
-
-#include "md5wrapper.h"
-
 #include <boost/shared_ptr.hpp>
 #include <sys/stat.h>
 #include <cmath>
@@ -64,7 +61,6 @@ U32 NameToAddressThread::run()
 ////////////////////////////////////////
 
 static Vector<DatabaseObject *> fillVector2;
-md5wrapper Game::md5;
 
 ////////////////////////////////////
 ////////////////////////////////////
