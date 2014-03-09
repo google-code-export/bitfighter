@@ -209,8 +209,10 @@ bool Ship::processArguments(S32 argc, const char **argv, Game *game)
       return false;
 
    Point pos;
+
    pos.read(argv + 1);
    pos *= game->getLegacyGridSize();
+
    for(U32 i = 0; i < MoveStateCount; i++)
    {
       setPos(i, pos);
@@ -2198,7 +2200,7 @@ void Ship::renderLayer(S32 layerIndex)
    const Ship *localShip      = static_cast<Ship *>(conn->getControlObject()); // Local player's ship -- could be NULL
    const bool isLocalShip     = !conn || conn->getControlObject() == this;     // Is render ship the local player?
    const bool showCoordinates = clientGame->isShowingDebugShipCoords();
-   const F32 nameScale        = clientGame->getRenderScale(localShip->hasModule(ModuleSensor));
+   const F32 nameScale        = localShip ? clientGame->getRenderScale(localShip->hasModule(ModuleSensor)) : 1.0f;
 
    ///// Info about the ship being rendered; comes primarily from the clientInfo
    const bool isAuthenticated     = clientInfo ? clientInfo->isAuthenticated()         : false;
@@ -2211,7 +2213,7 @@ void Ship::renderLayer(S32 layerIndex)
    const bool boostActive  = mLoadout.isModulePrimaryActive(ModuleBoost);
    const bool shieldActive = mLoadout.isModulePrimaryActive(ModuleShield);
    const bool repairActive = mLoadout.isModulePrimaryActive(ModuleRepair) && mHealth < 1;
-   const bool hasArmor     = hasModule(ModuleArmor);
+   const bool hasArmor     = mLoadout.hasModule(ModuleArmor);
 
    // If the local player is cloaked, and is close enough to the render ship, it will activate 
    // the ship's sensor module, and we'll need to draw it.  Here, we determine if that has happened.
@@ -2272,10 +2274,6 @@ bool Ship::doesShipActivateSensor(const Ship *ship)
 }
 
 
-// Set to true to allow players to see their cloaked teammates, 
-// false if cloaked teammates should be invisible
-static const bool SHOW_CLOAKED_TEAMMATES = true;    
-
 // Determine ship's visibility, 0 = invisible, 1 = normal visibility.  
 // Value will be used as alpha when rendering ship.
 F32 Ship::getShipVisibility(const Ship *localShip)
@@ -2291,6 +2289,10 @@ F32 Ship::getShipVisibility(const Ship *localShip)
    S32 localTeam =  localShip ? localShip->getTeam() : NO_TEAM;
    bool teamGame = mGame->getGameType()->isTeamGame();
    bool isFriendly = (getTeam() == localTeam) && teamGame;
+
+   // Set to true to allow players to see their cloaked teammates, 
+   // false if cloaked teammates should be invisible
+   static const bool SHOW_CLOAKED_TEAMMATES = true;    
 
    // Don't completely hide local player or ships on same team (in a team game)
    if(isLocalShip || (SHOW_CLOAKED_TEAMMATES && isFriendly))
@@ -2409,6 +2411,7 @@ REGISTER_LUA_SUBCLASS(Ship, MoveObject);
  */
 S32 Ship::lua_isAlive(lua_State *L)    { return returnBool(L, !isDestroyed()); }
 
+
 /**
  * @luafunc bool Ship::hasFlag()
  *
@@ -2417,6 +2420,7 @@ S32 Ship::lua_isAlive(lua_State *L)    { return returnBool(L, !isDestroyed()); }
  * @return `true` if the Ship is carrying at least one flag, `false` otherwise.
  */
 S32 Ship::lua_hasFlag(lua_State *L)    { return returnBool (L, getFlagCount() > 0); }
+
 
 /**
  * @luafunc int Ship::getFlagCount()
@@ -2436,6 +2440,7 @@ S32 Ship::lua_getFlagCount(lua_State *L) { return returnInt(L, getFlagCount()); 
  * @return The LuaPlayerInfo for this Ship.
  */
 S32 Ship::lua_getPlayerInfo(lua_State *L) { return returnPlayerInfo(L, this); }
+
 
 /**
  * @luafunc num Ship::getAngle()
