@@ -48,6 +48,22 @@ static const char *gameTypeClassNames[] = {
 };
 
 
+typedef map<string, GameTypeId> GameTypeNamesMapType;
+
+static GameTypeNamesMapType initializeGameTypeMap()
+{
+  GameTypeNamesMapType gtmap;
+
+#  define GAME_TYPE_ITEM(id, type, c, d, e, f) gtmap[type] = id; 
+       GAME_TYPE_TABLE
+#  undef GAME_TYPE_ITEM
+
+  return gtmap;
+}
+
+// Get GameTypeId given a name like NexusGameType
+static const GameTypeNamesMapType GameTypeNamesMap = initializeGameTypeMap();
+
 
 ////////////////////////////////////////      __              ___           
 ////////////////////////////////////////     /__  _. ._ _   _  |    ._   _  
@@ -121,6 +137,7 @@ string GameType::toLevelCode() const
    return string(getClassName()) + " " + getRemainingGameTimeInMinutesString() + " " + itos(mWinningScore);
 }
 
+
 // GameType object is the first to be added when a new game starts... 
 // therefore, this is a reasonable signifier that a new game is starting up.  I think.
 // Server only?
@@ -157,6 +174,19 @@ void GameType::onGhostRemove()
    ClientGame *clientGame = static_cast<ClientGame *>(getGame());
    clientGame->gameTypeIsAboutToBeDeleted();
 #endif
+}
+
+
+// Returns GameTypeId from names like "NexusGameType".  Returns NoGameType if it can't figure it out.
+// Static method
+GameTypeId GameType::getGameTypeIdFromName(const string &name)
+{
+   const GameTypeNamesMapType::const_iterator it = GameTypeNamesMap.find(name);
+   
+   if(it == GameTypeNamesMap.end())
+      return NoGameType;
+
+   return it->second;
 }
 
 
@@ -491,18 +521,19 @@ string GameType::getScoringEventDescr(ScoringEvent event)
 }
 
 
-// Will return a valid GameType string -- either what's passed in, or the default if something bogus was specified  (static)
-const char *GameType::validateGameType(const char *gameTypeName)
+// Will return a valid GameType string -- either what's passed in, or the default if something bogus was specified.
+// Can't return const char * because hosting string object will be out-of-scope on return.
+// Static method
+string GameType::validateGameType(const string &gameTypeName)
 {
-   if(!stricmp(gameTypeName, "HuntersGameType"))
+   if(gameTypeName == "HuntersGameType")
        return "NexusGameType";
 
-   for(S32 i = 0; gameTypeClassNames[i]; i++)    // Repeat until we hit NULL
-      if(stricmp(gameTypeClassNames[i], gameTypeName) == 0)
-         return gameTypeClassNames[i];
+   // If no valid game type was specified, we'll return the default (Bitmatch)
+   if(getGameTypeIdFromName(gameTypeName) == NoGameType)
+      return gameTypeClassNames[0];
 
-   // If we get to here, no valid game type was specified, so we'll return the default (Bitmatch)
-   return gameTypeClassNames[0];
+   return gameTypeName;
 }
 
 
@@ -511,6 +542,8 @@ U32 GameType::packUpdate(GhostConnection *connection, U32 updateMask, BitStream 
    stream->write(mTotalGamePlay);
    return 0;
 }
+
+
 void GameType::unpackUpdate(GhostConnection *connection, BitStream *stream)
 {
    stream->read(&mTotalGamePlay);
