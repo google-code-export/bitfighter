@@ -186,7 +186,6 @@ public:
 
    F32 sfxVolLevel;                 // SFX volume (0 = silent, 1 = full bore)
    F32 voiceChatVolLevel;           // Ditto
-   F32 alertsVolLevel;              // And again
 
    F32 getMusicVolLevel();
    F32 getRawMusicVolLevel();
@@ -197,9 +196,6 @@ public:
 
    sfxSets sfxSet;                  // Which set of SFX does the user want?
 
-   bool diagnosticKeyDumpMode;      // True if want to dump keystrokes to the screen
-
-   U32 maxDedicatedFPS;
    U32 maxFPS;
 
 
@@ -211,8 +207,6 @@ public:
    string lastEditorName;           // Name of file most recently edited by the user
 
    S32 connectionSpeed;
-
-   bool useUpdater;                 // Use updater system (windows only)
 
    // Server display settings in join menu
    S32 queryServerSortColumn;
@@ -226,34 +220,6 @@ public:
    F32 winSizeFact;
 
    bool musicMutedOnCmdLine;
-
-   // Logging options   --   true will enable logging these events, false will disable
-   bool logConnectionProtocol;
-   bool logNetConnection;
-   bool logEventConnection;
-   bool logGhostConnection;
-   bool logNetInterface;
-   bool logPlatform;
-   bool logNetBase;
-   bool logUDP;
-
-   bool logFatalError;        
-   bool logError;             
-   bool logWarning;    
-   bool logConfigurationError;
-   bool logConnection;        
-   bool logLevelLoaded;    
-   bool logLevelError;
-   bool logLuaObjectLifecycle;
-   bool luaLevelGenerator;    
-   bool luaBotMessage;        
-   bool serverFilter;  
-   bool logStats;
-
-   string mySqlStatsDatabaseServer;
-   string mySqlStatsDatabaseName;
-   string mySqlStatsDatabaseUser;
-   string mySqlStatsDatabasePassword;
 
    Vector<StringTableEntry> levelList;
 
