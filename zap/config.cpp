@@ -55,12 +55,29 @@ const char *MASTER_SERVER_LIST_ADDRESS = "bitfighter.org:25955,bitfighter.net:25
 //const char *MASTER_SERVER_LIST_ADDRESS = "IP:199.192.229.168:25955, bitfighter.net:25955";
 
 
+// Vol gets stored as a number from 0 to 10; normalize it to 0-1
+static F32 checkVol(const F32 &vol) 
+{ 
+   F32 v = vol / 10.0f; 
+   return CLAMP(v, 0, 1);
+}  
+
+
+static F32 writeVol(const F32 &vol) 
+{ 
+   return ceilf(vol * 10.0f);
+}  
+
+
 // Constructor: Set default values here
 IniSettings::IniSettings()
 {
 
-#  define SETTINGS_ITEM(typeName, enumVal, section, key, defaultVal, comment) \
-            mSettings.add(new Setting<typeName, IniKey::SettingsItem>(IniKey::enumVal, defaultVal, key, section, comment));
+#  define SETTINGS_ITEM(typeName, enumVal, section, key, defaultVal, readValidator, writeValidator, comment)    \
+            mSettings.add(                                                                                      \
+               new Setting<typeName, IniKey::SettingsItem>(IniKey::enumVal, defaultVal, key,                    \
+                                                           section, readValidator, writeValidator, comment)     \
+            );
       SETTINGS_TABLE
 #  undef SETTINGS_ITEM
 
@@ -71,13 +88,9 @@ IniSettings::IniSettings()
    sfxVolLevel       = 1.0;           // SFX volume (0 = silent, 1 = full bore)
    musicVolLevel     = 1.0;           // Music volume (range as above)
    voiceChatVolLevel = 1.0;           // INcoming voice chat volume (range as above)
-   alertsVolLevel    = 1.0;           // Audio alerts volume (when in dedicated server mode only, range as above)
 
    sfxSet = sfxModernSet;             // Start off with our modern sounds
 
-   diagnosticKeyDumpMode = false;     // True if want to dump keystrokes to the screen
-
-   maxDedicatedFPS = 100;             // Max FPS on dedicated server
    maxFPS = 100;                      // Max FPS on client/non-dedicated server
 
    masterAddress = MASTER_SERVER_LIST_ADDRESS;   // Default address of our master server
@@ -91,39 +104,12 @@ IniSettings::IniSettings()
    queryServerSortColumn = 0;
    queryServerSortAscending = true;
 
-   useUpdater = true;
-
    // Game window location when in windowed mode
    winXPos = 0;  // if set to (0,0), it will not set the position meaning it uses operating system default position. (see bottom of "VideoSystem::actualizeScreenMode" in VideoSystem.cpp)
    winYPos = 0;
    winSizeFact = 1.0;
 
    musicMutedOnCmdLine = false;
-
-   // Specify which events to log
-   logConnectionProtocol = false;
-   logNetConnection = false;
-   logEventConnection = false;
-   logGhostConnection = false;
-   logNetInterface = false;
-   logPlatform = false;
-   logNetBase = false;
-   logUDP = false;
-
-   logFatalError = true;       
-   logError = true;            
-   logWarning = true;     
-   logConfigurationError = true;
-   logConnection = true;       
-   logLevelLoaded = true;      
-   logLuaObjectLifecycle = false;
-   luaLevelGenerator = true;   
-   luaBotMessage = true;       
-   serverFilter = false; 
-
-   logLevelError = true;
-
-   logStats = false;          // Log statistics into local sqlite database
 
    version = BUILD_VERSION;   // Default to current version to avoid triggering upgrade checks on fresh install
 }
@@ -134,6 +120,23 @@ IniSettings::~IniSettings()
 {
    // Do nothing
 }
+
+
+// This list is currently incomplete, will grow as we move our settings into the new structure
+static const string sections[] = {"Settings", "Effects", "Host", "Host-Voting", "EditorSettings", "Updater", "Diagnostics"};
+static const string headerComments[] = 
+{
+   "Settings entries contain a number of different options.",
+   "Various visual effects.",
+   "Items in this section control how Bitfighter works when you are hosting a game.  See also Host-Voting.",
+   "Control how voting works on the server.  The default values work pretty well, but if you want to tweak them, go ahead!\n"
+      "Yes and No votes, and abstentions, have different weights.  When a vote is conducted, the total value of all votes (or non-votes)\n"
+      "is added up, and if the result is greater than 0, the vote passes.  Otherwise it fails.  You can adjust the weight of the votes below.",
+   "EditorSettings entries relate to items in the editor",
+   "The Updater section contains entries that control how game updates are handled.",
+   "Diagnostic entries can be used to enable or disable particular actions for debugging purposes.\n"
+      "You probably can't use any of these settings to enhance your gameplay experience!"
+};
 
 
 // Some static helper methods:
@@ -219,7 +222,6 @@ void  IniSettings::setMusicVolLevel(F32 vol)
 {
    musicVolLevel = vol;
 }
-
 
 
 extern string lcase(string strToConvert);
@@ -393,9 +395,8 @@ static void loadSettings(CIniFile *ini, IniSettings *iniSettings, const string &
 static void loadGeneralSettings(CIniFile *ini, IniSettings *iniSettings)
 {
    // New school
-   loadSettings(ini, iniSettings, "Testing");
-   loadSettings(ini, iniSettings, "EditorSettings");
-   loadSettings(ini, iniSettings, "Settings");
+   for(S32 i = 0; i < ARRAYSIZE(sections); i++)
+      loadSettings(ini, iniSettings, sections[i]);
 
    string section = "Settings";
 
@@ -449,36 +450,6 @@ static void loadGeneralSettings(CIniFile *ini, IniSettings *iniSettings)
 }
 
 
-static void loadDiagnostics(CIniFile *ini, IniSettings *iniSettings)
-{
-   string section = "Diagnostics";
-
-   iniSettings->diagnosticKeyDumpMode = ini->GetValueYN(section, "DumpKeys",              iniSettings->diagnosticKeyDumpMode);
-
-   iniSettings->logConnectionProtocol = ini->GetValueYN(section, "LogConnectionProtocol", iniSettings->logConnectionProtocol);
-   iniSettings->logNetConnection      = ini->GetValueYN(section, "LogNetConnection",      iniSettings->logNetConnection);
-   iniSettings->logEventConnection    = ini->GetValueYN(section, "LogEventConnection",    iniSettings->logEventConnection);
-   iniSettings->logGhostConnection    = ini->GetValueYN(section, "LogGhostConnection",    iniSettings->logGhostConnection);
-   iniSettings->logNetInterface       = ini->GetValueYN(section, "LogNetInterface",       iniSettings->logNetInterface);
-   iniSettings->logPlatform           = ini->GetValueYN(section, "LogPlatform",           iniSettings->logPlatform);
-   iniSettings->logNetBase            = ini->GetValueYN(section, "LogNetBase",            iniSettings->logNetBase);
-   iniSettings->logUDP                = ini->GetValueYN(section, "LogUDP",                iniSettings->logUDP);
-
-   iniSettings->logFatalError         = ini->GetValueYN(section, "LogFatalError",         iniSettings->logFatalError);
-   iniSettings->logError              = ini->GetValueYN(section, "LogError",              iniSettings->logError);
-   iniSettings->logWarning            = ini->GetValueYN(section, "LogWarning",            iniSettings->logWarning);
-   iniSettings->logConfigurationError = ini->GetValueYN(section, "LogConfigurationError", iniSettings->logConfigurationError);
-   iniSettings->logConnection         = ini->GetValueYN(section, "LogConnection",         iniSettings->logConnection);
-   iniSettings->logLevelError         = ini->GetValueYN(section, "LogLevelError",         iniSettings->logLevelError);
-
-   iniSettings->logLevelLoaded        = ini->GetValueYN(section, "LogLevelLoaded",        iniSettings->logLevelLoaded);
-   iniSettings->logLuaObjectLifecycle = ini->GetValueYN(section, "LogLuaObjectLifecycle", iniSettings->logLuaObjectLifecycle);
-   iniSettings->luaLevelGenerator     = ini->GetValueYN(section, "LuaLevelGenerator",     iniSettings->luaLevelGenerator);
-   iniSettings->luaBotMessage         = ini->GetValueYN(section, "LuaBotMessage",         iniSettings->luaBotMessage);
-   iniSettings->serverFilter          = ini->GetValueYN(section, "ServerFilter",          iniSettings->serverFilter);
-}
-
-
 static void loadLoadoutPresets(CIniFile *ini, GameSettings *settings)
 {
    Vector<string> rawPresets(GameSettings::LoadoutPresetCount);
@@ -527,22 +498,10 @@ static void loadPluginBindings(CIniFile *ini, IniSettings *iniSettings)
 }
 
 
-static void loadEffectsSettings(CIniFile *ini, IniSettings *iniSettings)
-{
-   // Nothing at the moment
-}
-
-
 // Convert a string value to our sfxSets enum
 static sfxSets stringToSFXSet(string sfxSet)
 {
    return (lcase(sfxSet) == "classic") ? sfxClassicSet : sfxModernSet;
-}
-
-
-static F32 checkVol(F32 vol)
-{
-   return max(min(vol, 1.f), 0.f);    // Restrict volume to be between 0 and 1
 }
 
 
@@ -561,40 +520,6 @@ static void loadSoundSettings(CIniFile *ini, GameSettings *settings, IniSettings
    iniSettings->sfxVolLevel       = checkVol(iniSettings->sfxVolLevel);
    iniSettings->setMusicVolLevel(checkVol(iniSettings->getRawMusicVolLevel()));
    iniSettings->voiceChatVolLevel = checkVol(iniSettings->voiceChatVolLevel);
-}
-
-
-static void loadHostConfiguration(CIniFile *ini, IniSettings *iniSettings)
-{
-   const char *section = "Host";
-
-   iniSettings->alertsVolLevel = checkVol(iniSettings->alertsVolLevel);
-
-   S32 fps = ini->GetValueI(section, "MaxFPS", iniSettings->maxDedicatedFPS);
-   if(fps >= 1) 
-      iniSettings->maxDedicatedFPS = fps; 
-   // TODO: else warn?
-
-   //iniSettings->SendStatsToMaster = (lcase(ini->GetValue(section, "SendStatsToMaster", "yes")) != "no");
-
-#ifdef BF_WRITE_TO_MYSQL
-   Vector<string> args;
-   parseString(ini->GetValue(section, "MySqlStatsDatabaseCredentials"), args, ',');
-   if(args.size() >= 1) iniSettings->mySqlStatsDatabaseServer = args[0];
-   if(args.size() >= 2) iniSettings->mySqlStatsDatabaseName = args[1];
-   if(args.size() >= 3) iniSettings->mySqlStatsDatabaseUser = args[2];
-   if(args.size() >= 4) iniSettings->mySqlStatsDatabasePassword = args[3];
-   if(iniSettings->mySqlStatsDatabaseServer == "server" && iniSettings->mySqlStatsDatabaseName == "dbname")
-   {
-      iniSettings->mySqlStatsDatabaseServer = "";  // blank this, so it won't try to connect to "server"
-   }
-#endif
-}
-
-
-void loadUpdaterSettings(CIniFile *ini, IniSettings *iniSettings)
-{
-   iniSettings->useUpdater = lcase(ini->GetValue("Updater", "UseUpdater", "Yes")) != "no";
 }
 
 
@@ -669,7 +594,7 @@ static void setDefaultKeyBindings(CIniFile *ini, InputCodeManager *inputCodeMana
 }
 
 
-// Only called while loading keys from the INI
+// Only called while loading keys from the INI; Note that this function might not be able to be modernized!
 void setDefaultEditorKeyBindings(CIniFile *ini, InputCodeManager *inputCodeManager)
 {
 #define EDITOR_BINDING(editorEnumVal, b, c, defaultEditorKeyboardBinding)                                       \
@@ -711,6 +636,7 @@ static void writeKeyBindings(CIniFile *ini, InputCodeManager *inputCodeManager, 
 }
 
 
+// Note that this function might not be able to be modernized!
 static void writeEditorKeyBindings(CIniFile *ini, InputCodeManager *inputCodeManager, const string &section)
 {
    string key;
@@ -1301,7 +1227,6 @@ void writeServerBanList(CIniFile *ini, BanList *banList)
 }
 
 
-// Option default values are stored here, in the 3rd prarm of the GetValue call
 // This is only called once, during initial initialization
 // Is also called from gameType::processServerCommand (why?)
 void loadSettingsFromINI(CIniFile *ini, GameSettings *settings)
@@ -1311,19 +1236,13 @@ void loadSettingsFromINI(CIniFile *ini, GameSettings *settings)
 
    ini->ReadFile();                             // Read the INI file
 
-   static const string sections[] = {"Settings", "Host", "Host-Voting"};
    for(S32 i = 0; i < ARRAYSIZE(sections); i++)
       loadSettings(ini, iniSettings, sections[i]);
 
    loadSoundSettings(ini, settings, iniSettings);
-   loadEffectsSettings(ini, iniSettings);
    loadGeneralSettings(ini, iniSettings);
    loadLoadoutPresets(ini, settings);
    loadPluginBindings(ini, iniSettings);
-
-   loadHostConfiguration(ini, iniSettings);
-   loadUpdaterSettings(ini, iniSettings);
-   loadDiagnostics(ini, iniSettings);
 
    setDefaultKeyBindings(ini, inputCodeManager);
    setDefaultEditorKeyBindings(ini, inputCodeManager);
@@ -1334,12 +1253,11 @@ void loadSettingsFromINI(CIniFile *ini, GameSettings *settings)
    loadLevelSkipList(ini, settings);            // Read level skipList, if there are any
 
    loadQuickChatMessages(ini);
-
    loadServerBanList(ini, settings->getBanList());
 
    saveSettingsToINI(ini, settings);            // Save to fill in any missing settings
 
-   settings->onFinishedLoading();
+   settings->onFinishedLoading();               // Merge INI settings with cmd line settings
 }
 
 
@@ -1361,78 +1279,6 @@ void IniSettings::loadUserSettingsFromINI(CIniFile *ini, GameSettings *settings)
    }
 }
 
-
-static void writeDiagnostics(CIniFile *ini, IniSettings *iniSettings)
-{
-   const char *section = "Diagnostics";
-   ini->addSection(section);
-
-   if (ini->numSectionComments(section) == 0)
-   {
-      ini->sectionComment(section, "----------------");
-      ini->sectionComment(section, " Diagnostic entries can be used to enable or disable particular actions for debugging purposes.");
-      ini->sectionComment(section, " You probably can't use any of these settings to enhance your gameplay experience!");
-      ini->sectionComment(section, " DumpKeys - Enable this to dump raw input to the screen (Yes/No)");
-      ini->sectionComment(section, " LogConnectionProtocol - Log ConnectionProtocol events (Yes/No)");
-      ini->sectionComment(section, " LogNetConnection - Log NetConnectionEvents (Yes/No)");
-      ini->sectionComment(section, " LogEventConnection - Log EventConnection events (Yes/No)");
-      ini->sectionComment(section, " LogGhostConnection - Log GhostConnection events (Yes/No)");
-      ini->sectionComment(section, " LogNetInterface - Log NetInterface events (Yes/No)");
-      ini->sectionComment(section, " LogPlatform - Log Platform events (Yes/No)");
-      ini->sectionComment(section, " LogNetBase - Log NetBase events (Yes/No)");
-      ini->sectionComment(section, " LogUDP - Log UDP events (Yes/No)");
-
-      ini->sectionComment(section, " LogFatalError - Log fatal errors; should be left on (Yes/No)");
-      ini->sectionComment(section, " LogError - Log serious errors; should be left on (Yes/No)");
-      ini->sectionComment(section, " LogWarning - Log less serious errors (Yes/No)");
-      ini->sectionComment(section, " LogConfigurationError - Log problems with configuration (Yes/No)");
-      ini->sectionComment(section, " LogConnection - High level logging connections with remote machines (Yes/No)");
-      ini->sectionComment(section, " LogLevelLoaded - Write a log entry when a level is loaded (Yes/No)");
-      ini->sectionComment(section, " LogLevelError - Log errors and warnings about levels loaded (Yes/No)");
-      ini->sectionComment(section, " LogLuaObjectLifecycle - Creation and destruciton of lua objects (Yes/No)");
-      ini->sectionComment(section, " LuaLevelGenerator - Messages from the LuaLevelGenerator (Yes/No)");
-      ini->sectionComment(section, " LuaBotMessage - Message from a bot (Yes/No)");
-      ini->sectionComment(section, " ServerFilter - For logging messages specific to hosting games (Yes/No)");
-      ini->sectionComment(section, "                (Note: these messages will go to bitfighter_server.log regardless of this setting) ");
-      ini->sectionComment(section, "----------------");
-   }
-
-   ini->setValueYN(section, "DumpKeys", iniSettings->diagnosticKeyDumpMode);
-   ini->setValueYN(section, "LogConnectionProtocol", iniSettings->logConnectionProtocol);
-   ini->setValueYN(section, "LogNetConnection",      iniSettings->logNetConnection);
-   ini->setValueYN(section, "LogEventConnection",    iniSettings->logEventConnection);
-   ini->setValueYN(section, "LogGhostConnection",    iniSettings->logGhostConnection);
-   ini->setValueYN(section, "LogNetInterface",       iniSettings->logNetInterface);
-   ini->setValueYN(section, "LogPlatform",           iniSettings->logPlatform);
-   ini->setValueYN(section, "LogNetBase",            iniSettings->logNetBase);
-   ini->setValueYN(section, "LogUDP",                iniSettings->logUDP);
-
-   ini->setValueYN(section, "LogFatalError",         iniSettings->logFatalError);
-   ini->setValueYN(section, "LogError",              iniSettings->logError);
-   ini->setValueYN(section, "LogWarning",            iniSettings->logWarning);
-   ini->setValueYN(section, "LogConfigurationError", iniSettings->logConfigurationError);
-   ini->setValueYN(section, "LogConnection",         iniSettings->logConnection);
-   ini->setValueYN(section, "LogLevelLoaded",        iniSettings->logLevelLoaded);
-   ini->setValueYN(section, "LogLevelError",         iniSettings->logLevelError);
-   ini->setValueYN(section, "LogLuaObjectLifecycle", iniSettings->logLuaObjectLifecycle);
-   ini->setValueYN(section, "LuaLevelGenerator",     iniSettings->luaLevelGenerator);
-   ini->setValueYN(section, "LuaBotMessage",         iniSettings->luaBotMessage);
-   ini->setValueYN(section, "ServerFilter",          iniSettings->serverFilter);
-}
-
-
-static void writeEffects(CIniFile *ini, IniSettings *iniSettings)
-{
-   const char *section = "Effects";
-   ini->addSection(section);
-
-   if (ini->numSectionComments(section) == 0)
-   {
-      ini->sectionComment(section, "----------------");
-      ini->sectionComment(section, " Various visual effects");
-      ini->sectionComment(section, "----------------");
-   }
-}
 
 static void writeSounds(CIniFile *ini, IniSettings *iniSettings)
 {
@@ -1464,21 +1310,10 @@ void saveWindowPosition(CIniFile *ini, S32 x, S32 y)
 }
 
 
-// This list is currently incomplete, will grow as we move our settings into the new structure
-static const string sections[] = {"Settings", "Host", "Host-Voting"};
-static const string headerComments[] = 
-{
-   "Settings entries contain a number of different options.",
-   "Items in this section control how Bitfighter works when you are hosting a game.  See also Host-Voting.",
-   "Control how voting works on the server.  The default values work pretty well, but if you want to tweak them, go ahead!\n"
-   "Yes and No votes, and abstentions, have different weights.  When a vote is conducted, the total value of all votes (or non-votes)\n"
-   "is added up, and if the result is greater than 0, the vote passes.  Otherwise it fails.  You can adjust the weight of the votes below."
-};
-
-
 static void writeSettings(CIniFile *ini, IniSettings *iniSettings)
 {
    TNLAssert(ARRAYSIZE(sections) == ARRAYSIZE(headerComments), "Mismatch!");
+   static const string HorizontalLine = "----------------";
 
    for(S32 i = 0; i < ARRAYSIZE(sections); i++)
    {
@@ -1494,10 +1329,10 @@ static void writeSettings(CIniFile *ini, IniSettings *iniSettings)
 
          ini->deleteSectionComments(section);      // Delete when done testing (harmless but useless)
 
-         ini->sectionComment(section, "----------------");
+         ini->sectionComment(section, HorizontalLine);      // ----------------
          for(S32 i = 0; i < comments.size(); i++)
             ini->sectionComment(section, " " + comments[i]);
-         ini->sectionComment(section, "----------------");
+         ini->sectionComment(section, HorizontalLine);      // ----------------
 
          // Write all our section comments for items defined in the new manner
          for(S32 i = 0; i < settings.size(); i++)
@@ -1508,11 +1343,13 @@ static void writeSettings(CIniFile *ini, IniSettings *iniSettings)
             for(S32 j = 0; j < comments.size(); j++)
                ini->sectionComment(section, " " + comments[j]);
          }
+
+         ini->sectionComment(section, HorizontalLine);      // ----------------
       }
 
       // Write the settings themselves
       for(S32 i = 0; i < settings.size(); i++)
-         ini->SetValue(section, settings[i]->getKey(), settings[i]->getValueString());
+         ini->SetValue(section, settings[i]->getKey(), settings[i]->getIniString());
    }
 
    const char *section = "Settings";
@@ -1568,75 +1405,6 @@ static void writeSettings(CIniFile *ini, IniSettings *iniSettings)
    // Just in case a user screw up with /linewidth command using value too big or too small.
    if(gDefaultLineWidth >= 0.5 && gDefaultLineWidth <= 5)
       ini->SetValueF (section, "LineWidth", gDefaultLineWidth);
-#endif
-}
-
-
-static void writeEditorSettings(CIniFile *ini, IniSettings *iniSettings)
-{
-   const char *section = "EditorSettings";
-   ini->addSection(section);
-
-   SettingsType settings = iniSettings->mSettings.getSettingsInSection(section);
-
-   if(ini->numSectionComments(section) == 0)
-   {
-      ini->sectionComment(section, "----------------");
-      ini->sectionComment(section, " EditorSettings entries relate to items in the editor");
-
-      // Write all our section comments for items defined in the new manner
-      for(S32 i = 0; i < settings.size(); i++)
-         ini->sectionComment(section, " " + settings[i]->getKey() + " - " + settings[i]->getComment());
-
-      ini->sectionComment(section, "----------------");
-   }
-
-   // Write all settings defined in the new modern manner
-   for(S32 i = 0; i < settings.size(); i++)
-      ini->SetValue(section, settings[i]->getKey(), settings[i]->getValueString());
-}
-
-
-static void writeUpdater(CIniFile *ini, IniSettings *iniSettings)
-{
-   ini->addSection("Updater");
-
-   if(ini->numSectionComments("Updater") == 0)
-   {
-      ini->sectionComment("Updater", "----------------");
-      ini->sectionComment("Updater", " The Updater section contains entries that control how game updates are handled");
-      ini->sectionComment("Updater", " UseUpdater - Enable or disable process that installs updates (WINDOWS ONLY)");
-      ini->sectionComment("Updater", "----------------");
-
-   }
-   ini->setValueYN("Updater", "UseUpdater", iniSettings->useUpdater, true);
-}
-
-
-static void writeHost(CIniFile *ini, IniSettings *iniSettings)
-{
-   const char *section = "Host";
-   ini->addSection(section);
-
-   if(ini->numSectionComments(section) == 0)
-   {
-      addComment("----------------");
-      addComment(" MySqlStatsDatabaseCredentials - If MySql integration has been compiled in (which it probably hasn't been), you can specify the");
-      addComment("                                 database server, database name, login, and password as a comma delimeted list");
-      addComment(" Vote Strengths - Vote will pass when sum of all vote strengths is bigger then zero.");
-      addComment(" MaxFPS - Maximum FPS the dedicaetd server will run at.  Higher values use more CPU, lower may increase lag (default = 100).");
-      addComment(" AlertsVolume - Volume of audio alerts when players join or leave game from 0 (mute) to 10 (full bore).");
-
-      addComment("----------------");
-   }
-
-   ini->SetValueI (section, "AlertsVolume", (S32) (iniSettings->alertsVolLevel * 10));
-   ini->SetValueI (section, "MaxFPS", iniSettings->maxDedicatedFPS);
-   ini->setValueYN(section, "LogStats", iniSettings->logStats);
-
-#ifdef BF_WRITE_TO_MYSQL
-   if(iniSettings->mySqlStatsDatabaseServer == "" && iniSettings->mySqlStatsDatabaseName == "" && iniSettings->mySqlStatsDatabaseUser == "" && iniSettings->mySqlStatsDatabasePassword == "")
-      ini->SetValue  (section, "MySqlStatsDatabaseCredentials", "server, dbname, login, password");
 #endif
 }
 
@@ -1723,19 +1491,14 @@ void saveSettingsToINI(CIniFile *ini, GameSettings *settings)
 
    IniSettings *iniSettings = settings->getIniSettings();
 
-   writeHost(ini, iniSettings);
    writeForeignServerInfo(ini, iniSettings);
    writeLoadoutPresets(ini, settings);
    writePluginBindings(ini, iniSettings);
    writeConnectionsInfo(ini, iniSettings);
-   writeEffects(ini, iniSettings);
    writeSounds(ini, iniSettings);
    writeSettings(ini, iniSettings);
-   writeEditorSettings(ini, iniSettings);
-   writeDiagnostics(ini, iniSettings);
    writeLevels(ini);
    writeSkipList(ini, settings->getLevelSkipList());
-   writeUpdater(ini, iniSettings);
    writePasswordSection(ini);
    writeKeyBindings(ini, settings->getInputCodeManager());
    
