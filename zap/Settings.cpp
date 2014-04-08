@@ -13,6 +13,7 @@ namespace Zap
 EnumParser<DisplayMode>        displayModeEnumParser;
 EnumParser<ColorEntryMode>     colorEntryModeEnumParser;
 EnumParser<YesNo>              yesNoEnumParser;
+EnumParser<MessageType>        messageTypeEnumParser;
 EnumParser<GoalZoneFlashStyle> goalZoneFlashEnumParser;
 EnumParser<RelAbs>             relativeAbsoluteEnumParser;
 
@@ -33,6 +34,10 @@ public:
 #define YES_NO_ITEM(value, name) yesNoEnumParser.addItem(name, value);
     YES_NO_TABLE
 #undef YES_NO_ITEM
+
+#define MESSAGE_TYPE_ITEM(value, name) messageTypeEnumParser.addItem(name, value);
+    MESSAGE_TYPE_TABLE
+#undef MESSAGE_TYPE_ITEM
 
 #define GOAL_ZONE_FLASH_ITEM(value, name) goalZoneFlashEnumParser.addItem(name, value);
     GOAL_ZONE_FLASH_TABLE
@@ -57,8 +62,9 @@ Evaluator::fromString(const string &val) { TNLAssert(false, "Specialize me!"); r
 template<> string             Evaluator::fromString(const string &val) { return val;                                    }
 template<> S32                Evaluator::fromString(const string &val) { return atoi(val.c_str());                      }
 template<> U32                Evaluator::fromString(const string &val) { return atoi(val.c_str());                      }
-template<> F32                Evaluator::fromString(const string &val) { return (F32)atof(val.c_str());                 }
 template<> U16                Evaluator::fromString(const string &val) { return atoi(val.c_str());                      }
+template<> F32                Evaluator::fromString(const string &val) { return (F32)atof(val.c_str());                 }
+template<> MessageType        Evaluator::fromString(const string &val) { return messageTypeEnumParser.getVal(val);      }
 template<> DisplayMode        Evaluator::fromString(const string &val) { return displayModeEnumParser.getVal(val);      }
 template<> YesNo              Evaluator::fromString(const string &val) { return yesNoEnumParser.getVal(val);            }
 template<> RelAbs             Evaluator::fromString(const string &val) { return relativeAbsoluteEnumParser.getVal(val); }
@@ -72,6 +78,7 @@ string Evaluator::toString(const string &val)      { return val;                
 string Evaluator::toString(S32 val)                { return itos(val);                              }
 string Evaluator::toString(U32 val)                { return itos(val);                              }
 string Evaluator::toString(F32 val)                { return ftos(val);                              }
+string Evaluator::toString(MessageType val)        { return messageTypeEnumParser.getKey(val);      }
 string Evaluator::toString(YesNo val)              { return yesNoEnumParser.getKey(val);            }
 string Evaluator::toString(RelAbs val)             { return relativeAbsoluteEnumParser.getKey(val); }
 string Evaluator::toString(DisplayMode val)        { return displayModeEnumParser.getKey(val);      }
