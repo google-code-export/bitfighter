@@ -94,17 +94,18 @@ class Evaluator
 {
 public:
    // Templated declaration
-   template <class DataType> DataType fromString(const string &val);
+   template <class DataType> static DataType fromString(const string &val);
 
    static string toString(const string &val);
    static string toString(S32 val);
    static string toString(U32 val);
    static string toString(F32 val);
-   static string toString(YesNo yesNo);
-   static string toString(RelAbs relAbs);
-   static string toString(DisplayMode displayMode);
-   static string toString(ColorEntryMode colorMode);
-   static string toString(GoalZoneFlashStyle flashStyle);
+   static string toString(MessageType val);
+   static string toString(YesNo val);
+   static string toString(RelAbs val);
+   static string toString(DisplayMode val);
+   static string toString(ColorEntryMode val);
+   static string toString(GoalZoneFlashStyle val);
    static string toString(const Color &color);
 };
 
@@ -277,7 +278,7 @@ public:
    T getVal(const string &value) const
    {
       typename ValueMapType::const_iterator iValue = mValues.find(lcase(value));
-      if(iValue  == mValues.end())      // Item not found, return default
+      if(iValue  == mValues.end())      // Item not found, return default, which 
          return (T)0;
 
       return iValue->second;
