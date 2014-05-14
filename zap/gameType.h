@@ -44,12 +44,17 @@ class Zone;
 ////////////////////////////////////////
 ////////////////////////////////////////
 
-
 class GameType : public NetObject
 {
    typedef NetObject Parent;
 
+public:
    static const S32 TeamNotSpecified = -99999;
+
+   enum ScoringGroup {
+      IndividualScore,
+      TeamScore
+   };
 
 private:
    Game *mGame;
@@ -73,12 +78,15 @@ private:
    S32 mSecondLeadingPlayerScore;   // Score of mLeadingPlayer
 
    bool mCanSwitchTeams;            // Player can switch teams when this is true, not when it is false
-   bool mBetweenLevels;             // We'll need to prohibit certain things (like team changes) when game is in an "intermediate" state
+   bool mBetweenLevels;             // We need to prohibit certain things (like team changes) when game is in an "intermediate" state
    bool mGameOver;                  // Set to true when an end condition is met
 
    bool mEngineerEnabled;
    bool mEngineerUnrestrictedEnabled;
    bool mBotsAllowed;
+
+   bool mOvertime;                  // True when we're in overtime/extended play, false during the normal game
+   bool mSuddenDeath;               // True when we're in sudden death and next score wins (only possible in some GameTypes)
 
    // Info about current level
    string mLevelName;
@@ -104,7 +112,7 @@ protected:
    Timer mScoreboardUpdateTimer;
 
    U32 mTotalGamePlay;  // Continuously counts up and never goes down. Used for syncing and gameplay stats. In Milliseconds.
-   U32 mEndingGamePlay; // Game over when mTotalGamePlay reaches mEndingGamePlay, 0 = no time limit. In Milliseconds.
+   U32 mEndingGamePlay; // Game over when mTotalGamePlay >= mEndingGamePlay, 0 = no time limit. In Milliseconds.
 
    Timer mGameTimeUpdateTimer;         // Timer for when to send clients a game clock update
                        
@@ -118,6 +126,9 @@ protected:
    static const S32 MaxMenuScore;
 
 public:
+   explicit GameType(S32 winningScore = 8);  // Constructor
+   virtual ~GameType();                      // Destructor
+
    static const S32 MAX_GAME_TIME = S32_MAX;
 
    static const S32 FirstTeamNumber = -2;                               // First team is "Hostile to All" with index -2
@@ -141,6 +152,8 @@ public:
    virtual bool canBeTeamGame() const;
    virtual bool canBeIndividualGame() const;
    virtual bool teamHasFlag(S32 teamIndex) const;
+
+   bool isOvertime() const;
 
    virtual void onFlagMounted(S32 teamIndex);         // A flag was picked up by a ship on the specified team
 
@@ -170,7 +183,6 @@ public:
    S32 getRenderingOffset() const;
    /////
    
-
    S32 getLeadingScore() const;
    S32 getLeadingTeam() const;
    S32 getLeadingPlayerScore() const;
@@ -196,11 +208,10 @@ public:
    enum
    {
       RespawnDelay = 1500,
-      SwitchTeamsDelay = 60000,   // Time between team switches (ms) -->  60000 = 1 minute
-      naScore = -99999,           // Score representing a nonsesical event
-      NO_FLAG = -1,               // Constant used for ship not having a flag
+      SwitchTeamsDelay = ONE_MINUTE,   // Time between team switches
+      naScore = -99999,                // Score representing a nonsesical event
+      NO_FLAG = -1,                    // Constant used for ship not having a flag
    };
-
 
    const Vector<WallRec> *getBarrierList();
 
@@ -219,16 +230,7 @@ public:
 
    static Vector<string> getGameTypeNames();
 
-   bool mHaveSoccer;                // Does level have soccer balls? used to determine weather or not to send s2cSoccerCollide
-
    bool mBotZoneCreationFailed;
-
-   enum
-   {
-      MaxPing = 999,
-      DefaultGameTime = 10 * 60 * 1000,
-      DefaultWinningScore = 8,
-   };
 
    // Some games have extra game parameters.  We need to create a structure to communicate those parameters to the editor so
    // it can make an intelligent decision about how to handle them.  Note that, for now, all such parameters are assumed to be S32.
@@ -242,22 +244,16 @@ public:
       S32 maxval;    // Max value for this param
    };
 
-   enum ScoringGroup
-   {
-      IndividualScore,
-      TeamScore,
-   };
 
    virtual S32 getEventScore(ScoringGroup scoreGroup, ScoringEvent scoreEvent, S32 data);
    static string getScoringEventDescr(ScoringEvent event);
 
    // Static vectors used for constructing update RPCs
+   static const S32 MaxPing = 999;
+
    static Vector<RangedU32<0, MaxPing> > mPingTimes;
    static Vector<SignedInt<24> > mScores;
    static Vector<SignedFloat<8> > mRatings;
-
-   explicit GameType(S32 winningScore = DefaultWinningScore);    // Constructor
-   virtual ~GameType();                                 // Destructor
 
    virtual void addToGame(Game *game, GridDatabase *database);
 
@@ -272,7 +268,6 @@ public:
 
    virtual bool processSpecialsParam(const char *param);
    virtual string getSpecialsLine();
-
 
    string getLevelName() const;
    void setLevelName(const StringTableEntry &levelName);
@@ -319,11 +314,15 @@ public:
 
    void achievementAchieved(U8 achievement, const StringTableEntry &playerName);
 
-   virtual void onGameOver();
+   bool onGameOver();
+   void startOvertime();                     // If game ends in a tie, start overtime
+   virtual void onOvertimeStarted();         // Handle GameType specific overtime settings  
+   void startSuddenDeath();
+
 
    void serverAddClient(ClientInfo *clientInfo);         
 
-   void serverRemoveClient(ClientInfo *clientInfo);   // Remove a client from the game
+   void removeClient(ClientInfo *clientInfo);   // Remove a client from the game
 
    virtual bool objectCanDamageObject(BfObject *damager, BfObject *victim);
    virtual void controlObjectForClientKilled(ClientInfo *theClient, BfObject *clientObject, BfObject *killerObject);
@@ -354,6 +353,7 @@ public:
    virtual const Color *getTeamColor(const BfObject *object) const; // Get the color of a team, based on object
            const Color *getTeamColor(S32 team)               const; // Get the color of a team, based on index
 
+   bool isSuddenDeath() const;
 
    //S32 getTeam(const StringTableEntry &playerName);   // Given a player's name, return their team
 
@@ -389,6 +389,8 @@ public:
    TNL_DECLARE_RPC(c2sSyncMessagesComplete, (U32 sequence));
 
    TNL_DECLARE_RPC(s2cSetGameOver, (bool gameOver));
+   TNL_DECLARE_RPC(s2cSetOvertime, ());
+
    TNL_DECLARE_RPC(s2cSetNewTimeRemaining, (U32 timeEndingInMs));
    TNL_DECLARE_RPC(s2cChangeScoreToWin, (U32 score, StringTableEntry changer));
 
@@ -407,7 +409,7 @@ public:
    void updateScore(Ship *ship, ScoringEvent event, S32 data = 0);              
    void updateScore(ClientInfo *clientInfo, ScoringEvent scoringEvent, S32 data = 0); 
    void updateScore(S32 team, ScoringEvent event, S32 data = 0);
-   virtual void updateScore(ClientInfo *player, S32 team, ScoringEvent event, S32 data = 0); // Core uses their own updateScore
+   virtual void updateScore(ClientInfo *player, S32 team, ScoringEvent event, S32 data = 0); // Core uses its own updateScore
 
    void updateLeadingTeamAndScore();   // Sets mLeadingTeamScore and mLeadingTeam
    void updateLeadingPlayerAndScore(); // Sets mLeadingTeamScore and mLeadingTeam

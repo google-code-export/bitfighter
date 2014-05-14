@@ -105,7 +105,7 @@ TNL_IMPLEMENT_NETOBJECT_RPC(SoccerGameType, s2cSoccerScoreMessage,
 
    // Print the message and emit the text effect
    getGame()->displayMessage(Color(0.6f, 1.0f, 0.8f), msg.c_str());
-   getGame()->emitTextEffect(txtEffect, *getTeamColor(scorerTeam), scorePos);
+   getGame()->emitTextEffect(txtEffect, *getTeamColor(scorerTeam), scorePos, true);
 }
 
 
@@ -184,6 +184,13 @@ void SoccerGameType::scoreGoal(Ship *ship, const StringTableEntry &scorerName, S
             mHatTrickCounter = 1;
       }
    }
+}
+
+
+// In Soccer games, we'll enter sudden death... next score wins
+void SoccerGameType::onOvertimeStarted()
+{
+   startSuddenDeath();
 }
 
 
@@ -292,13 +299,14 @@ S32 SoccerGameType::getEventScore(ScoringGroup scoreGroup, ScoringEvent scoreEve
 TNL_IMPLEMENT_NETOBJECT(SoccerBallItem);
 
 static const F32 SOCCER_BALL_ITEM_MASS = 4;
+const F32 SoccerBallItem::SOCCER_BALL_RADIUS = 30;
 
 /**
  * @luafunc SoccerBallItem::SoccerBallItem()
  * @luafunc SoccerBallItem::SoccerBallItem(point)
  */
 // Combined Lua / C++ default constructor
-SoccerBallItem::SoccerBallItem(lua_State *L) : Parent(Point(0,0), true, (F32)SoccerBallItem::SOCCER_BALL_RADIUS, SOCCER_BALL_ITEM_MASS)
+SoccerBallItem::SoccerBallItem(lua_State *L) : Parent(Point(0,0), true, SoccerBallItem::SOCCER_BALL_RADIUS, SOCCER_BALL_ITEM_MASS)
 {
    mObjectTypeNumber = SoccerBallItemTypeNumber;
    mNetFlags.set(Ghostable);
@@ -439,7 +447,7 @@ void SoccerBallItem::renderDock()
 }
 
 
-void SoccerBallItem::renderEditor(F32 currentScale, bool snappingToWallCornersEnabled)
+void SoccerBallItem::renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices)
 {
    renderItem(getRenderPos());
 }

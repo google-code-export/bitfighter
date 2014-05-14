@@ -94,8 +94,9 @@ GameType::GameType(S32 winningScore) : mScoreboardUpdateTimer(THREE_SECONDS), mG
    mLevelHasPredeployedFlags = false;
    mLevelHasFlagSpawns = false;
    mShowAllBots = false;
-   mHaveSoccer = false;
    mBotZoneCreationFailed = false;
+   mOvertime = false;
+   mSuddenDeath = false;
 
    mMinRecPlayers = 0;
    mMaxRecPlayers = 0;
@@ -105,7 +106,7 @@ GameType::GameType(S32 winningScore) : mScoreboardUpdateTimer(THREE_SECONDS), mG
    mBotsAllowed = true;
 
    mTotalGamePlay = 0;
-   mEndingGamePlay = DefaultGameTime;
+   mEndingGamePlay = EIGHT_MINUTES;
 
    mObjectsExpected = 0;
    mGame = NULL;
@@ -603,7 +604,7 @@ void GameType::idle_server(U32 deltaT)
                updateClientScoreboard(clientInfo->getConnection());
          }
 
-         if(getGame()->getSettings()->getIniSettings()->allowTeamChanging)
+         if(getGame()->getSettings()->getIniSettings()->mSettings.getVal<YesNo>(IniKey::AllowTeamChanging))
          {
             if(conn->mSwitchTimer.getCurrent())             // Are we still counting down until the player can switch?
                if(conn->mSwitchTimer.update(deltaT))        // Has the time run out?
@@ -629,8 +630,8 @@ void GameType::idle_server(U32 deltaT)
    // Process any pending Robot events
    EventManager::get()->update();
 
-   // If game time has expired... game is over, man, it's over
-   if(!isTimeUnlimited() && mEndingGamePlay <= mTotalGamePlay)
+   // If game time has expired... game is over, man, it's over (unless we get pushed into overtime)
+   if(!isTimeUnlimited() && !mSuddenDeath && mTotalGamePlay >= mEndingGamePlay)
       gameOverManGameOver();
 }
 
@@ -667,7 +668,7 @@ void GameType::launchKillStreakTextEffects(const ClientInfo *clientInfo) const
    else if(killStreak % 5 == 0)
       msg = itos(killStreak) + "! Hang in there!";
 
-   mGame->emitTextEffect(msg, Colors::yellow, ship->getRenderPos() + Point(0, -150));
+   mGame->emitTextEffect(msg, Colors::yellow, ship->getRenderPos() + Point(0, -150), true);
 }
 
 
@@ -759,8 +760,9 @@ void GameType::gameOverManGameOver()
    if(mGameOver)     // Only do this once
       return;
 
-   onGameOver();                         // Call game-specific end-of-game code
-   // onGameOver() goes before mGameOver = true; so win messages won't get blocked, part of preving messages going away too fast
+   // Call game-specific end-of-game code
+   if(!onGameOver())    
+      return;     // (I guess the game wasn't really over!)
 
    mBetweenLevels = true;
    mGameOver = true;                     // Show scores at end of game
@@ -951,6 +953,34 @@ private:
    GameSettings *mSettings;
    VersionedGameStats mStats;
 
+#ifdef BF_WRITE_TO_MYSQL
+   static string mMySqlStatsDatabaseServer;
+   static string mMySqlStatsDatabaseName;
+   static string mMySqlStatsDatabaseUser;
+   static string mMySqlStatsDatabasePassword;
+   static bool mInitialized;
+
+   static void initializeDbSettings(const string &params)
+   {
+      // params will be a (probably) 4 item comma separated string
+      Vector<string> args;
+
+      parseString(params, args, ',');
+
+      if(args.size() >= 1) mMySqlStatsDatabaseServer   = args[0];
+      if(args.size() >= 2) mMySqlStatsDatabaseName     = args[1];
+      if(args.size() >= 3) mMySqlStatsDatabaseUser     = args[2];
+      if(args.size() >= 4) mMySqlStatsDatabasePassword = args[3];
+
+      // Check for default sample values that get automatically inserted into the INI... can't do anything
+      // until the user has updated them!
+      if(mMySqlStatsDatabaseServer == "server" && mMySqlStatsDatabaseName == "dbname")
+         mMySqlStatsDatabaseServer = "";      // blank this, so it won't try to connect to "server"
+
+      mInitialized = true;
+   }
+#endif
+
 public:
    InsertStatsToDatabaseThread(GameSettings *settings, const VersionedGameStats &stats) { mSettings = settings; mStats = stats; }
    virtual ~InsertStatsToDatabaseThread() { }
@@ -958,12 +988,16 @@ public:
    U32 run()
    {
 #ifdef BF_WRITE_TO_MYSQL
-      if(mSettings->getIniSettings()->mySqlStatsDatabaseServer != "")
+      if(!mInitialized)
+         initializeDbSettings(mSettings->getIniSettings()->mSettings.getVal<string>(IniKey::MySqlStatsDatabaseCredentials));
+
+      if(mMySqlStatsDatabaseServer != "")
       {
-         DatabaseWriter databaseWriter(mSettings->getIniSettings()->mySqlStatsDatabaseServer.c_str(), 
-                                       mSettings->getIniSettings()->mySqlStatsDatabaseName.c_str(),
-                                       mSettings->getIniSettings()->mySqlStatsDatabaseUser.c_str(),   
-                                       mSettings->getIniSettings()->mySqlStatsDatabasePassword.c_str() );
+
+         DatabaseWriter databaseWriter(mMySqlStatsDatabaseServer.c_str(), 
+                                       mMySqlStatsDatabaseName.c_str(),
+                                       mMySqlStatsDatabaseUser.c_str(),   
+                                       mMySqlStatsDatabasePassword.c_str() );
          databaseWriter.insertStats(mStats.gameStats);
       }
       else
@@ -975,6 +1009,12 @@ public:
       return 0;
    }
 };
+
+
+#ifdef BF_WRITE_TO_MYSQL
+   // Initialize our statics
+   bool InsertStatsToDatabaseThread::mInitialized = false;
+#endif
 
 
 // Transmit statistics to the master server, LogStats to game server
@@ -1007,7 +1047,7 @@ void GameType::saveGameStats()
    if(masterConn)
       masterConn->s2mSendStatistics(stats);
 
-   if(getGame()->getSettings()->getIniSettings()->logStats)
+   if(getGame()->getSettings()->getIniSettings()->mSettings.getVal<YesNo>(IniKey::LogStats))
    {
       processStatsResults(&stats.gameStats);
 
@@ -1039,72 +1079,135 @@ void GameType::achievementAchieved(U8 achievement, const StringTableEntry &playe
 
 static Vector<StringTableEntry> messageVals;     // Reusable container
 
-
-// Handle the end-of-game...  handles all games... not in any subclasses
-// Can be overridden for any game-specific game over stuff
+// Handle the end-of-game...  handles all games... not in any subclasses.
+// Can be overridden for any game-specific game over stuff.
+// Returns true if there is a winner and the game can really be over, 
+// or false if there is a tie and requires overtime.
 // Server only
-void GameType::onGameOver()
+bool GameType::onGameOver()
 {
    static StringTableEntry teamString("Team ");
    static StringTableEntry emptyString;
 
    bool tied = false;
+   bool onlyOne = false;
    messageVals.clear();
 
    if(isTeamGame())   // Team game -> find top team
    {
-      S32 teamWinner = 0;
-      S32 winningScore = ((Team *)(mGame->getTeam(0)))->getScore();
-      for(S32 i = 1; i < mGame->getTeamCount(); i++)
+      TeamGameResults results = mGame->getTeamBasedGameWinner();
+
+      if(results.first == Tied)
+         tied = true;
+
+      else if(results.first == OnlyOnePlayerOrTeam)
+         onlyOne = true;
+
+      else if(results.first == TiedByTeamsWithNoPlayers)    // Game is tied, but no overtime
       {
-         if(((Team *)(mGame->getTeam(i)))->getScore() == winningScore)
-            tied = true;
-         else if(((Team *)(mGame->getTeam(i)))->getScore() > winningScore)
-         {
-            teamWinner = i;
-            winningScore = ((Team *)(mGame->getTeam(i)))->getScore();
-            tied = false;
-         }
+         static StringTableEntry tieMessage("The game ended in a tie.");
+         broadcastMessage(GameConnection::ColorNuclearGreen, SFXFlagDrop, tieMessage);
+         return true;
       }
-      if(!tied)
+
+      else           // We have an unambiguous winner!
       {
+         S32 winner = mGame->getTeamBasedGameWinner().second;
+
          messageVals.push_back(teamString);
-         messageVals.push_back(mGame->getTeam(teamWinner)->getName());
+         messageVals.push_back(mGame->getTeam(winner)->getName());
       }
    }
-   else                    // Individual game -> find player with highest score
+   else              // Individual game -> find player with highest score
    {
-      S32 clientCount = mGame->getClientCount();
+      IndividualGameResults results = mGame->getIndividualGameWinner();
+      
+      GameEndStatus status = results.first;
+      const ClientInfo *winningClient = results.second;
 
-      if(clientCount)
+      if(status == Tied)
+         tied = true;
+
+      else if(results.first == OnlyOnePlayerOrTeam)
+         onlyOne = true;
+
+      else
       {
-         ClientInfo *winningClient = mGame->getClientInfo(0);
-
-         for(S32 i = 1; i < clientCount; i++)
-         {
-            ClientInfo *clientInfo = mGame->getClientInfo(i);
-
-            tied = (clientInfo->getScore() == winningClient->getScore());     // TODO: I think this logic is wrong -- what if scores are in the order 4 5 5 4 will still be tied?
-
-            if(!tied && clientInfo->getScore() > winningClient->getScore())
-               winningClient = clientInfo;
-         }
-
-         if(!tied)
-         {
-            messageVals.push_back(emptyString);
-            messageVals.push_back(winningClient->getName());
-         }
+         messageVals.push_back(emptyString);
+         messageVals.push_back(winningClient->getName());
       }
    }
 
-   static StringTableEntry tieMessage("The game ended in a tie.");
-   static StringTableEntry winMessage("%e0%e1 wins the game!");
+   if(onlyOne)             // No messages for solo games
+      return true;
 
    if(tied)
-      broadcastMessage(GameConnection::ColorNuclearGreen, SFXFlagDrop, tieMessage);
-   else
-      broadcastMessage(GameConnection::ColorNuclearGreen, SFXFlagCapture, winMessage, messageVals);
+   {
+      startOvertime();     // SUDDEN DEATH OVERTIME!!!!
+      return false;
+   }
+
+   static StringTableEntry winMessage("%e0%e1 wins the game!");
+   broadcastMessage(GameConnection::ColorNuclearGreen, SFXFlagCapture, winMessage, messageVals);
+   return true;
+}
+
+
+// Runs on server and client
+void GameType::startOvertime()
+{
+   if(isServer())
+      s2cSetOvertime();    // Tell the clients
+
+   onOvertimeStarted();
+
+   mOvertime = true;
+}
+
+
+// Handle any gameType specific overtime actions/settings... is overridden by various gameTypes.
+// Will be called at the beginning of each overtime period if overtime is extended.  
+// On first call, mOvertime will be false; mOvertime will be true on subsequent calls.
+//
+// In Bitmatch (and other) games, we'll just add 20 seconds to game clock in event of a tie.  Other games will override this.
+void GameType::onOvertimeStarted()
+{
+   mEndingGamePlay += TWENTY_SECONDS;    
+
+   // And release a text effect to notify players
+   if(isClient())
+   {
+      // The 750 ms delay of the second TextEffect makes a nice two-tiered effect
+      string msg = mOvertime ? "MORE OVERTIME!" : "OVERTIME!";
+      mGame->emitTextEffect(msg, Colors::red, Point(0,0), false);
+      mGame->emitDelayedTextEffect(750, "+20 SECONDS", Colors::red, Point(0,0), false);
+
+      // TODO: Need a SFX here
+   }
+}
+
+
+// Several GameTypes enter a period of sudden death in the event of a tie... next score wins
+void GameType::startSuddenDeath()
+{
+   mSuddenDeath = true;
+   mEndingGamePlay += ONE_MINUTE;      // By extending game for one minute, we'll retrigger overtime message after a minute
+
+   // And release a text effect to notify players
+   if(isClient())
+   {
+      // The 750 ms delay of the second TextEffect makes a nice two-tiered effect
+      mGame->emitTextEffect("SUDDEN DEATH!", Colors::red, Point(0,0), false);
+      getGame()->emitDelayedTextEffect(750, "NEXT SCORE WINS", Colors::red, Point(0,0), false);
+
+      // TODO: Need a SFX here
+   }
+}
+
+
+bool GameType::isSuddenDeath() const
+{
+   return mSuddenDeath;
 }
 
 
@@ -1121,6 +1224,14 @@ TNL_IMPLEMENT_NETOBJECT_RPC(GameType, s2cSetGameOver, (bool gameOver), (gameOver
       static_cast<ClientGame *>(mGame)->setEnteringGameOverScoreboardPhase();
 
 #endif
+}
+
+
+// Tells the client that we have entered overtime
+TNL_IMPLEMENT_NETOBJECT_RPC(GameType, s2cSetOvertime, (), (),
+                            NetClassGroupGameMask, RPCGuaranteed, RPCToGhost, 0)
+{
+   startOvertime();
 }
 
 
@@ -1187,6 +1298,8 @@ void GameType::onAddedToGame(Game *game)
 // This ClientInfo should be a FullClientInfo in every case
 bool GameType::spawnShip(ClientInfo *clientInfo)
 {
+   TNLAssert(dynamic_cast<FullClientInfo *>(clientInfo), "Was expecting a FullCleintInfo!");
+
    // Check if player is "on hold" due to inactivity; if so, delay spawn and alert client.  Never delays bots.
    // Note, if we know that this is the beginning of a new level, we can save a wee bit of bandwidth by passing
    // NULL as first arg to setSpawnDelayed(), but we don't check this currently, and it's probably not worth doing
@@ -1251,9 +1364,6 @@ bool GameType::spawnShip(ClientInfo *clientInfo)
                zone->collide(newShip);
          } 
       }
-
-
-      //clientInfo->resetActiveLoadout();      // Why?
    }
 
    Teleporter::checkAllTeleporters(clientInfo->getShip());
@@ -1269,12 +1379,7 @@ void GameType::spawnRobot(Robot *robot)
 
    Point spawnPoint = getSpawnPoint(robotPtr->getTeam());
 
-   if(!robot->initialize(spawnPoint))
-   {
-      if(robotPtr.isValid())
-         robotPtr->deleteObject();
-      return;
-   }
+   robot->initialize(spawnPoint);
 }
 
 
@@ -1518,11 +1623,7 @@ bool GameType::makeSureTeamCountIsNotZero()
 {
    if(mGame->getTeamCount() == 0) 
    {
-      Team *team = new Team;           // Will be deleted by TeamManager
-      team->setName("Missing Team");
-      team->setColor(Colors::blue);
-      mGame->addTeam(team);
-
+      mGame->addTeam(new Team("Missing Team", Colors::blue));     // Will be deleted by TeamManager
       return true;
    }
 
@@ -1736,7 +1837,7 @@ void GameType::updateScore(Ship *ship, ScoringEvent scoringEvent, S32 data)
 }
 
 
-// Handle both individual scores and team scores
+// Handle both individual scores and team scores; overridden by CoreGameType
 // Runs on server only
 void GameType::updateScore(ClientInfo *player, S32 teamIndex, ScoringEvent scoringEvent, S32 data)
 {
@@ -1748,6 +1849,9 @@ void GameType::updateScore(ClientInfo *player, S32 teamIndex, ScoringEvent scori
    // Get event scores
    S32 playerPoints = getEventScore(IndividualScore, scoringEvent, data);
    S32 teamPoints = getEventScore(TeamScore, scoringEvent, data);
+
+   if(playerPoints == 0 && teamPoints == 0)
+      return;
 
    // Grab our LuaPlayerInfo for the Lua event if it exists
    LuaPlayerInfo *playerInfo = NULL;
@@ -1819,13 +1923,10 @@ void GameType::updateScore(ClientInfo *player, S32 teamIndex, ScoringEvent scori
    }
    // Fire scoring event for non-team games
    else
-   {
       EventManager::get()->fireEvent(EventManager::ScoreChangedEvent, playerPoints, teamIndex + 1, playerInfo);
-   }
-
 
    // End game if max score has been reached
-   if(newScore >= mWinningScore)
+   if(newScore >= mWinningScore || mSuddenDeath)
       gameOverManGameOver();
 }
 
@@ -2189,10 +2290,7 @@ void GameType::changeClientTeam(ClientInfo *client, S32 team)
             obj->setOwner(NULL);
       }
 
-      if(ship->isRobot())              // Players get a new ship, robots reuse the same object
-         ship->setChangeTeamMask();
-      else
-         client->respawnTimer.clear(); // If we've just died, this will keep a second copy of ourselves from appearing
+      ship->onChangedClientTeam();
 
       ship->kill();           // Destroy the old ship
    }
@@ -2255,9 +2353,9 @@ GAMETYPE_RPC_S2C(GameType, s2cAddClient,
 }
 
 
-// Remove a client from the game
+// Player quit -- remove client from the game
 // Server only
-void GameType::serverRemoveClient(ClientInfo *clientInfo)
+void GameType::removeClient(ClientInfo *clientInfo)
 {
    if(clientInfo->getConnection())
    {
@@ -2276,7 +2374,14 @@ void GameType::serverRemoveClient(ClientInfo *clientInfo)
    // Note that we do not need to delete clientConnection... TNL handles that, and the destructor gets runs shortly after we get here
 
    static_cast<ServerGame *>(getGame())->suspendIfNoActivePlayers();
+
+   // If we are in overtime, check to make sure there are at least two players/teams left... if not, crown a winner and end the game!
+   if(mOvertime)
+   {
+      // Do something!!
+   }
 }
+
 
 void GameType::setTimeRemaining(U32 timeLeft, bool isUnlimited)
 {
@@ -2366,13 +2471,7 @@ GAMETYPE_RPC_S2C(GameType, s2cAddTeam, (StringTableEntry teamName, F32 r, F32 g,
    if(firstTeam)
       mGame->clearTeams();
 
-   Team *team = new Team;           // Will be deleted by TeamManager
-
-   team->setName(teamName);
-   team->setColor(r,g,b);
-   team->setScore(score);
-
-   mGame->addTeam(team);
+   mGame->addTeam(new Team(teamName.getString(), r, g, b, score));   // Team will be deleted by TeamManager
 }
 
 
@@ -2383,7 +2482,7 @@ GAMETYPE_RPC_S2C(GameType, s2cSetTeamScore, (RangedU32<0, Game::MAX_TEAMS> teamI
    if(teamIndex >= U32(mGame->getTeamCount()))
       return;
    
-   ((Team *)mGame->getTeam(teamIndex))->setScore(score);
+   mGame->getTeam(teamIndex)->setScore(score);
    updateLeadingTeamAndScore();    
 }
 
@@ -2539,7 +2638,9 @@ void GameType::onGhostAvailable(GhostConnection *theConnection)
       s2cAddWalls(mWalls[i].verts, mWalls[i].width, mWalls[i].solid);
 
    broadcastNewRemainingTime();
-   s2cSetGameOver(mGameOver);
+   s2cSetGameOver(mGameOver);    // TODO: Is this really needed?
+   TNLAssert(!mGameOver, "Is this ever true here?");     // If this assert never trips... then we can get rid of the s2c above.  4/26/2014
+
    s2cSyncMessagesComplete(theConnection->getGhostingSequence());
 
    NetObject::setRPCDestConnection(NULL);             // Set RPCs to go to all players
@@ -2613,15 +2714,17 @@ void GameType::processServerCommand(ClientInfo *clientInfo, const char *cmd, Vec
    {
       if(clientInfo->isAdmin())
       {
-         bool prev_enableServerVoiceChat = serverGame->getSettings()->getIniSettings()->enableServerVoiceChat;
+         Settings<IniKey::SettingsItem> settings = serverGame->getSettings()->getIniSettings()->mSettings;
+         bool prev_enableServerVoiceChat = settings.getVal<YesNo>(IniKey::EnableServerVoiceChat);
          loadSettingsFromINI(&GameSettings::iniFile, serverGame->getSettings());    // Why??
 
-         if(prev_enableServerVoiceChat != serverGame->getSettings()->getIniSettings()->enableServerVoiceChat)
+         bool curr_enableServerVoiceChat = settings.getVal<YesNo>(IniKey::EnableServerVoiceChat);
+         if(curr_enableServerVoiceChat != prev_enableServerVoiceChat)
             for(S32 i = 0; i < mGame->getClientCount(); i++)
                if(!mGame->getClientInfo(i)->isRobot())
                {
                   GameConnection *gc = mGame->getClientInfo(i)->getConnection();
-                  gc->s2rVoiceChatEnable(serverGame->getSettings()->getIniSettings()->enableServerVoiceChat && !gc->mChatMute);
+                  gc->s2rVoiceChatEnable(settings.getVal<YesNo>(IniKey::EnableServerVoiceChat) && !gc->mChatMute);
                }
          clientInfo->getConnection()->s2cDisplayMessage(0, 0, "Configuration settings loaded");
       }
@@ -2652,8 +2755,9 @@ bool GameType::addBotFromClient(Vector<StringTableEntry> args)
       conn->s2cDisplayErrorMessage("!!! This level does not allow robots");
 
    // No default robot set
-   else if(!clientInfo->isAdmin() && settings->getIniSettings()->defaultRobotScript == "" && args.size() < 2)
-      conn->s2cDisplayErrorMessage("!!! This server doesn't have default robots configured");
+   else if(!clientInfo->isAdmin() && args.size() < 2 &&
+           settings->getIniSettings()->mSettings.getVal<string>(IniKey::DefaultRobotScript) == "")
+      conn->s2cDisplayErrorMessage("!!! This server doesn't have a default robot configured");
 
    else if(!clientInfo->isLevelChanger())
    { /* Do nothing -- error message handled upstream */ }
@@ -2733,7 +2837,6 @@ GAMETYPE_RPC_C2S(GameType, c2sAddBots,
 
       broadcastMessage(GameConnection::ColorNuclearGreen, SFXNone, msg, messageVals);
    }
-
 }
 
 
@@ -2746,7 +2849,6 @@ GAMETYPE_RPC_C2S(GameType, c2sSetWinningScore, (U32 score), (score))
    // Level changers and above
    if(!clientInfo->isLevelChanger())
       return;  // Error message handled client-side
-
 
    if(score <= 0)    // i.e. score is invalid
       return;  // Error message handled client-side
@@ -2801,7 +2903,7 @@ GAMETYPE_RPC_C2S(GameType, c2sResetScore, (), ())
          s2cSetTeamScore(i, 0);
 
       // Set the score internally...
-      ((Team *)mGame->getTeam(i))->setScore(0);
+      mGame->getTeam(i)->setScore(0);
    }
 
    StringTableEntry msg("%e0 has reset the score of the game");
@@ -2919,14 +3021,14 @@ GAMETYPE_RPC_C2S(GameType, c2sSetMaxBots, (S32 count), (count))
    if(count <= 0)
       return;  // Error message handled client-side
 
-   settings->getIniSettings()->maxBots = count;
+   settings->getIniSettings()->mSettings.setVal(IniKey::MaxBots, count);
 
-   GameConnection *conn = clientInfo->getConnection();
-   TNLAssert(conn == source, "If this never fires, we can get rid of conn!");    // Added long ago, well before Dec 2013
+   //GameConnection *conn = clientInfo->getConnection();
+   //TNLAssert(conn == source, "If this never fires, we can get rid of conn!");    // Added long ago, well before Dec 2013
 
    messageVals.clear();
    messageVals.push_back(itos(count));
-   conn->s2cDisplayMessageE(GameConnection::ColorRed, SFXNone, "Maximum bots was changed to %e0", messageVals);
+   source->s2cDisplayMessageE(GameConnection::ColorRed, SFXNone, "Maximum bots was changed to %e0", messageVals);
 }
 
 
@@ -3085,7 +3187,7 @@ GAMETYPE_RPC_C2S(GameType, c2sGlobalMutePlayer, (StringTableEntry playerName), (
    gc->mChatMute = !gc->mChatMute;
 
    // if server voice chat is allowed, send voice chat status.
-   if(getGame()->getSettings()->getIniSettings()->enableServerVoiceChat)
+   if(getGame()->getSettings()->getIniSettings()->mSettings.getVal<YesNo>(IniKey::EnableServerVoiceChat))
       gc->s2rVoiceChatEnable(!gc->mChatMute);
 
    GameConnection *conn = clientInfo->getConnection();
@@ -3096,15 +3198,16 @@ GAMETYPE_RPC_C2S(GameType, c2sGlobalMutePlayer, (StringTableEntry playerName), (
 
 GAMETYPE_RPC_C2S(GameType, c2sClearScriptCache, (), ())
 {
-   LuaScriptRunner::clearScriptCache();
    ClientInfo *clientInfo = ((GameConnection *) getRPCSourceConnection())->getClientInfo();
 
    if(!clientInfo->isAdmin())    // Error message handled client-side
       return;  
 
-   clientInfo->getConnection()->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "Script cache cleared; scripts will be reloaded on next use");
-}
+   LuaScriptRunner::clearScriptCache();
 
+   clientInfo->getConnection()->s2cDisplayMessage(
+         GameConnection::ColorRed, SFXNone, "Script cache cleared; scripts will be reloaded on next use");
+}
 
 
 GAMETYPE_RPC_C2S(GameType, c2sTriggerTeamChange, (StringTableEntry playerName, S32 teamIndex), (playerName, teamIndex))
@@ -3124,7 +3227,8 @@ GAMETYPE_RPC_C2S(GameType, c2sTriggerTeamChange, (StringTableEntry playerName, S
    changeClientTeam(playerClientInfo, teamIndex);
 
    if(!playerClientInfo->isRobot())
-      playerClientInfo->getConnection()->s2cDisplayMessage(GameConnection::ColorRed, SFXNone, "An admin has shuffled you to a different team");
+      playerClientInfo->getConnection()->s2cDisplayMessage(
+            GameConnection::ColorRed, SFXNone, "An admin has shuffled you to a different team");
 }
 
 
@@ -3485,7 +3589,7 @@ TNL_IMPLEMENT_NETOBJECT_RPC(GameType, s2cAchievementMessage,
 
    Ship *ship = mGame->findShip(clientName);
    if(ship)
-      mGame->emitTextEffect(textEffectText, Colors::yellow, ship->getRenderPos() + Point(0, 150));
+      mGame->emitTextEffect(textEffectText, Colors::yellow, ship->getRenderPos() + Point(0, 150), true);
 }
 
 
@@ -3596,7 +3700,7 @@ TNL_IMPLEMENT_NETOBJECT_RPC(GameType, c2sVoiceChat, (bool echo, ByteBufferPtr vo
    ClientInfo *sourceClientInfo = source->getClientInfo();
 
    // If globally muted or voice chat is disabled on the server, don't send to anyone
-   if(source->mChatMute || !getGame()->getSettings()->getIniSettings()->enableServerVoiceChat)
+   if(source->mChatMute || !getGame()->getSettings()->getIniSettings()->mSettings.getVal<YesNo>(IniKey::EnableServerVoiceChat))
       return;
 
    if(source)
@@ -3679,6 +3783,12 @@ HelpItem GameType::getGameStartInlineHelpItem() const { return isTeamGame() ? Te
 bool GameType::isFlagGame()          const { return false; }
 bool GameType::canBeTeamGame()       const { return true;  }
 bool GameType::canBeIndividualGame() const { return true;  }
+
+
+bool GameType::isOvertime() const
+{
+   return mOvertime;
+}
 
 
 bool GameType::teamHasFlag(S32 teamIndex) const
@@ -3776,10 +3886,12 @@ U32 GameType::getTotalGameTime() const
    return mEndingGamePlay / 1000;
 }
 
+
 U32 GameType::getTotalGameTimeInMs() const
 {
    return mEndingGamePlay;
 }
+
 
 // Return total time played, new gametype starts at 0 and constantly count up while playing, it doesn't matter what the time limit is.
 U32 GameType::getTotalGamePlayedInMs() const

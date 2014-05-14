@@ -178,7 +178,7 @@ private:
    void initialize(const Point &pos);
 
 public:
-   static const S32 SensorRadius;            // Radius of outer circle when mine is rendered
+   static const F32 SensorRadius;            // Radius of outer circle when mine is rendered
    static const S32 ArmedMask = Burst::FirstFreeMask;
 
    Mine(const Point &pos, BfObject *owner);  // Constructor -- used when mine is planted
@@ -200,7 +200,7 @@ public:
 
    /////
    // Editor methods
-   void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled);
+   void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices = false);
    void renderDock();
 
    const char *getEditorHelpString();
@@ -261,7 +261,7 @@ public:
 
    /////
    // Editor methods
-   void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled);
+   void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices = false);
    void renderDock();
 
    const char *getEditorHelpString();

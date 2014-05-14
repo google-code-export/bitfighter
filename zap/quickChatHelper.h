@@ -19,18 +19,21 @@ using namespace std;
 namespace Zap
 {
 
+class CIniFile;
+
 struct QuickChatNode
 {
    U32 depth;
    InputCode inputCode;
    InputCode buttonCode;
-   bool teamOnly;
-   bool commandOnly;
+   MessageType messageType;
    string caption;
    string msg;
-   bool isMsgItem;         // False for groups, true for messages
 
-   QuickChatNode();        // Constructor
+   // Constructors
+   QuickChatNode();
+   QuickChatNode(S32 depth, const CIniFile *ini, const string &key, bool isGroup);
+
    virtual ~QuickChatNode();
 };
 

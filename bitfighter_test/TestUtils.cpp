@@ -83,8 +83,7 @@ GamePair::GamePair(const string &levelCode, S32 clientCount)
 void GamePair::initialize(GameSettingsPtr settings, const string &levelCode, S32 clientCount)
 {
    // Need to start Lua before we add any clients.  Might as well do it now.
-   LuaScriptRunner::setScriptingDir(settings->getFolderManager()->luaDir);
-   LuaScriptRunner::startLua();
+   LuaScriptRunner::startLua(settings->getFolderManager()->getLuaDir());
 
    LevelSourcePtr levelSource = LevelSourcePtr(new StringLevelSource(levelCode));
    initHosting(settings, levelSource, true, false);      // Creates a game and adds it to GameManager
@@ -137,7 +136,7 @@ void GamePair::idle(U32 timeDelta, U32 cycles)
 
 
 // Simulates player joining game from new client
-void GamePair::addClient(const string &name, S32 team)
+void GamePair::addClient(const string &name, S32 teamIndex)
 {
    GameSettingsPtr settings = GameSettingsPtr(new GameSettings());
 
@@ -157,10 +156,10 @@ void GamePair::addClient(const string &name, S32 team)
    if(!clientInfo->isRobot())
       clientInfo->getConnection()->useZeroLatencyForTesting();
 
-   if(team != NO_TEAM)
+   if(teamIndex != NO_TEAM)
    {
-      TNLAssert(team < server->getTeamCount(), "Bad team!");
-      server->getGameType()->changeClientTeam(clientInfo, team);
+      TNLAssert(teamIndex < server->getTeamCount(), "Bad team!");
+      server->getGameType()->changeClientTeam(clientInfo, teamIndex);
    }
 }
 
@@ -204,7 +203,7 @@ void GamePair::removeClient(const string &name)
 }
 
 
-void GamePair::addBotClient(const string &name, S32 team)
+void GamePair::addBotClient(const string &name, S32 teamIndex)
 {
    ServerGame *server = GameManager::getServerGame();
 
@@ -217,8 +216,8 @@ void GamePair::addBotClient(const string &name, S32 team)
    // respawning the BfObject representing that ship would be on the correct team.  Not so here (where we are
    // taking lots of shortcuts); here we need to manually assign a new team to the robot object in addition to
    // it's more "official" setting on the ClientInfo.
-   clientInfo->setTeamIndex(team);
-   clientInfo->getShip()->setTeam(team);
+   clientInfo->setTeamIndex(teamIndex);
+   clientInfo->getShip()->setTeam(teamIndex);
 }
 
 

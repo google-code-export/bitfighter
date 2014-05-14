@@ -405,44 +405,16 @@ bool MultiLevelSource::populateLevelInfoFromSource(const string &fullFilename, L
       return false;
    }
 
-   string hash;
-	
-   S32 t1, t2;
-   // Method 1
-   {
-   S64 ts = Platform::getHighPrecisionTimerValue();
-   string contents = readFile(fullFilename);
-   getLevelInfoFromCodeChunk(contents, levelInfo);     // Fills levelInfo with data from file
-   hash = Md5::getHashFromString(contents); 
-   S64 te = Platform::getHighPrecisionTimerValue();
-   t1 = te - ts;
-   }
-
-   {
-   // Method 2
-   S64 ts = Platform::getHighPrecisionTimerValue();
-
    char data[1024 * 4];  // Should be enough to fit all parameters at the beginning of level; we don't need to read everything
 	S32 size = (S32)fread(data, 1, sizeof(data), f);
 	fclose(f);
 
-   hash = Md5::getHashFromFile(fullFilename); 
-   bool inDatabase = getLevelInfoFromDatabase(hash, levelInfo);
+   getLevelInfoFromCodeChunk(string(data, size), levelInfo);     // Fills levelInfo with data from file
 
-   if(!inDatabase)
- 	   getLevelInfoFromCodeChunk(string(data, size), levelInfo);     // Fills levelInfo with data from file
-
-   // See if this slows things down... serves no other purpose at the moment
-   // Tests suggest this takes between 0 and 1 ms
-   S64 te = Platform::getHighPrecisionTimerValue();
-   t2 = (S32)(te - ts);
-   }
-
-   logprintf("Timings: %s read entire file: %d / read chunk + md5: %d,  %f2.2 >>> ", fullFilename.c_str(), t1, t2, (F64)t1 / (F64)t2);
+   string hash = Md5::getHashFromFile(fullFilename); 
 
    levelInfo.ensureLevelInfoHasValidName();
 	return true;
-
 }
 
 
@@ -496,7 +468,7 @@ string FileListLevelSource::loadLevel(S32 index, Game *game, GridDatabase *gameO
 
    LevelInfo *levelInfo = &mLevelInfos[index];
 
-	string filename = FolderManager::findLevelFile(GameSettings::getFolderManager()->levelDir, levelInfo->filename);
+	string filename = FolderManager::findLevelFile(GameSettings::getFolderManager()->getLevelDir(), levelInfo->filename);
 
 	if(filename == "")
 	{
@@ -518,7 +490,10 @@ string FileListLevelSource::loadLevel(S32 index, Game *game, GridDatabase *gameO
 Vector<string> FileListLevelSource::findAllFilesInPlaylist(const string &fileName, const string &levelDir)
 {
    Vector<string> levels;
-   Vector<string> lines = parseString(readFile(fileName));
+   string contents;
+
+   readFile(fileName, contents);
+   Vector<string> lines = parseString(contents);
 
    for(S32 i = 0; i < lines.size(); i++)
 	{

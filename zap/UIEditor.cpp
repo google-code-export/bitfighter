@@ -59,6 +59,7 @@
 #include "RenderUtils.h"
 #include "OpenglUtils.h"
 #include "ScreenShooter.h"
+#include "FontManager.h"
 
 #include <cmath>
 #include <set>
@@ -160,9 +161,10 @@ EditorUserInterface::EditorUserInterface(ClientGame *game) : Parent(game)
 
    mSaveMsgTimer.setPeriod(FIVE_SECONDS);    
 
-   mGridSize = game->getSettings()->getIniSettings()->mSettings.getVal<U32>("EditorGridSize");
+   mGridSize = game->getSettings()->getIniSettings()->mSettings.getVal<U32>(IniKey::EditorGridSize);
 
    mQuitLocked = false;
+   mVertexEditMode = true;
 }
 
 
@@ -174,7 +176,7 @@ GridDatabase *EditorUserInterface::getDatabase() const
 
 F32 EditorUserInterface::getGridSize() const
 {
-   return mGridSize;
+   return (F32)mGridSize;
 }
 
 
@@ -583,7 +585,7 @@ void EditorUserInterface::loadLevel()
    cleanUp();
 
    FolderManager *folderManager = game->getSettings()->getFolderManager();
-   string fileName = joindir(folderManager->levelDir, filename).c_str();
+   string fileName = joindir(folderManager->getLevelDir(), filename).c_str();
 
 
    // Process level file --> returns true if file found and loaded, false if not (assume it's a new level)
@@ -925,7 +927,7 @@ void EditorUserInterface::onPluginExecuted(const Vector<string> &args)
 
 void EditorUserInterface::showCouldNotFindScriptMessage(const string &scriptName)
 {
-   string pluginDir = getGame()->getSettings()->getFolderManager()->pluginDir;
+   string pluginDir = getGame()->getSettings()->getFolderManager()->getPluginDir();
 
    Vector<string> messages;
    messages.push_back("Plugin not Found");
@@ -1251,7 +1253,7 @@ void EditorUserInterface::onActivate()
 
    FolderManager *folderManager = settings->getFolderManager();
 
-   if(folderManager->levelDir == "")      // Never did resolve a leveldir... no editing for you!
+   if(folderManager->getLevelDir().empty())      // Never did resolve a leveldir... no editing for you!
    {
       getUIManager()->reactivatePrevUI();     // Must come before the error msg, so it will become the previous UI when that one exits
 
@@ -1694,7 +1696,7 @@ void EditorUserInterface::renderTurretAndSpyBugRanges(GridDatabase *editorDb)
       glEnable(GL_DEPTH_WRITEMASK);
       glDepthFunc(GL_LESS);
       glPushMatrix();
-      glTranslatef(0, 0, -0.95f);
+      glTranslate(0, 0, -0.95f);
 
       // This blending works like this, source(SRC) * GL_ONE_MINUS_DST_COLOR + destination(DST) * GL_ONE
       glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ONE);  
@@ -1707,7 +1709,7 @@ void EditorUserInterface::renderTurretAndSpyBugRanges(GridDatabase *editorDb)
          BfObject *editorObj = dynamic_cast<BfObject *>(fillVector[i]);
 
          if(i != 0 && editorObj->getTeam() != prevTeam)
-            glTranslatef(0, 0, 0.05f);
+            glTranslate(0, 0, 0.05f);
          prevTeam = editorObj->getTeam();
 
          Point pos = editorObj->getPos();
@@ -1976,15 +1978,15 @@ void EditorUserInterface::renderReferenceShip()
    glPushMatrix();
       glTranslate(mMousePos);
       glScale(mCurrentScale);
-      glRotatef(90, 0, 0, 1);
+      glRotate(90);
       renderShip(ShipShape::Normal, &Colors::red, 1, thrusts, 1, 5, 0, false, false, false, false);
-      glRotatef(-90, 0, 0, 1);
+      glRotate(-90);
 
       // Draw collision circle
       const F32 spaceAngle = 0.0278f * FloatTau;
       glColor(Colors::green, 0.35f);
       glLineWidth(gLineWidth1);
-      drawDashedCircle(Point(0,0), Ship::CollisionRadius, 10, spaceAngle, 0);
+      drawDashedCircle(Point(0,0), (F32)Ship::CollisionRadius, 10, spaceAngle, 0);
       glLineWidth(gDefaultLineWidth);
 
       // And show how far it can see
@@ -2066,14 +2068,15 @@ void EditorUserInterface::render()
       }
 
       // Render our snap vertex as a hollow magenta box...
-      if(!mPreviewMode && mSnapObject && mSnapObject->isSelected() && mSnapVertexIndex != NONE &&        // ...but not in preview mode...
-         mSnapObject->getGeomType() != geomPoint &&                                                      // ...and not on point objects...
-         !mSnapObject->isVertexLitUp(mSnapVertexIndex) && !mSnapObject->vertSelected(mSnapVertexIndex))  // ...or selected vertices
+      if(mVertexEditMode &&                                                                                 // Must be in vertex-edit mode
+            !mPreviewMode && mSnapObject && mSnapObject->isSelected() && mSnapVertexIndex != NONE &&        // ...but not in preview mode...
+            mSnapObject->getGeomType() != geomPoint &&                                                      // ...and not on point objects...
+            !mSnapObject->isVertexLitUp(mSnapVertexIndex) && !mSnapObject->vertSelected(mSnapVertexIndex))  // ...or selected vertices
       {
          renderVertex(SnappingVertex, mSnapObject->getVert(mSnapVertexIndex), NO_NUMBER, mCurrentScale/*, alpha*/);  
       }
 
-    glPopMatrix(); 
+   glPopMatrix();
 
    if(!mNormalizedScreenshotMode)
    {
@@ -2148,7 +2151,7 @@ void EditorUserInterface::renderObjects(GridDatabase *database, RenderModes rend
             obj->render();
          else
          {
-            obj->renderEditor(mCurrentScale, getSnapToWallCorners());
+            obj->renderEditor(mCurrentScale, getSnapToWallCorners(), mVertexEditMode);
             obj->renderAndLabelHighlightedVertices(mCurrentScale);
          }
       }
@@ -2162,9 +2165,14 @@ void EditorUserInterface::renderWallsAndPolywalls(GridDatabase *database, const 
    GameSettings *settings = getGame()->getSettings();
 
    WallSegmentManager *wsm = database->getWallSegmentManager();
-   const Color &fillColor = mPreviewMode ? *settings->getWallFillColor() : Colors::EDITOR_WALL_FILL_COLOR;
 
-   renderWalls(wsm->getWallSegmentDatabase(), *wsm->getWallEdgePoints(), *wsm->getSelectedWallEdgePoints(), *settings->getWallOutlineColor(),  
+   // Guarantee walls are a standard color for editor screenshot uploads to the level database
+   const Color &fillColor = mNormalizedScreenshotMode ? Colors::DefaultWallFillColor:
+         mPreviewMode ? settings->getWallFillColor() : Colors::EDITOR_WALL_FILL_COLOR;
+
+   const Color &outlineColor = mNormalizedScreenshotMode ? Colors::DefaultWallOutlineColor: settings->getWallOutlineColor();
+
+   renderWalls(wsm->getWallSegmentDatabase(), *wsm->getWallEdgePoints(), *wsm->getSelectedWallEdgePoints(), outlineColor,
                fillColor, mCurrentScale, mDraggingObjects, drawSelected, offset, mPreviewMode, 
                getSnapToWallCorners(), getRenderingAlpha(isLevelGenDatabase));
 
@@ -2306,6 +2314,8 @@ void EditorUserInterface::renderSaveMessage() const
 
 void EditorUserInterface::renderWarnings() const
 {
+   FontManager::pushFontContext(EditorWarningContext);
+
    if(mWarnMsgTimer.getCurrent())
    {
       F32 alpha = 1.0;
@@ -2319,7 +2329,7 @@ void EditorUserInterface::renderWarnings() const
 
    if(mLevelErrorMsgs.size() || mLevelWarnings.size())
    {
-      S32 ypos = vertMargin + 50;
+      S32 ypos = vertMargin + 20;
 
       glColor(Colors::ErrorMessageTextColor);
 
@@ -2337,6 +2347,8 @@ void EditorUserInterface::renderWarnings() const
          ypos += 25;
       }
    }
+
+   FontManager::popFontContext();
 }
 
 
@@ -2497,9 +2509,6 @@ void EditorUserInterface::scaleSelection(F32 scale)
    Point min, max;                        
    database->computeSelectionMinMax(min, max);
    Point ctr = (min + max) * 0.5;
-
-   if(scale > 1 && min.distanceTo(max) * scale > 50 * mGridSize)    // If walls get too big, they'll bog down the db
-      return;
 
    bool modifiedWalls = false;
    WallSegmentManager *wallSegmentManager = database->getWallSegmentManager();
@@ -3006,15 +3015,18 @@ void EditorUserInterface::onMouseMoved()
 
    bool spaceDown = InputCodeManager::getState(KEY_SPACE);
 
-   // We hit a vertex that wasn't already selected
-   if(!spaceDown && mHitItem && mHitVertex != NONE && !mHitItem->vertSelected(mHitVertex))   
-      mHitItem->setVertexLitUp(mHitVertex);
-
    // Highlight currently selected item
    if(mHitItem)
       mHitItem->setLitUp(true);
 
-   findSnapVertex();
+   if(mVertexEditMode) {
+      // We hit a vertex that wasn't already selected
+      if(!spaceDown && mHitItem && mHitVertex != NONE && !mHitItem->vertSelected(mHitVertex))   
+         mHitItem->setVertexLitUp(mHitVertex);
+
+      findSnapVertex();
+   }
+
    Cursor::enableCursor();
 }
 
@@ -3776,7 +3788,16 @@ void EditorUserInterface::centerView(bool isScreenshot)
       setDisplayCenter(extents.getCenter());
    }
    else
-      setDisplayExtents(extents, isScreenshot ? 1.0f : 1.3f);
+   {
+      if(isScreenshot)
+      {
+         // Expand just slightly so we don't clip edges
+         extents.expand(Point(2,2));
+         setDisplayExtents(extents, 1.0f);
+      }
+      else
+         setDisplayExtents(extents, 1.3f);
+   }
 }
 
 
@@ -4100,6 +4121,10 @@ bool EditorUserInterface::onKeyDown(InputCode inputCode)
    {
       // Do nothing
    }
+   else if(inputString == getEditorBindingString(settings, BINDING_TOGGLE_EDIT_MODE))
+   {
+      mVertexEditMode = !mVertexEditMode;
+   }
    else
       return false;
 
@@ -4176,7 +4201,7 @@ void EditorUserInterface::onMouseClicked_left()
       if(InputCodeManager::checkModifier(KEY_SHIFT))  // ==> Shift key is down
       {
          // Check for vertices
-         if(!spaceDown && mHitItem && mHitVertex != NONE && mHitItem->getGeomType() != geomPoint)
+         if(mVertexEditMode && !spaceDown && mHitItem && mHitVertex != NONE && mHitItem->getGeomType() != geomPoint)
          {
             if(mHitItem->vertSelected(mHitVertex))
                mHitItem->unselectVert(mHitVertex);
@@ -4196,7 +4221,7 @@ void EditorUserInterface::onMouseClicked_left()
 
          // If we hit a vertex of an already selected item --> now we can move that vertex w/o losing our selection.
          // Note that in the case of a point item, we want to skip this step, as we don't select individual vertices.
-         if(!spaceDown && mHitVertex != NONE && mHitItem && mHitItem->isSelected() && mHitItem->getGeomType() != geomPoint)
+         if(mVertexEditMode && !spaceDown && mHitVertex != NONE && mHitItem && mHitItem->isSelected() && mHitItem->getGeomType() != geomPoint)
          {
             clearSelection(getDatabase());
             mHitItem->selectVert(mHitVertex);
@@ -4213,7 +4238,7 @@ void EditorUserInterface::onMouseClicked_left()
             mHitItem->setSelected(true);
             onSelectionChanged();
          }
-         else if(!spaceDown && mHitVertex != NONE && (mHitItem && !mHitItem->isSelected()))      // Hit a vertex of an unselected item
+         else if(mVertexEditMode && !spaceDown && mHitVertex != NONE && (mHitItem && !mHitItem->isSelected()))      // Hit a vertex of an unselected item
          {        // (braces required)
             if(!(mHitItem->vertSelected(mHitVertex)))
             {
@@ -4618,7 +4643,6 @@ void EditorUserInterface::onKeyUp(InputCode inputCode)
          if(InputCodeManager::getState(KEY_SPACE) && mSnapContext == NO_SNAPPING)
             mSnapContext = NO_GRID_SNAPPING;
          break;
-
       case KEY_TAB:
          mPreviewMode = false;
          break;
@@ -5011,7 +5035,7 @@ bool EditorUserInterface::doSaveLevel(const string &saveName, bool showFailMessa
    {
       FolderManager *folderManager = getGame()->getSettings()->getFolderManager();
 
-      string fileName = joindir(folderManager->levelDir, saveName);
+      string fileName = joindir(folderManager->getLevelDir(), saveName);
       if(!writeFile(fileName, getLevelText()))
          throw(SaveException("Could not open file for writing"));
    }
@@ -5092,7 +5116,10 @@ void EditorUserInterface::testLevelStart()
       Vector<string> levelList;
       levelList.push_back(TestFileName);
 
-      LevelSourcePtr levelSource = LevelSourcePtr(new FolderLevelSource(levelList, getGame()->getSettings()->getFolderManager()->levelDir));
+      LevelSourcePtr levelSource = LevelSourcePtr(
+            new FolderLevelSource(levelList, getGame()->getSettings()->getFolderManager()->getLevelDir()));
+
+      getGame()->setGameType(NULL); // Prevents losing seconds on game timer (test level from editor, save, and reload level)
 
       initHosting(getGame()->getSettingsPtr(), levelSource, true, false);
    }
@@ -5147,7 +5174,7 @@ void EditorMenuUserInterface::onActivate()
 void EditorUserInterface::findPlugins()
 {
    mPluginInfos.clear();
-   string dirName = getGame()->getSettings()->getFolderManager()->pluginDir;
+   string dirName = getGame()->getSettings()->getFolderManager()->getPluginDir();
    Vector<string> plugins;
    string extension = ".lua";
    getFilesFromFolder(dirName, plugins, &extension, 1);
@@ -5326,8 +5353,15 @@ void uploadToDbCallback(ClientGame *game, U32 unused)
 
    if(game->getGameType()->getLevelName() == "")    
    {
-      TNLAssert(false, "This should never happen!");
-      editor->setSaveMessage("You must give your map a name before uploading it", false);
+      editor->setSaveMessage("Failed: Level name required", false);
+      return;
+   }
+
+
+   if(strcmp(game->getClientInfo()->getName().getString(),
+         game->getGameType()->getLevelCredits()->getString()) != 0)
+   {
+      editor->setSaveMessage("Failed: Level author must match your username", false);
       return;
    }
 
@@ -5370,7 +5404,7 @@ void EditorMenuUserInterface::setupMenus()
 
    clearMenuItems();
    addMenuItem(new MenuItem("RETURN TO EDITOR", reactivatePrevUICallback,    "", KEY_R));
-   addMenuItem(getWindowModeMenuItem((U32)settings->getIniSettings()->mSettings.getVal<DisplayMode>("WindowMode")));
+   addMenuItem(getWindowModeMenuItem((U32)settings->getIniSettings()->mSettings.getVal<DisplayMode>(IniKey::WindowMode)));
    addMenuItem(new MenuItem("TEST LEVEL",       testLevelCallback,           "", KEY_T));
    addMenuItem(new MenuItem("SAVE LEVEL",       returnToEditorCallback,      "", KEY_S));
    addMenuItem(new MenuItem("EDITOR SECRETS",   activateHelpCallback,        "", KEY_E, keyHelp));

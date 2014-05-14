@@ -276,8 +276,8 @@ private:
    void dropItem();                                // User presses drop item key
 
 
-   void loadAlreadySeenLevelupMessageList();
-   void saveAlreadySeenLevelupMessageList();
+   //void loadAlreadySeenLevelupMessageList();
+   //void saveAlreadySeenLevelupMessageList();
 
    const string getAlreadySeenLevelupMessageString() const;
    void setAlreadySeenLevelupMessageString(const string &vals);
@@ -370,7 +370,8 @@ public:
    void emitBlast(const Point &pos, U32 size);
    void emitBurst(const Point &pos, const Point &scale, const Color &color1, const Color &color2);
    void emitDebrisChunk(const Vector<Point> &points, const Color &color, const Point &pos, const Point &vel, S32 ttl, F32 angle, F32 rotation);
-   void emitTextEffect(const string &text, const Color &color, const Point &pos);
+   void emitTextEffect(const string &text, const Color &color, const Point &pos, bool relative);
+   void emitDelayedTextEffect(U32 delay, const string &text, const Color &color, const Point &pos, bool relative);
    void emitSpark(const Point &pos, const Point &vel, const Color &color, S32 ttl, UI::SparkType sparkType);
    void emitExplosion(const Point &pos, F32 size, const Color *colorArray, U32 numColors);
    void emitTeleportInEffect(const Point &pos, U32 type);
@@ -395,20 +396,18 @@ public:
    Point worldToScreenPoint(const Point *point,  S32 canvasWidth, S32 canvasHeight) const;
    void toggleCommanderMap();
 
-   void onActivate();                 // Gets run when interface is first activated
-   void onReactivate();               // Gets run when interface is subsequently reactivated
+   void onActivate();                  // Gets run when interface is first activated
+   void onReactivate();                // Gets run when interface is subsequently reactivated
 
    void onPlayerJoined();
    void onPlayerQuit();
-   void onGameOver();
+   void onGameOver();                  // Scoreboard display begins
+   void onGameReallyAndTrulyOver();    // After scoreboard display is finished
 
    void pregameSetup(bool engineerEnabled);
    void setSelectedEngineeredObject(U32 objectType);
 
    void quitEngineerHelper();
-
-   //ofstream mOutputFile;            // For saving downloaded levels
-   //FILE *mOutputFile;               // For saving downloaded levels
 
    bool onKeyDown(InputCode inputCode);
    void onKeyUp(InputCode inputCode);

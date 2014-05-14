@@ -58,6 +58,10 @@ public:
    virtual S32 getPlayerBotCount() const = 0; 
    virtual S32 getPlayerCount() const = 0;      
    virtual S32 getBotCount() const = 0;
+
+   virtual S32 getScore() const;
+   virtual void setScore(S32 score);
+   virtual void addScore(S32 score);
 };
 
 
@@ -91,8 +95,14 @@ private:
    Vector<Point> mItemSpawnPoints;
    Vector<FlagSpawn *> mFlagSpawns;    // List of places for team flags to spawn
 
+   void initialize();
+
 public:
-   Team();              // Constructor
+   // Constructors
+   Team();                                                
+   Team(const char *name, const Color &color);            
+   Team(const char *name, F32 r, F32 g, F32 b, S32 score);
+
    virtual ~Team();     // Destructor
 
    void setName(const char *name);
@@ -100,7 +110,7 @@ public:
   
    StringTableEntry getName() const;
 
-   S32 getScore();
+   S32 getScore() const;
    void setScore(S32 score);
    void addScore(S32 score);
 

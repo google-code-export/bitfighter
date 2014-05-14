@@ -39,7 +39,7 @@ class LuaLevelGenerator;
 class PluginMenuUI;
 class SimpleTextEntryMenuUI;
 
-struct FolderManager;
+class FolderManager;
 
 
 ////////////////////////////////////////
@@ -197,6 +197,7 @@ private:
    bool mAddingVertex;
    bool mPreviewMode;
    bool mNormalizedScreenshotMode;
+   bool mVertexEditMode;
 
    bool mQuitLocked;
    string mQuitLockedMessage;

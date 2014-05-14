@@ -22,7 +22,7 @@
 
 #include "stringUtils.h"
 
-#include "../clipper/clipper.hpp"
+#include <clipper.hpp>
 
 #include "tnlLog.h"            // For logprintf
 #include "tnlRandom.h"
@@ -40,7 +40,6 @@ namespace Zap
 
 // Declare and Initialize statics:
 lua_State *LuaScriptRunner::L = NULL;
-bool  LuaScriptRunner::mScriptingDirSet = false;
 string LuaScriptRunner::mScriptingDir;
 
 deque<string> LuaScriptRunner::mCachedScripts;
@@ -95,14 +94,6 @@ LuaScriptRunner::~LuaScriptRunner()
 
 
 const char *LuaScriptRunner::getErrorMessagePrefix() { return "SCRIPT"; }
-
-
-// Static method setting static vars
-void LuaScriptRunner::setScriptingDir(const string &scriptingDir)
-{
-   mScriptingDir = scriptingDir;
-   mScriptingDirSet = true;
-}
 
 
 lua_State *LuaScriptRunner::getL()
@@ -197,54 +188,24 @@ void LuaScriptRunner::pushStackTracer()
 }
 
 
-// Update our Lua Timer each tick
-void LuaScriptRunner::tickTimer(U32 timeDelta)
-{
-   if(!L)
-      return;
+// Use this method to load an external script directly into the currently running script's
+// environment.  This loaded script will be cleared when the parent script terminates
+bool LuaScriptRunner::loadCompileRunEnvironmentScript(const string &scriptName) {
+   // The timer is loaded in each script
+   loadCompileScript(joindir(mScriptingDir, scriptName).c_str());
+   setEnvironment();
 
-   // This will grab the function _tick() and call it like so:
-   //    Timer._tick(self, timeDelta)
-   //
-   // This is equivalent to calling
-   //    Timer:_tick(timeDelta)
-   lua_getglobal(L, "Timer");       // Timer
-   lua_getfield(L, -1, "_tick");    // Timer, _tick
-   lua_pushvalue(L, -2);            // Timer, _tick, Timer
-   lua_pushinteger(L, timeDelta);   // Timer, _tick, Timer, timeDelta
+   S32 err = lua_pcall(L, 0, 0, 0);
 
-   // Run
-   S32 err = lua_pcall(L, 2, 0, 0);
-   if(err!=0)
+   if(err != 0)
    {
-      logprintf("Timer Error: %s", lua_tostring(L, -1));
-      lua_pop(L, 1);
+      logError("Failed to load script %s: %s", scriptName.c_str(), lua_tostring(L, -1));
+
+      clearStack(L);
+      return false;
    }
 
-   lua_pop(L, 1);
-}
-
-
-// Here we reset the global Lua Timer at the start of each level
-void LuaScriptRunner::resetTimer()
-{
-   if(!L)
-      return;
-
-   // Call Timer._initialize(self) a.k.a. Timer:_initialize()
-   lua_getglobal(L, "Timer");          // Timer
-   lua_getfield(L, -1, "_initialize"); // Timer, _initialize
-   lua_pushvalue(L, -2);               // Timer, _initialize, Timer
-
-   // Run
-   S32 err = lua_pcall(L, 1, 0, 0);
-   if(err!=0)
-   {
-      logprintf("Timer Error: %s", lua_tostring(L, -1));
-      lua_pop(L, 1);
-   }
-
-   lua_pop(L, 1);
+   return true;
 }
 
 
@@ -409,10 +370,11 @@ bool LuaScriptRunner::runCmd(const char *function, S32 returnValues)
 
 
 // Start Lua and get everything configured
-bool LuaScriptRunner::startLua()
+bool LuaScriptRunner::startLua(const string &scriptingDir)
 {
-   TNLAssert(!L,               "L should not have been created yet!");
-   TNLAssert(mScriptingDirSet, "Must set scripting folder before starting Lua interpreter!");
+   TNLAssert(!L, "L should not have been created yet!");
+
+   mScriptingDir = scriptingDir;
 
    // Prepare the Lua global environment
    try 
@@ -471,12 +433,10 @@ void LuaScriptRunner::configureNewLuaInstance(lua_State *L)
    // Load our vector library
    loadCompileRunHelper("luavec.lua");
 
-   // Now load our Timer class.  This is global and will need to be reset between levels
-   loadCompileRunHelper("timer.lua");
-
    // Load our helper functions and store copies of the compiled code in the registry where we can use them for starting new scripts
    loadCompileSaveHelper("robot_helper_functions.lua",    ROBOT_HELPER_FUNCTIONS_KEY);
    loadCompileSaveHelper("levelgen_helper_functions.lua", LEVELGEN_HELPER_FUNCTIONS_KEY);
+   loadCompileSaveHelper("timer.lua", SCRIPT_TIMER_KEY);
 
 
    // Perform sandboxing now
@@ -491,11 +451,8 @@ void LuaScriptRunner::loadCompileSaveHelper(const string &scriptName, const char
 }
 
 
-/**
- * Load a script from the scripting directory by basename (e.g. "my_script.lua")
- *
- * Throws LuaException when there's an error compiling or running the script
- */
+// Load a script from the scripting directory by basename (e.g. "my_script.lua").
+// Throws LuaException when there's an error compiling or running the script.
 void LuaScriptRunner::loadCompileRunHelper(const string &scriptName)
 {
    loadCompileScript(joindir(mScriptingDir, scriptName).c_str());
@@ -546,7 +503,8 @@ bool LuaScriptRunner::prepareEnvironment()
 {
    if(!L)
    {
-      logprintf(LogConsumer::LogError, "%s %s.", getErrorMessagePrefix(), "Lua interpreter doesn't exist.  Aborting environment setup");
+      logprintf(LogConsumer::LogError, "%s %s.", getErrorMessagePrefix(), 
+                "Lua interpreter doesn't exist.  Aborting environment setup");
       return false;
    }
 

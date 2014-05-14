@@ -385,7 +385,6 @@ public:
    virtual string toLevelCode() const;    // Generates levelcode line for object
    string appendId(const string &objName) const;
 
-   void onPointsChanged();
    void updateExtentInDatabase();
    virtual void onGeomChanged();    // Item changed geometry (or moved), do any internal updating that might be required
    virtual void onItemDragging();   // Item is being dragged around in the editor; make any updates necessary
@@ -403,7 +402,7 @@ public:
 #ifndef ZAP_DEDICATED
    void renderAndLabelHighlightedVertices(F32 currentScale);      // Render selected and highlighted vertices, called from renderEditor
 #endif
-   virtual void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled);
+   virtual void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices = false);
 
 
    virtual void setSnapped(bool snapped);                  // Overridden in EngineeredItem 

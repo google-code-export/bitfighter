@@ -3,6 +3,15 @@ cmake_minimum_required (VERSION 2.8)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
+# Use appropriate platform alterations
+if(WIN32)
+	include(${CMAKE_SOURCE_DIR}/cmake/Platform/Win32.cmake)
+elseif(APPLE)
+	include(${CMAKE_SOURCE_DIR}/cmake/Platform/Apple.cmake)
+elseif(UNIX)
+	include(${CMAKE_SOURCE_DIR}/cmake/Platform/Linux.cmake)
+endif()
+
 
 # No creating project files in-source.  Bad, evil things happen
 string(COMPARE EQUAL "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}" _insource)
@@ -11,6 +20,7 @@ if (_insource)
 	message(FATAL_ERROR "Remove the file CMakeCache.txt in ${CMAKE_SOURCE_DIR} first.")
 endif()
 
+
 # Default to Release for a build type
 if (NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE "Release")
@@ -18,162 +28,18 @@ endif()
 
 
 #
-# Environment verification
-#
-if(APPLE)
-	set(OSX_DEPLOY_TARGET $ENV{MACOSX_DEPLOYMENT_TARGET})
-	
-	message(STATUS "MACOSX_DEPLOYMENT_TARGET: ${OSX_DEPLOY_TARGET}")
-	# MACOSX_DEPLOYMENT_TARGET must be set in the environment to compile properly
-	if(NOT OSX_DEPLOY_TARGET)
-		message(FATAL_ERROR "MACOSX_DEPLOYMENT_TARGET environment variable not set.  Set this like so: 'export MACOSX_DEPLOYMENT_TARGET=10.6'")
-	endif()
-endif()
-
-
-#
-# Global linker flags
-# 
-if(MSVC)
-	set(CMAKE_EXE_LINKER_FLAGS "/NODEFAULTLIB:MSVCRT.lib;LIBCMT.lib")
-
-	# Disable incremental linking on RelWithDebInfo for sam686
-	set(LinkerFlags
-		CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO
-	)
-	
-	foreach(LinkerFlag ${LinkerFlags})
-		# Handle both /INCREMENTAL:YES and /INCREMENTAL
-		string(REPLACE "INCREMENTAL:YES" "INCREMENTAL" ${LinkerFlag} "${${LinkerFlag}}")
-		string(REPLACE "INCREMENTAL" "INCREMENTAL:NO" ${LinkerFlag} "${${LinkerFlag}}")
-	endforeach()
-else()
-	# MinGW won't statically compile in Microsofts c/c++ library routines
-	if(MINGW)
-		set(BF_LINK_FLAGS "-Wl,--as-needed -static-libgcc")
-	elseif(NOT APPLE)
-		set(BF_LINK_FLAGS "-Wl,--as-needed")
-	endif()
-	
-	# Only link in what is absolutely necessary
-	set(CMAKE_EXE_LINKER_FLAGS ${BF_LINK_FLAGS})
-endif()
-
-
-# 
-# Global compiler specific flags
-# 
-if (CMAKE_COMPILER_IS_GNUCC)
-	set(CMAKE_C_FLAGS_DEBUG "-g -Wall")
-	set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
-	set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELEASE} -g")
-	set(CMAKE_CXX_FLAGS_DEBUG "-g -Wall")
-	set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
-	set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELEASE} -g")
-endif()
-
-if(MSVC)
-	# Using /MT avoids linking against the stupid MSVC runtime libraries
-	set(CompilerFlags
-		CMAKE_CXX_FLAGS
-		CMAKE_CXX_FLAGS_DEBUG
-		CMAKE_CXX_FLAGS_RELEASE
-		CMAKE_CXX_FLAGS_RELWITHDEBINFO
-		CMAKE_C_FLAGS
-		CMAKE_C_FLAGS_DEBUG
-		CMAKE_C_FLAGS_RELEASE
-		CMAKE_C_FLAGS_RELWITHDEBINFO
-	)
-	foreach(CompilerFlag ${CompilerFlags})
-		string(REPLACE "/MD" "/MT" ${CompilerFlag} "${${CompilerFlag}}")
-	endforeach()
-	
-	# Enable 'Edit and Continue' debugging support
-	set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /ZI")
-	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /ZI")
-endif()
-
-if(MINGW)
-	set(CMAKE_RC_COMPILER_INIT windres)
-	enable_language(RC)
-	set(CMAKE_RC_COMPILE_OBJECT "<CMAKE_RC_COMPILER> -i <SOURCE> -o <OBJECT>")
-endif()
-
-
-#
-# Determine game versions.  Used in various places later
-#
-file(STRINGS "${CMAKE_SOURCE_DIR}/zap/version.h" VERSION_H_FILE)
-string(REGEX REPLACE ".*ZAP_GAME_RELEASE[ ]+\"([^\"]+)\".*" "\\1" BITFIGHTER_RELEASE "${VERSION_H_FILE}")
-message(STATUS "Bitfighter Release: ${BITFIGHTER_RELEASE}")
-
-string(REGEX REPLACE ".*#define BUILD_VERSION[ ]+([^ ]+).*" "\\1" BITFIGHTER_BUILD_VERSION_KEY "${VERSION_H_FILE}")
-string(REGEX REPLACE ".*${BITFIGHTER_BUILD_VERSION_KEY}[ ]+([0-9]+).*" "\\1" BITFIGHTER_BUILD_VERSION "${VERSION_H_FILE}")
-message(STATUS "Bitfighter Build Version: ${BITFIGHTER_BUILD_VERSION}")
-
-
-#
 # CMake options
 #
 
 # Default to NO for Linux
-option(USE_SDL2 "Force usage of SDL2" NO)
-
+option(USE_SDL2 "Force usage of SDL2" YES)
 option(USE_GLES "Force usage of OpenGL ES for the bitfighter client.  Requires SDL2." NO)
-option(USE_LUAJIT "Use LuaJIT." YES)
+
 
 #
-# Now search for dependencies
+# Library searching and dependencies
 #
-# Set up Windows or OSX specific locations for libraries and headers
-#
-if(WIN32 OR APPLE OR XCOMPILE)
-	# Always use SDL2 on OSX or Windows
-	set(USE_SDL2 1)
 
-	set(SDL2_SEARCH_PATHS ${CMAKE_SOURCE_DIR}/lib ${CMAKE_SOURCE_DIR}/libsdl)
-	set(OGG_SEARCH_PATHS ${CMAKE_SOURCE_DIR}/lib ${CMAKE_SOURCE_DIR}/libogg)
-	set(VORBIS_SEARCH_PATHS	${CMAKE_SOURCE_DIR}/lib	${CMAKE_SOURCE_DIR}/libvorbis)
-	set(VORBISFILE_SEARCH_PATHS	${CMAKE_SOURCE_DIR}/lib	${CMAKE_SOURCE_DIR}/libvorbis)
-	set(SPEEX_SEARCH_PATHS ${CMAKE_SOURCE_DIR}/lib ${CMAKE_SOURCE_DIR}/libspeex)
-	set(MODPLUG_SEARCH_PATHS ${CMAKE_SOURCE_DIR}/lib ${CMAKE_SOURCE_DIR}/libmodplug)
-	set(ALURE_SEARCH_PATHS ${CMAKE_SOURCE_DIR}/lib ${CMAKE_SOURCE_DIR}/alure)
-
-	# OpenAL
-	set(OPENAL_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/openal/include")
-	if(APPLE)
-		set(OPENAL_LIBRARY "${CMAKE_SOURCE_DIR}/lib/OpenAL-Soft.framework")
-	else()
-		set(OPENAL_LIBRARY "${CMAKE_SOURCE_DIR}/lib/OpenAL32.lib")
-	endif()
-
-	# libpng
-	set(PNG_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/libpng")
-	set(PNG_PNG_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/libpng")
-	if(APPLE)
-		set(PNG_LIBRARY "${CMAKE_SOURCE_DIR}/lib/libpng.framework")
-	else()
-		set(PNG_LIBRARY "${CMAKE_SOURCE_DIR}/lib/libpng14.lib")
-	endif()
-	
-	# zlib
-	set(ZLIB_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/zlib")
-	if(NOT APPLE)
-		set(ZLIB_LIBRARY "${CMAKE_SOURCE_DIR}/lib/zlib.lib")
-	endif()
-endif()
-
-if(MSVC)
-	# Add parallel build to Visual Studio
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
-
-	# Disable deprecated warnings (fopen, vsnprintf), some alternative function may not exist on other compilers including gcc.
-	set(CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS} /wd4996")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4996")
-endif()
-
-
-# Search for our dependencies
 # SDL2 is default and should be found on all platforms except possibly Linux
 if(USE_SDL2)
 	find_package(SDL2)
@@ -181,22 +47,18 @@ if(USE_SDL2)
 	if(SDL2_FOUND)
 		set(SDL_INCLUDE_DIR ${SDL2_INCLUDE_DIR})
 		set(SDL_LIBRARY ${SDL2_LIBRARY})
+	else()
+		message(STATUS "SDL2 not found.  Attempting to find SDL 1.2...")
 	endif()
-else()
-	find_package(SDL)
-	
+endif()
+
+if(NOT USE_SDL2 OR NOT SDL2_FOUND)
 	# SDL_LIBRARY and SDL_INCLUDE_DIR are set by the FindSDL module
+	find_package(SDL)
 endif()
 
-if(WIN32)
-	find_package(ALURE)
-else()
-	set(ALURE_LIBRARIES alure)
-endif()
 
-find_package(OpenAL)
-
-# Searches for opengl and gnables gles if gl isnt found in the system.
+# Searches for OpenGL and enables GLES if GL isnt found in the system
 message(STATUS "Determining system GL provider")
 if(NOT USE_GLES)
 	message(STATUS "Atempting to use standard OpenGL")
@@ -215,54 +77,127 @@ if(USE_GLES OR NOT USE_STANDARD_GL)
 	set(GL_INCLUDE_DIR ${OPENGLES_INCLUDE_DIR})
 endif()
 
+
+# Other needed libraries that don't have in-tree fallback options
 find_package(Threads REQUIRED)
 find_package(PNG)
-find_package(OGG)
-find_package(Vorbis)
-if(APPLE)
-	set(SPARKLE_SEARCH_PATHS ${CMAKE_SOURCE_DIR}/lib)
-	find_package(Sparkle)
-	# OSX doesn't use vorbisfile (or it's built-in to normal vorbis, I think)
-	set(VORBISFILE_LIBRARIES "")
-else()
-	find_package(VorbisFile)
-endif()
-find_package(Speex)
-find_package(ModPlug)
 find_package(MySQL)
+find_package(OGG)
+find_package(Speex)
+find_package(Vorbis)
+find_package(ModPlug)
+find_package(OpenAL)
+
+
+# Now look for libraries that have an in-tree fallback option
+# Many of these may have special overrides to properly adapt to the in-tree versions
+
+# Special function to look for a system lib, but fall back to the in-tree version
+function(FIND_WITH_FALLBACK packageName capsName dirName)
+	find_package(${packageName})
+	if( NOT ${capsName}_FOUND )
+		set(${capsName}_LIBRARIES ${dirName})
+		set(${capsName}_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/${dirName}")
+	endif()
+
+	# export the results
+	set(${capsName}_FOUND "${${capsName}_FOUND}" PARENT_SCOPE)
+	set(${capsName}_INCLUDE_DIR "${${capsName}_INCLUDE_DIR}" PARENT_SCOPE)
+	set(${capsName}_LIBRARY "${${capsName}_LIBRARY}" PARENT_SCOPE)
+	set(${capsName}_LIBRARIES "${${capsName}_LIBRARIES}" PARENT_SCOPE)
+endfunction()
+
+
+# ALURE
+find_with_fallback(ALURE ALURE alure)
+if(NOT ALURE_FOUND)
+	if(NOT OPENAL_FOUND OR NOT VORBIS_FOUND OR NOT MODPLUG_FOUND)
+		message(WARNING "Audio system components are missing.  Bitfighter will be compiled without audio")
+		add_definitions(-DBF_NO_AUDIO)
+	else()
+		message(STATUS "Using in-tree ALURE")
+		add_definitions(-DALURE_STATIC_LIBRARY)
+		add_subdirectory(alure)
+	endif()
+endif()
+
+
+# sqlite3
+find_with_fallback(Sqlite SQLITE3 sqlite)
+if(NOT SQLITE3_FOUND)
+	message(STATUS "Using in-tree sqlite3")
+	set(SQLITE3_LIBRARIES "")
+	set(SQLITE3_FILES "${CMAKE_SOURCE_DIR}/sqlite/sqlite3.c")
+endif()
+
+
+# libtomcrypt
+find_with_fallback(TomCrypt TOMCRYPT tomcrypt)
+if(NOT TOMCRYPT_FOUND)
+	message(STATUS "Using in-tree libtomcrypt")
+	set(TOMCRYPT_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/tomcrypt/src/headers")
+	add_subdirectory(tomcrypt)
+endif()
+
+
+# Boost
+find_with_fallback(Boost BOOST boost)
+if(NOT BOOST_FOUND)
+	message(STATUS "Using in-tree Boost c++ headers")
+	set(BOOST_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/boost")
+endif()
+
+
+# Clipper
+find_with_fallback(Clipper CLIPPER clipper)
+if(NOT CLIPPER_FOUND)
+	message(STATUS "Using in-tree Clipper")
+	add_subdirectory(clipper)
+endif()
+
+
+# LuaJIT / Lua
+find_with_fallback(LuaJit LUAJIT lua)
+if(LUAJIT_FOUND)
+	set(LUA_LIB ${LUAJIT_LIBRARIES})
+	set(LUA_INCLUDE_DIR ${LUAJIT_INCLUDE_DIR})
+elseif(USE_LUAJIT)
+	message(STATUS "Using in-tree LuaJIT")
+	# Use internal LuaJIT
+	set(LUA_LIB luajit)
+	set(LUA_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/lua/luajit/src")
+else()
+	message(STATUS "Using in-tree Lua.  Bitfighter will run scripts much slower than with LuaJIT")
+	# Failing that, use the slow one
+	set(LUA_LIB lua-vec)
+	set(LUA_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/lua/lua-vec/src")
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/lua/${LUA_LIB}")
+	add_subdirectory("${CMAKE_SOURCE_DIR}/lua/${LUA_LIB}")
+endif()
+
+
+# Other internal-only sub-projects
+add_subdirectory(tnl)
+add_subdirectory(master)
 
 
 # Disable certain sub-projects based on dependency search
-set(COMPILE_ALURE 1)
 set(COMPILE_ZAP 1)
 
-if(NOT OPENAL_FOUND OR NOT VORBIS_FOUND OR NOT MODPLUG_FOUND)
-	set(COMPILE_ALURE 0)
-endif()
-
-if( NOT COMPILE_ALURE OR (NOT SDL2_FOUND AND NOT SDL_FOUND) )
+if(NOT SDL2_FOUND AND NOT SDL_FOUND)
 	set(COMPILE_ZAP 0)
 endif()
 
 
-# Add our sub-projects
-add_subdirectory(tnl)
-
-if(USE_LUAJIT)
-	add_subdirectory(lua/luajit)
-	include_directories(${CMAKE_SOURCE_DIR}/lua/luajit/src)
-else()
-	add_subdirectory(lua/lua-vec)
-	include_directories(${CMAKE_SOURCE_DIR}/lua/lua-vec/src)
+if(EXISTS "${CMAKE_SOURCE_DIR}/mysql++")
+	add_subdirectory(mysql++)
 endif()
 
-if(NOT WIN32 AND COMPILE_ALURE)  # ALURE is not compiled on Windows presently
-	add_subdirectory(alure)
-endif()
-add_subdirectory(mysql++)
-add_subdirectory(libtomcrypt)
-add_subdirectory(master)
 if(COMPILE_ZAP)
 	add_subdirectory(zap)
-	add_subdirectory(gtest)
+	if(EXISTS "${CMAKE_SOURCE_DIR}/gtest")
+		add_subdirectory(gtest)
+	endif()
 endif()

@@ -26,7 +26,7 @@
 #include "tnlThread.h"
 #include "tnlNonce.h"
 
-#include "boost/smart_ptr/shared_ptr.hpp"
+#include <boost/smart_ptr/shared_ptr.hpp>
 
 #include <string>
 
@@ -270,6 +270,7 @@ public:
 
    S32 getClientCount() const;                                    // Total number of players, human and robot
    S32 getPlayerCount() const;                                    // Returns number of human players
+   S32 getPlayerCount(S32 teamIndex) const;                       // Returns number of human players on specified team
    S32 getAuthenticatedPlayerCount() const;                       // Number of authenticated human players
    S32 getRobotCount() const;                                     // Returns number of bots
 
@@ -313,13 +314,14 @@ public:
    void computeWorldObjectExtents();
    Rect computeBarrierExtents();
 
-   Point computePlayerVisArea(Ship *ship) const;
+   Point computePlayerVisArea(const Ship *ship) const;
    F32 getRenderScale(bool sensorActive) const;
 
    virtual Point worldToScreenPoint(const Point *p, S32 canvasWidth, S32 canvasHeight) const;
    virtual F32 getCommanderZoomFraction() const;
    virtual void renderBasicInterfaceOverlay() const;
-   virtual void emitTextEffect(const string &text, const Color &color, const Point &pos) const;
+   virtual void emitTextEffect(const string &text, const Color &color, const Point &pos, bool releative) const;
+   virtual void emitDelayedTextEffect(U32 delay, const string &text, const Color &color, const Point &pos, bool releative) const;
 
    U32 getTimeUnconnectedToMaster();
    virtual void onConnectedToMaster();
@@ -416,6 +418,10 @@ public:
    void removeTeam(S32 teamIndex);
    void clearTeams();
 
+   // Find winners!
+   TeamGameResults       getTeamBasedGameWinner()  const;   // Find winner of a team-based game
+   IndividualGameResults getIndividualGameWinner() const;   // Find winner of a non-team based game
+   
    void setTeamHasFlag(S32 teamIndex, bool hasFlag);
    void clearTeamHasFlagList();
 

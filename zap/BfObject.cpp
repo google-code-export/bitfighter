@@ -532,9 +532,8 @@ void BfObject::setGeom(lua_State *L, S32 stackIndex)
 
    // Adjust geometry
    GeomObject::setGeom(points);
-   onPointsChanged();
 
-   // Tell this BfObject its geometry has changed
+   // Tell this GeomObject/BfObject its geometry has changed
    onGeomChanged();
 }
 
@@ -597,14 +596,6 @@ bool BfObject::processArguments(S32 argc, const char**argv, Game *game)
 }
 
 
-void BfObject::onPointsChanged()                        
-{   
-   GeomObject::onPointsChanged();
-   updateExtentInDatabase(); 
-   setMaskBits(GeomMask);
-}
-
-
 void BfObject::updateExtentInDatabase()
 {
    setExtent(calcExtents());    // Make sure the database extents are in sync with where the object actually is
@@ -620,10 +611,14 @@ void BfObject::unselect()
 }
 
 
+// Can be overriden by child objects, which should always call Parent::onGeomChanged()
 void BfObject::onGeomChanged()
 {
+   // Notify our GeomObject parent of the geometry change
    GeomObject::onGeomChanged();
+
    updateExtentInDatabase();
+   setMaskBits(GeomMask);
 }
 
 
@@ -763,7 +758,7 @@ Point BfObject::getInitialPlacementOffset(U32 gridSize) const
 }
 
 
-void BfObject::renderEditor(F32 currentScale, bool snappingToWallCornersEnabled)
+void BfObject::renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices)
 {
    TNLAssert(false, "renderEditor not implemented!");
 }
