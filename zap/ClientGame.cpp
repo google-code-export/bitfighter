@@ -308,9 +308,18 @@ void ClientGame::emitDebrisChunk(const Vector<Point> &points, const Color &color
 }
 
 
-void ClientGame::emitTextEffect(const string &text, const Color &color, const Point &pos) const
+// If relative is true, pos represents a fixed offset from the center of the screen.  If false, it is absolute world coords.
+void ClientGame::emitTextEffect(const string &text, const Color &color, const Point &pos, bool relative) const
 {
-   getUIManager()->emitTextEffect(text, color, pos);
+   getUIManager()->emitTextEffect(text, color, pos, relative);
+}
+
+
+// If relative is true, pos represents a fixed offset from the center of the screen.  If false, it is absolute world coords.
+// Delay is in ms
+void ClientGame::emitDelayedTextEffect(U32 delay, const string &text, const Color &color, const Point &pos, bool relative) const
+{
+   getUIManager()->emitDelayedTextEffect(delay, text, color, pos, relative);
 }
 
 
@@ -390,6 +399,18 @@ void ClientGame::queueVoiceChatBuffer(const SFXHandle &effect, const ByteBufferP
    getUIManager()->queueVoiceChatBuffer(effect, p);
 }
 
+S32 ClientGame::getCurrentTeamIndex()
+{
+   Ship *ship = getLocalPlayerShip(); // first try, when playing back a recorded game
+   if(ship)
+      return ship->getTeam();
+
+   ClientInfo *clientInfo = getLocalRemoteClientInfo(); // second try, when idling in-game
+   if(clientInfo)
+      return clientInfo->getTeamIndex();
+
+   return TEAM_NEUTRAL;
+}
 
 // User selected Switch Teams menu item
 void ClientGame::switchTeams()
@@ -674,9 +695,8 @@ void ClientGame::requestLoadoutPreset(S32 index)
 
    LoadoutTracker loadout = getSettings()->getLoadoutPreset(index);
 
-   if(getSettings()->getIniSettings()->mSettings.getVal<YesNo>("VerboseHelpMessages"))
-      displayShipDesignChangedMessage(loadout, "Loaded preset " + itos(index + 1) + ": ",
-                                               "Preset same as the current design");
+   displayShipDesignChangedMessage(loadout, "Loaded preset " + itos(index + 1) + ": ",
+                                             "Preset same as the current design");
 
    // Request loadout even if it was the same -- if I have loadout A, with on-deck loadout B, and I enter a new loadout
    // that matches A, it would be better to have loadout remain unchanged if I entered a loadout zone.
@@ -700,20 +720,17 @@ void ClientGame::displayShipDesignChangedMessage(const LoadoutTracker &loadout, 
    if(ship->isInZone(LoadoutZoneTypeNumber))
       return;
 
-   if(getSettings()->getIniSettings()->mSettings.getVal<YesNo>("VerboseHelpMessages"))
+   if(ship->isLoadoutSameAsCurrent(loadout))
+      displayErrorMessage(msgToShowIfLoadoutsAreTheSame);
+   else
    {
-      if(ship->isLoadoutSameAsCurrent(loadout))
-         displayErrorMessage(msgToShowIfLoadoutsAreTheSame);
-      else
-      {
-         GameType *gt = getGameType();
+      GameType *gt = getGameType();
 
-         // Show new loadout
-         displaySuccessMessage("%s %s", baseSuccesString.c_str(), loadout.toString(false).c_str());
+      // Show new loadout
+      displaySuccessMessage("%s %s", baseSuccesString.c_str(), loadout.toString(false).c_str());
 
-         displaySuccessMessage(gt->levelHasLoadoutZone() ? "Enter Loadout Zone to activate changes" : 
-                                                           "Changes will be activated when you respawn");
-      }
+      displaySuccessMessage(gt->levelHasLoadoutZone() ? "Enter Loadout Zone to activate changes" : 
+                                                         "Changes will be activated when you respawn");
    }
 }
 
@@ -836,7 +853,8 @@ void ClientGame::setGameType(GameType *gameType)
 {
    Parent::setGameType(gameType);
 
-   getUIManager()->onGameTypeChanged();
+   if(gameType)
+      getUIManager()->onGameTypeChanged();
 }
 
 
@@ -942,7 +960,7 @@ void ClientGame::sendChat(bool isGlobal, const StringPtr &message)
 void ClientGame::sendChatSTE(bool global, const StringTableEntry &message) const
 {
    if(getGameType())
-      getGameType()->c2sSendChatSTE(global, message);;
+      getGameType()->c2sSendChatSTE(global, message);
 }
 
 
@@ -1022,7 +1040,7 @@ void ClientGame::onGameReallyAndTrulyOver()
    getGameObjDatabase()->removeEverythingFromDatabase();    
 
    // Inform the UI
-   getUIManager()->onGameOver();
+   getUIManager()->onGameReallyAndTrulyOver();
 }
 
 

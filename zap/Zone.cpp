@@ -57,7 +57,7 @@ void Zone::render()
 }
 
 
-void Zone::renderEditor(F32 currentScale, bool snappingToWallCornersEnabled)
+void Zone::renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices)
 {
    renderZone(&Colors::white, getOutline(), getFill());
    PolygonObject::renderEditor(currentScale, snappingToWallCornersEnabled);
@@ -103,10 +103,11 @@ bool Zone::processArguments(S32 argc2, const char **argv2, Game *game)
       return false;
 
    readGeom(argc, argv, 0, game->getLegacyGridSize());
+   updateExtentInDatabase();
+
+   // Make sure our Zone doesn't have invalid geometry
    if(getExtent().getHeight() == 0 && getExtent().getWidth() == 0)
       return false;
-
-   updateExtentInDatabase();
 
    return true;
 }

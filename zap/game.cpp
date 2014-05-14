@@ -229,6 +229,19 @@ S32 Game::getPlayerCount() const
 }
 
 
+// Return the number of human players on a given team (does not include bots, used for testing)
+S32 Game::getPlayerCount(S32 teamIndex) const
+{
+   S32 playerCount = 0;
+
+   for(S32 i = 0; i < mClientInfos.size(); i++)
+      if(mClientInfos[i]->getTeamIndex() == teamIndex)
+         playerCount++;
+
+   return playerCount;
+}
+
+
 S32 Game::getAuthenticatedPlayerCount() const
 {
    S32 count = 0;
@@ -434,7 +447,7 @@ S32 Game::getTeamIndex(const StringTableEntry &playerName)
 }
 
 
-// The following just delegate their work to the TeamManager
+// The following just delegate their work to the TeamManager.  TeamManager will handle cleanup of any added teams.
 void Game::removeTeam(S32 teamIndex)                  { mActiveTeamManager->removeTeam(teamIndex);    }
 void Game::addTeam(AbstractTeam *team)                { mActiveTeamManager->addTeam(team);            }
 void Game::addTeam(AbstractTeam *team, S32 index)     { mActiveTeamManager->addTeam(team, index);     }
@@ -488,8 +501,98 @@ void Game::teleporterDestroyed(Teleporter *teleporter)
 
 
 S32           Game::getTeamCount()                const { return mActiveTeamManager->getTeamCount();            } 
-AbstractTeam *Game::getTeam(S32 team)             const { return mActiveTeamManager->getTeam(team);             }
+AbstractTeam *Game::getTeam(S32 teamIndex)        const { return mActiveTeamManager->getTeam(teamIndex);        }
 bool          Game::getTeamHasFlag(S32 teamIndex) const { return mActiveTeamManager->getTeamHasFlag(teamIndex); }
+
+
+// Find winner of a team-based game.
+// Team with the most points wins.
+// If multple teams are tied for most points, a tie is declared.
+// If multiple teams are tied for most points, but only one has players, that team is declared the winner.
+// If multiple teams are tied for most points, but none have players, those teams are declared winners by tie.
+// Bots are considered players for this purpose.
+TeamGameResults Game::getTeamBasedGameWinner() const
+{
+   S32 teamCount = getTeamCount();
+   countTeamPlayers();
+
+   TNLAssert(teamCount > 0, "Expect at least one team here!");
+   if(teamCount == 0)
+      return TeamGameResults(OnlyOnePlayerOrTeam, 0);
+
+   if(teamCount == 1)
+      return TeamGameResults(OnlyOnePlayerOrTeam, 0);
+
+   S32 winningTeam = -1;
+   S32 winningScore = S32_MIN;
+   S32 winningTeamsWithPlayers = 0;
+
+   GameEndStatus status = HasWinner;
+
+   for(S32 i = 0; i < teamCount; i++)
+   {
+      if(getTeam(i)->getScore() == winningScore)
+      {
+         if(getTeam(i)->getPlayerBotCount() > 0)
+         {
+            // Is this the first team with players with the high score?
+            if(winningTeamsWithPlayers == 0)
+            {
+               winningTeam = i;
+               status = HasWinner;
+            }
+            else
+               status = Tied;
+
+            winningTeamsWithPlayers++;
+         }
+
+         // If no other teams with this score has players, then we can call it a tie
+         else if(winningTeamsWithPlayers == 0)
+            status = TiedByTeamsWithNoPlayers;
+      }
+
+      else if(getTeam(i)->getScore() > winningScore)
+      {
+         winningTeam = i;
+         winningScore = getTeam(i)->getScore();
+         status = HasWinner;
+         winningTeamsWithPlayers = (getTeam(i)->getPlayerBotCount() == 0) ? 0 : 1;
+      }
+   }
+
+   return TeamGameResults(status, winningTeam);
+}
+
+
+// Find winner of a non-team based game
+IndividualGameResults Game::getIndividualGameWinner() const
+{
+   S32 clientCount = getClientCount();
+
+   if(clientCount == 1)
+      return IndividualGameResults(OnlyOnePlayerOrTeam, getClientInfo(0));
+
+   ClientInfo *winningClient = getClientInfo(0);
+   GameEndStatus status = HasWinner;
+
+   for(S32 i = 1; i < clientCount; i++)
+   {
+      ClientInfo *clientInfo = getClientInfo(i);
+
+      if(clientInfo->getScore() == winningClient->getScore())
+         status = Tied;
+
+      else if(clientInfo->getScore() > winningClient->getScore())
+      {
+         winningClient = clientInfo;
+         status = HasWinner;
+      }
+   }
+
+   return IndividualGameResults(status, winningClient);
+}
+
 
 
 S32 Game::getTeamIndexFromTeamName(const char *teamName) const 
@@ -621,9 +724,7 @@ void Game::parseLevelLine(const char *line, GridDatabase *database, const string
    }
 
    for(U32 i = 0; i < argc; i++)
-   {
       argv[i] = args[i].c_str();
-   }
 
    try
    {
@@ -649,7 +750,8 @@ void Game::loadLevelFromString(const string &contents, GridDatabase* database, c
 
 bool Game::loadLevelFromFile(const string &filename, GridDatabase *database)
 {
-   string contents = readFile(filename);
+   string contents;
+   readFile(filename, contents);
    if(contents == "")
       return false;
 
@@ -1191,7 +1293,7 @@ Rect Game::computeBarrierExtents()
 }
 
 
-Point Game::computePlayerVisArea(Ship *ship) const
+Point Game::computePlayerVisArea(const Ship *ship) const
 {
    F32 fraction = ship->getSensorZoomFraction();
 
@@ -1212,7 +1314,7 @@ F32 Game::getRenderScale(bool sensorActive) const
    static const F32 sensorScale = (F32)PLAYER_SENSOR_PASSIVE_VISUAL_DISTANCE_HORIZONTAL / 
                                   (F32)PLAYER_VISUAL_DISTANCE_HORIZONTAL;
 
-   return sensorActive ? sensorScale : 1.0;
+   return sensorActive ? sensorScale : 1;
 }
 
 
@@ -1568,11 +1670,16 @@ void Game::renderBasicInterfaceOverlay() const
 }
 
 
-void Game::emitTextEffect(const string &text, const Color &color, const Point &pos) const
+void Game::emitTextEffect(const string &text, const Color &color, const Point &pos, bool relative) const
 {
    TNLAssert(false, "Not implemented for this class!");
 }
 
+
+void Game::emitDelayedTextEffect(U32 delay, const string &text, const Color &color, const Point &pos, bool relative) const
+{
+   TNLAssert(false, "Not implemented for this class!");
+}
 
 string Game::getPlayerName() const
 {

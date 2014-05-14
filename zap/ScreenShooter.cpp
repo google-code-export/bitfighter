@@ -69,7 +69,7 @@ void ScreenShooter::resizeViewportToCanvas(UIManager *uiManager)
 // Stolen from VideoSystem::actualizeScreenMode()
 void ScreenShooter::restoreViewportToWindow(GameSettings *settings)
 {
-   DisplayMode displayMode = settings->getIniSettings()->mSettings.getVal<DisplayMode>("WindowMode");
+   DisplayMode displayMode = settings->getIniSettings()->mSettings.getVal<DisplayMode>(IniKey::WindowMode);
 
    // Set up video/window flags amd parameters and get ready to change the window
    S32 sdlWindowWidth, sdlWindowHeight;
@@ -105,7 +105,7 @@ void ScreenShooter::restoreViewportToWindow(GameSettings *settings)
 // Much was copied directly.
 void ScreenShooter::saveScreenshot(UIManager *uiManager, GameSettings *settings, string filename)
 {
-   string folder = settings->getFolderManager()->screenshotDir;
+   string folder = settings->getFolderManager()->getScreenshotDir();
 
    // Let's find a filename to use
    makeSureFolderExists(folder);

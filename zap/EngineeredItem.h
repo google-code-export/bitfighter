@@ -271,7 +271,7 @@ public:
    bool canBeNeutral();
 
    void renderDock();
-   void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled);
+   void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices = false);
 
    void onGeomChanged();
    void findForceFieldEnd();                      // Find end of forcefield in editor
@@ -319,7 +319,7 @@ public:
 
    static const S32 defaultRespawnTime = 0;
 
-   static const S32 TURRET_OFFSET = 15;               // Distance of the turret's render location from it's attachment location
+   static const F32 TURRET_OFFSET;                    // Distance of the turret's render location from it's attachment location
                                                       // Also serves as radius of circle of turret's body, where the turret starts
    static const S32 TurretTurnRate = 4;               // How fast can turrets turn to aim?
    static const S32 TurretPerceptionDistance = 800;   // Area to search for potential targets...
@@ -357,7 +357,7 @@ public:
    void onGeomChanged();
 
    void renderDock();
-   void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled);
+   void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices = false);
 
    ///// Lua interface
 	LUAW_DECLARE_CLASS_CUSTOM_CONSTRUCTOR(Turret);

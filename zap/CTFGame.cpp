@@ -273,9 +273,10 @@ S32 CTFGameType::getEventScore(ScoringGroup scoreGroup, ScoringEvent scoreEvent,
 }
 
 
-void CTFGameType::onGameOver()
+bool CTFGameType::onGameOver()
 {
-   Parent::onGameOver();
+   if(Parent::onGameOver())
+      return false;
 
    // Check if we got the Last-Second Win badge
    if(mLastWinBadgeAchievable &&                                           // Badge was possibly achieved (some flag scored in last second)
@@ -298,11 +299,11 @@ void CTFGameType::onGameOver()
             continue;
 
          // Test for tie
-         if(static_cast<Team*>(getGame()->getTeam(i))->getScore() == getLeadingScore())
+         if(static_cast<Team *>(getGame()->getTeam(i))->getScore() == getLeadingScore())
             tiedGame = true;
 
          // Test for exists 1 team with winning score minus 1
-         if(static_cast<Team*>(getGame()->getTeam(i))->getScore() == getLeadingScore() - 1)
+         if(static_cast<Team *>(getGame()->getTeam(i))->getScore() == getLeadingScore() - 1)
             secondPlaceIsMinusOne = true;
       }
 
@@ -310,18 +311,23 @@ void CTFGameType::onGameOver()
       if(!tiedGame && secondPlaceIsMinusOne)
          achievementAchieved(BADGE_LAST_SECOND_WIN, mPossibleLastWinBadgeAchiever->getName());
    }
+
+   return true;
+}
+
+
+// In CTF games, we'll enter sudden death... next score wins
+void CTFGameType::onOvertimeStarted()
+{
+   startSuddenDeath();
 }
 
 
 GameTypeId CTFGameType::getGameTypeId() const { return CTFGame; }
-
-
 const char *CTFGameType::getShortName() const { return "CTF"; }
-
 static const char *instructions[] = { "Take the enemy flag",  "and touch it to yours!" };
 const char **CTFGameType::getInstructionString() const { return instructions; }
 HelpItem CTFGameType::getGameStartInlineHelpItem() const { return CTFGameStartItem; }
-
 
 bool CTFGameType::isFlagGame()          const { return true; }
 bool CTFGameType::isTeamGame()          const { return true; }

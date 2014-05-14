@@ -75,7 +75,6 @@ extern void drawSquare(const Point &pos, F32 radius, bool filled = false);
 extern void drawSquare(const Point &pos, S32 radius, bool filled = false);
 extern void drawHollowSquare(const Point &pos, F32 radius, const Color *color = NULL);
 extern void drawFilledSquare(const Point &pos, F32 radius, const Color *color = NULL);
-extern void drawFilledSquare(const Point &pos, S32 radius, const Color *color = NULL);
 
 extern void renderSmallSolidVertex(F32 currentScale, const Point &pos, bool snapping);
 
@@ -95,9 +94,8 @@ extern void drawFadingHorizontalLine(S32 x1, S32 x2, S32 yPos, const Color &colo
 
 extern void renderSquareItem(const Point &pos, const Color *c, F32 alpha, const Color *letterColor, char letter);
 
-extern void drawCircle(const Point &pos, S32 radius, const Color *color = NULL, F32 alpha = 1.0);
-extern void drawCircle(const Point &pos, F32 radius, const Color *color = NULL, F32 alpha = 1.0);
-extern void drawCircle(F32 x, F32 y,     F32 radius, const Color *color = NULL, F32 alpha = 1.0);
+extern void drawCircle(const Point &center, F32 radius, const Color *color = NULL, F32 alpha = 1.0);
+extern void drawCircle(F32 radius, const Color *color = NULL, F32 alpha = 1.0);
 
 extern void drawDivetedTriangle(F32 height, F32 len);
 extern void drawGear(const Point &center, S32 teeth, F32 r1, F32 r2, F32 ang1, F32 ang2, F32 innerCircleRadius, F32 angleRadians = 0.0f);
@@ -183,8 +181,8 @@ extern void renderPolygon(const Vector<Point> *fillPoints, const Vector<Point> *
 
 extern void renderGoalZone(const Color &c, const Vector<Point> *outline, const Vector<Point> *fill);     // No label version
 extern void renderGoalZone(const Color &c, const Vector<Point> *outline, const Vector<Point> *fill, Point centroid, F32 labelAngle,
-                           bool isFlashing, F32 glowFraction, S32 score, F32 flashCounter, bool useOldStyle);
-extern void renderGoalZoneIcon(const Point &center, S32 radius, F32 angleRadians = 0.0f);
+                           bool isFlashing, F32 glowFraction, S32 score, F32 flashCounter, GoalZoneFlashStyle flashStyle);
+extern void renderGoalZoneIcon(const Point &center, S32 radius);
 
 
 extern void renderNexus(const Vector<Point> *outline, const Vector<Point> *fill, Point centroid, F32 labelAngle, 
@@ -270,7 +268,7 @@ extern void renderWalls(const GridDatabase *wallSegmentDatabase, const Vector<Po
 
 
 extern void renderWallOutline(WallItem *wallItem, const Vector<Point> *outline, const Color *color, 
-                              F32 currentScale, bool snappingToWallCornersEnabled);
+                              F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices = false);
 
 extern void drawLetter(char letter, const Point &pos, const Color &color, F32 alpha);
 extern void renderSpawn(const Point &pos, F32 scale, const Color *color);

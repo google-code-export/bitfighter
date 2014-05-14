@@ -440,6 +440,13 @@ void UIManager::onGameOver()
 }
 
 
+void UIManager::onGameReallyAndTrulyOver()
+{
+   if(mUis[getTypeInfo<GameUserInterface>()])
+      getUI<GameUserInterface>()->onGameReallyAndTrulyOver();    // Closes helpers and such
+}
+
+
 void UIManager::displayMessage(const Color &msgColor, const char *format, ...)
 {
    va_list args;
@@ -814,9 +821,15 @@ void UIManager::emitDebrisChunk(const Vector<Point> &points, const Color &color,
 }
 
 
-void UIManager::emitTextEffect(const string &text, const Color &color, const Point &pos)
+void UIManager::emitTextEffect(const string &text, const Color &color, const Point &pos, bool relative)
 {
-   getUI<GameUserInterface>()->emitTextEffect(text, color, pos);
+   getUI<GameUserInterface>()->emitTextEffect(text, color, pos, relative);
+}
+
+
+void UIManager::emitDelayedTextEffect(U32 delay, const string &text, const Color &color, const Point &pos, bool relative)
+{
+   getUI<GameUserInterface>()->emitDelayedTextEffect(delay, text, color, pos, relative);
 }
 
 

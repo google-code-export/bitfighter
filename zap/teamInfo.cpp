@@ -124,19 +124,54 @@ void AbstractTeam::alterBlue(F32 amt)
 }
 
 
+S32 AbstractTeam::getScore() const
+{
+   TNLAssert(false, "Not implemented for this class!");
+   return 0;
+}
+
+
+void AbstractTeam::setScore(S32 score)
+{
+   TNLAssert(false, "Not implemented for this class!");
+}
+
+
+void AbstractTeam::addScore(S32 score)
+{
+   TNLAssert(false, "Not implemented for this class!");
+}
+
+
 ////////////////////////////////////////
 ////////////////////////////////////////
+
+
+// Default constructor
+Team::Team()
+{
+   initialize();
+}
 
 
 // Constructor
-Team::Team()
+Team::Team(const char *name, const Color &color)
 {
-   mPlayerCount = 0;
-   mBotCount = 0;
-   mScore = 0;
-   mRating = 0;
+   initialize();
 
-   LUAW_CONSTRUCTOR_INITIALIZATIONS;
+   setName(name);
+   setColor(color);
+}
+
+
+// Constructor
+Team::Team(const char *name, F32 r, F32 g, F32 b, S32 score)
+{
+   initialize();
+
+   setName(name);
+   setColor(r, g, b);
+   setScore(score);
 }
 
 
@@ -144,6 +179,15 @@ Team::Team()
 Team::~Team()
 {
    LUAW_DESTRUCTOR_CLEANUP;
+}
+
+
+void Team::initialize()
+{
+   clearStats();
+   mScore = 0;
+
+   LUAW_CONSTRUCTOR_INITIALIZATIONS;
 }
 
 
@@ -173,7 +217,7 @@ StringTableEntry Team::getName() const
 }
 
 
-S32 Team::getScore()
+S32 Team::getScore() const
 {
    return mScore;
 }
@@ -211,7 +255,7 @@ S32 Team::getPlayerCount() const
 
 S32 Team::getBotCount() const
 {
-   TNLAssert(mBotCount >= 0, "No on expects the Spanish Inquisition!");
+   TNLAssert(mBotCount >= 0, "No one expects the Spanish Inquisition!");
    return mBotCount;
 }
 

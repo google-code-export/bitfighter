@@ -11,6 +11,7 @@
 #include "gameType.h"
 #include "ServerGame.h"
 #include "stringUtils.h"
+#include "RenderUtils.h"
 
 #include "ClientGame.h"
 #include "UIManager.h"
@@ -133,10 +134,8 @@ GameRecorderPlayback::GameRecorderPlayback(ClientGame *game, const char *filenam
       while(true)
       {
          U8 data[3];
-         data[0] = 0;
-         data[1] = 0;
-         data[2] = 0;
-         fread(data, 1, 3, mFile);
+         if(fread(data, 1, 3, mFile) != 3)
+            break;
          U32 size = (U32(data[1] & 63) << 8) + data[0];
          U32 milli = S32((U32(data[1] >> 6) << 8) + data[2]);
          if(size == 0)
@@ -196,10 +195,15 @@ void GameRecorderPlayback::updateSpectate()
    const Vector<RefPtr<ClientInfo> > &infos = *(mGame->getClientInfos());
 
    if(mClientInfoSpectating.isNull() && infos.size() != 0)
-      mClientInfoSpectating = infos[0];
+   {
+      mClientInfoSpectating = mGame->findClientInfo(mClientInfoSpectatingName);
+      if(mClientInfoSpectating.isNull())
+         mClientInfoSpectating = infos[0];
+   }
    
    if(mClientInfoSpectating.isValid())
    {
+      mClientInfoSpectatingName = mClientInfoSpectating->getName();
       Ship *ship = mClientInfoSpectating->getShip();
       setControlObject(ship);
 
@@ -239,14 +243,16 @@ void GameRecorderPlayback::processMoreData(U32 MilliSeconds)
          mPacketRecvBytesTotal += mSizeToRead;
          mPacketRecvCount++;
 
-         fread(data, 1, mSizeToRead, mFile);
-         BitStream bstream(data, mSizeToRead);
-         GhostConnection::readPacket(&bstream);
+         if(fread(data, 1, mSizeToRead, mFile) == mSizeToRead)
+         {
+            BitStream bstream(data, mSizeToRead);
+            GhostConnection::readPacket(&bstream);
+         }
          mSizeToRead = 0;
       }
 
-      data[2] = data[1] = data[0] = 0;
-      fread(data, 1, 3, mFile);
+      if(fread(data, 1, 3, mFile) != 3)
+         break; // Could not read 3 bytes
 
       U32 size = (U32(data[1] & 63) << 8) + data[0];
       U32 milli = S32((U32(data[1] >> 6) << 8) + data[2]);
@@ -301,7 +307,7 @@ void PlaybackSelectUserInterface::onActivate()
 //mLevels
    mMenuTitle = "Choose Recorded Game";
 
-   const string &dir = getGame()->getSettings()->getFolderManager()->recordDir;
+   const string &dir = getGame()->getSettings()->getFolderManager()->getRecordDir();
 
    S32 oldIndex = selectedIndex;
 
@@ -336,7 +342,7 @@ void PlaybackSelectUserInterface::onActivate()
 
 void PlaybackSelectUserInterface::processSelection(U32 index)
 {
-   string file = joindir(getGame()->getSettings()->getFolderManager()->recordDir, mLevels[index]);
+   string file = joindir(getGame()->getSettings()->getFolderManager()->getRecordDir(), mLevels[index]);
    GameRecorderPlayback *gc = new GameRecorderPlayback(getGame(), file.c_str());
    if(!gc->isValid())
    {
@@ -456,7 +462,7 @@ const F32 btn_y = 510;
 const F32 btn_w = 20;
 const F32 btn_h = 20;
 
-const F32 btn_spectate_name_x = 350; // fast forward
+const F32 btn_spectate_name_x = 400;
 
 const F32 buttons_lines[] = {
    btn0_x + btn_w/3  , btn_y            , btn0_x            , btn_y,
@@ -602,6 +608,8 @@ void PlaybackGameUserInterface::render()
       renderVertexArray(vertex, 2, GL_LINES);
 
       renderVertexArray(buttons_lines, sizeof(buttons_lines) / (sizeof(buttons_lines[0]) * 2), GL_LINES);
+
+      drawString(btn_spectate_name_x, btn_y, 15, mPlaybackConnection->mClientInfoSpectatingName.getString());
    }
 }
 

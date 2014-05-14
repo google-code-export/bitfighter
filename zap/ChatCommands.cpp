@@ -29,28 +29,31 @@ namespace ChatCommands
 // static method
 void addTimeHandler(ClientGame *game, const Vector<string> &words)
 {
-   if(words.size() < 2 || words[1] == "")
-      game->displayErrorMessage("!!! Need to supply a time (in minutes)");
-   else
+   if(game->hasLevelChange("!!! Need level change permissions to add time"))
    {
-      U8 mins;    // Use U8 to limit number of mins that can be added, while nominally having no limit!
-                  // Parse 2nd arg -- if first digit isn't a number, user probably screwed up.
-                  // atoi will return 0, but this probably isn't what the user wanted.
-
-      bool err = false;
-      if(words[1][0] >= '0' && words[1][0] <= '9')
-         mins = atoi(words[1].c_str());
-      else
-         err = true;
-
-      if(err || mins == 0)
-         game->displayErrorMessage("!!! Invalid value... game time not changed");
+      if(words.size() < 2 || words[1] == "")
+         game->displayErrorMessage("!!! Need to supply a time (in minutes)");
       else
       {
-         if(game->getGameType())
+         U8 mins;    // Use U8 to limit number of mins that can be added, while nominally having no limit!
+                     // Parse 2nd arg -- if first digit isn't a number, user probably screwed up.
+                     // atoi will return 0, but this probably isn't what the user wanted.
+
+         bool err = false;
+         if(words[1][0] >= '0' && words[1][0] <= '9')
+            mins = atoi(words[1].c_str());
+         else
+            err = true;
+
+         if(err || mins == 0)
+            game->displayErrorMessage("!!! Invalid value... game time not changed");
+         else
          {
-            game->displayCmdChatMessage("Extended game by %d minute%s", mins, (mins == 1) ? "" : "s");
-            game->getGameType()->addTime(mins * 60 * 1000);
+            if(game->getGameType())
+            {
+               game->displayCmdChatMessage("Extended game by %d minute%s", mins, (mins == 1) ? "" : "s");
+               game->getGameType()->addTime(mins * 60 * 1000);
+            }
          }
       }
    }
@@ -1052,17 +1055,17 @@ void rateMapHandler(ClientGame *game, const Vector<string> &args)
    if(!game->canRateLevel())      // Will display any appropriate error messages
       return;
 
-   S32 rating = NONE;
+   LevelDatabaseRateThread::LevelRating ratingEnum = LevelDatabaseRateThread::UnknownRating;
 
    if(args.size() >= 2)
       for(S32 i = 0; i < LevelDatabaseRateThread::RatingsCount; i++)
          if(args[1] == LevelDatabaseRateThread::RatingStrings[i])
          {
-            rating = i;
+            ratingEnum = LevelDatabaseRateThread::getLevelRatingEnum(args[1]);
             break;
          }
 
-   if(rating == NONE)      // Error
+   if(ratingEnum == LevelDatabaseRateThread::UnknownRating)      // Error
    {  
       string msg = "!!! You must specify a rating (";
 
@@ -1082,7 +1085,6 @@ void rateMapHandler(ClientGame *game, const Vector<string> &args)
    }
    else                    // Args look ok; release the kraken!
    {
-      LevelDatabaseRateThread::LevelRating ratingEnum = LevelDatabaseRateThread::getLevelRatingEnum(rating);
       RefPtr<LevelDatabaseRateThread> rateThread = new LevelDatabaseRateThread(game, ratingEnum);
       game->getSecondaryThread()->addEntry(rateThread);
    }

@@ -38,7 +38,7 @@ TNL_IMPLEMENT_NETOBJECT(Robot);
  * @param [scriptName] The bot script to use. Defaults to the server's default bot.
  * @param [scriptArg] Zero or more string arguments to pass to the script.
  */
-Robot::Robot(lua_State *L) : Ship(NULL, TEAM_NEUTRAL, Point(0,0), true),   
+Robot::Robot(lua_State *L) : Ship(NULL, TEAM_NEUTRAL, Point(0,0)),   
                              LuaScriptRunner() 
 {
    if(L)
@@ -96,24 +96,27 @@ Robot::~Robot()
       return;
    }
 
-   dismountAll();  // fixes dropping CTF flag without ClientInfo...
-
    // Server only from here on down
-   if(getGame())  // can be NULL if this robot was never added to game (bad / missing robot file)
+
+   dismountAll();
+
+   Game *game = getGame();
+
+   if(game)       // Can be NULL if this robot was never added to game (bad / missing robot file)
    {
       EventManager::get()->fireEvent(this, EventManager::PlayerLeftEvent, getPlayerInfo());
 
-      if(getGame()->getGameType())
-         getGame()->getGameType()->serverRemoveClient(mClientInfo);
+      if(game->getGameType())
+         game->getGameType()->removeClient(mClientInfo);
 
-      getGame()->removeBot(this);
-      logprintf(LogConsumer::LogLuaObjectLifecycle, "Robot %s terminated (%d bots left)", mScriptName.c_str(), getGame()->getRobotCount());
+      game->removeBot(this);
+      logprintf(LogConsumer::LogLuaObjectLifecycle, "Robot %s terminated (%d bots left)", mScriptName.c_str(), game->getRobotCount());
    }
 
    delete mPlayerInfo;
    if(mClientInfo.isValid())
    {
-      getGame()->removeFromClientList(mClientInfo.getPointer());
+      game->removeFromClientList(mClientInfo.getPointer());
 	   delete mClientInfo.getPointer();
    }
 
@@ -125,38 +128,33 @@ Robot::~Robot()
 
 // Reset everything on the robot back to the factory settings -- runs only when bot is spawning in GameType::spawnRobot()
 // Only runs on server!
-bool Robot::initialize(Point &pos)
+void Robot::initialize(const Point &pos)
 {
    TNLAssert(!isGhost(), "Server only, dude!");
 
-   try
-   {
-      flightPlan.clear();
+   Parent::initialize(pos);
 
-      mCurrentZone = U16_MAX;   // Correct value will be calculated upon first request
+   flightPlan.clear();
 
-      Parent::initialize(pos);
+   mCurrentZone = U16_MAX;   // Correct value will be calculated upon first request
+   // Robots added via robot.new() get intialized.  If the robot is added in a script's main() 
+   // function, the bot will be reinitialized when the game starts.  This check avoids that.
+   if(!isCollisionEnabled())
+      enableCollision();
 
-      // Robots added via robot.new() get intialized.  If the robot is added in a script's main() 
-      // function, the bot will be reinitialized when the game starts.  This check avoids that.
-      if(!isCollisionEnabled())
-         enableCollision();
+   // WarpPositionMask triggers the spinny spawning visual effect
+   setMaskBits(RespawnMask | HealthMask        | LoadoutMask         | PositionMask | 
+               MoveMask    | ModulePrimaryMask | ModuleSecondaryMask | WarpPositionMask);      // Send lots to the client
 
-      // WarpPositionMask triggers the spinny spawning visual effect
-      setMaskBits(RespawnMask | HealthMask        | LoadoutMask         | PositionMask | 
-                  MoveMask    | ModulePrimaryMask | ModuleSecondaryMask | WarpPositionMask);      // Send lots to the client
-
-      EventManager::get()->update();   // Ensure registrations made during bot initialization are ready to go
-   }
-   catch(LuaException &e)
-   {
-      logError("Robot error during spawn: %s.  Shutting robot down.", e.what());
-      clearStack(L);
-      return false;
-   }
-
-   return true;
+   EventManager::get()->update();   // Ensure registrations made during bot initialization are ready to go
 } 
+
+
+// Overrides method in Ship
+void Robot::doClassSpecificInitialization(const Point &pos)
+{
+   mHasExploded = false;    // Client needs this false for unpackUpdate
+}
 
 
 const char *Robot::getErrorMessagePrefix() { return "***ROBOT ERROR***"; }
@@ -194,7 +192,7 @@ bool Robot::prepareEnvironment()
       // Set this first so we have this object available in the helper functions in case we need overrides
       setSelf(L, this, "bot");
 
-      if(!loadAndRunGlobalFunction(L, ROBOT_HELPER_FUNCTIONS_KEY, RobotContext))
+      if(!loadCompileRunEnvironmentScript("timer.lua") || !loadAndRunGlobalFunction(L, ROBOT_HELPER_FUNCTIONS_KEY, RobotContext))
          return false;
    }
    catch(LuaException &e)
@@ -292,7 +290,7 @@ void Robot::onAddedToGame(Game *game)
    // Check whether a script file has been specified. If not, use the default
    if(mScriptName == "")
    {
-      string scriptName = game->getSettings()->getIniSettings()->defaultRobotScript;
+      string scriptName = game->getSettings()->getIniSettings()->mSettings.getVal<string>(IniKey::DefaultRobotScript);
       mScriptName = GameSettings::getFolderManager()->findBotFile(scriptName);
    }
 
@@ -392,7 +390,7 @@ bool Robot::processArguments(S32 argc, const char **argv, Game *game, string &er
    if(argc >= 2)
       scriptName = argv[1];
    else
-      scriptName = game->getSettings()->getIniSettings()->defaultRobotScript;
+      scriptName = game->getSettings()->getIniSettings()->mSettings.getVal<string>(IniKey::DefaultRobotScript);
 
    FolderManager *folderManager = game->getSettings()->getFolderManager();
 
@@ -509,8 +507,11 @@ void Robot::idle(BfObject::IdleCallPath path)
    {
       mSendSpawnEffectTimer.update(mCurrentMove.time); // This is to fix robot go spinny, since we skipped Ship::idle(ServerIdleMainLoop)
 
-      // Robot Timer ticks are now processed in the global Lua Timer along with
-      // levelgens in ServerGame::idle()
+      U32 deltaT = mCurrentMove.time;
+
+      TNLAssert(deltaT != 0, "Time should never be zero!");    
+
+      tickTimer<Robot>(deltaT);
 
       Parent::idle(BfObject::ServerProcessingUpdatesFromClient);   // Let's say the script is the client  ==> really not sure this is right
    }
@@ -532,9 +533,17 @@ void Robot::clearMove()
 }
 
 
-bool Robot::isRobot()
+// Overrides Ship method
+void Robot::onPositionChanged(GhostConnection *connection)
 {
-   return true;
+   // Do nothing
+}
+
+
+// Overrides Ship method
+void Robot::onChangedClientTeam()
+{
+   setChangeTeamMask();
 }
 
 

@@ -19,6 +19,7 @@
 
 #include "gameObjectRender.h"
 
+#include "Intervals.h"
 #include "stringUtils.h"   // For itos
 #include "MathUtils.h"     // For radiansToDegrees
 #include "GeomUtils.h"
@@ -45,9 +46,9 @@ TNL_IMPLEMENT_NETOBJECT(Ship);
 // Note that on client, we use all default values set in declaration; on the server, these values will be provided
 // Most of these values are set in the initial packet set from the server (see packUpdate() below)
 // Also, the following is also run by robot's constructor
-Ship::Ship(ClientInfo *clientInfo, S32 team, const Point &pos, bool isRobot) : MoveObject(pos, (F32)CollisionRadius), mSpawnPoint(pos)
+Ship::Ship(ClientInfo *clientInfo, S32 team, const Point &pos) : MoveObject(pos, (F32)CollisionRadius), mSpawnPoint(pos)
 {
-   initialize(clientInfo, team, pos, isRobot);
+   initialize(clientInfo, team, pos);
 }
 
 
@@ -60,7 +61,7 @@ Ship::Ship(lua_State *L) : MoveObject(Point(0,0), (F32)CollisionRadius)
       return;
    }
 
-   initialize(NULL, TEAM_NEUTRAL, Point(0,0), false);
+   initialize(NULL, TEAM_NEUTRAL, Point(0,0));
 }
 
 
@@ -78,11 +79,11 @@ Ship::~Ship()
 }
 
 
-void Ship::initialize(ClientInfo *clientInfo, S32 team, const Point &pos, bool isRobot)
+void Ship::initialize(ClientInfo *clientInfo, S32 team, const Point &pos)
 {
-   static const U32 ModuleSecondaryTimerDelay = 500;
-   static const U32 SpyBugPlacementTimerDelay = 800;
-   static const U32 IdleRechargeCycleTimerDelay = 2000;
+   static const U32 ModuleSecondaryTimerDelay = 500;  // ms
+   static const U32 SpyBugPlacementTimerDelay = 800;  // ms
+   static const U32 IdleRechargeCycleTimerDelay = TWO_SECONDS;
 
    mObjectTypeNumber = PlayerShipTypeNumber;
    mFireTimer = 0;
@@ -98,7 +99,7 @@ void Ship::initialize(ClientInfo *clientInfo, S32 team, const Point &pos, bool i
    mSpyBugPlacementTimer.setPeriod(SpyBugPlacementTimerDelay);
    mSensorEquipZoomTimer.setPeriod(SensorZoomTime);
    mFastRechargeTimer.reset(IdleRechargeCycleTimerDelay, IdleRechargeCycleTimerDelay);
-   mSendSpawnEffectTimer.setPeriod(300);
+   mSendSpawnEffectTimer.setPeriod(300);  // ms
 
    mNetFlags.set(Ghostable);
 
@@ -115,14 +116,7 @@ void Ship::initialize(ClientInfo *clientInfo, S32 team, const Point &pos, bool i
    setTeam(team);
    mass = 1.0;            // Ship's mass, not used
 
-   // Name will be unique across all clients, but client and server may disagree on this name if the server has modified it to make it unique
-
-   mIsRobot = isRobot;
-
-   if(!isRobot)               // Robots will run this during their own initialization; no need to run it twice!
-      initialize(pos);
-   else
-      mHasExploded = false;    // Client needs this false for unpackUpdate
+   doClassSpecificInitialization(pos);
 
    mZones1IsCurrent = true;
 
@@ -138,6 +132,13 @@ void Ship::initialize(ClientInfo *clientInfo, S32 team, const Point &pos, bool i
       mLoadout = clientInfo->getOldLoadout();
 
    LUAW_CONSTRUCTOR_INITIALIZATIONS;
+}
+
+
+// Is overidden in Robot
+void Ship::doClassSpecificInitialization(const Point &pos)
+{
+   initialize(pos);
 }
 
 
@@ -1291,6 +1292,7 @@ void Ship::computeMaxFireDelay()
 const U32 negativeFireDelay = 123;  // how far into negative we are allowed to send.
 // MaxFireDelay + negativeFireDelay, 900 + 123 = 1023, so writeRangedU32 are sending full range of 10 bits of information.
 
+
 // Only used on client for prediction in replay moves
 void Ship::setState(ControlObjectData *state)
 {
@@ -1309,6 +1311,8 @@ void Ship::setState(ControlObjectData *state)
    mLoadout.setModulePrimary(ModuleBoost, state->mBoostActive);
    
 }
+
+
 void Ship::getState(ControlObjectData *state) const
 {
    state->mPos = getActualPos();
@@ -1323,6 +1327,7 @@ void Ship::getState(ControlObjectData *state) const
    state->mFastRecharging = mFastRecharging;
    state->mBoostActive = mLoadout.isModulePrimaryActive(ModuleBoost);
 }
+
 
 void Ship::writeControlState(BitStream *stream)
 {
@@ -1487,6 +1492,7 @@ void Ship::findClientInfoFromName()
    if(mClientInfo)
       mClientInfo->setShip(this);
 }
+
 
 // Any changes here need to be reflected in Ship::packUpdate
 void Ship::unpackUpdate(GhostConnection *connection, BitStream *stream)
@@ -1662,12 +1668,8 @@ void Ship::unpackUpdate(GhostConnection *connection, BitStream *stream)
 
    setActualAngle(mCurrentMove.angle);
 
-
-   if(positionChanged && !isRobot() )
-   {
-      mCurrentMove.time = (U32) connection->getOneWayTime();
-      processMove(ActualState);
-   }
+   if(positionChanged)
+      onPositionChanged(connection);
 
    if(shipwarped)
    {
@@ -1707,6 +1709,22 @@ void Ship::unpackUpdate(GhostConnection *connection, BitStream *stream)
 
 #endif
 }  // unpackUpdate
+
+
+// Overridden by Robot
+void Ship::onPositionChanged(GhostConnection *connection)
+{
+   mCurrentMove.time = (U32)connection->getOneWayTime();
+   processMove(ActualState);
+}
+
+
+// Overridden by Robot
+void Ship::onChangedClientTeam()
+{
+   // If we've just died, this will keep a second copy of ourselves from appearing
+   getClientInfo()->respawnTimer.clear(); 
+}
 
 
 F32 Ship::getUpdatePriority(GhostConnection *connection, U32 updateMask, S32 updateSkips)
@@ -2361,12 +2379,6 @@ void Ship::removeMountedItem(MountableItem *item)
 }
 
 
-bool Ship::isRobot()
-{
-   return mIsRobot;
-}
-
-
 //// Lua methods
 
 //               Fn name           Param profiles  Profile count                           
@@ -2746,14 +2758,14 @@ LoadoutTracker Ship::checkAndBuildLoadout(lua_State *L, S32 profile)
 
 
 /**
- * @luafunc Ship::setLoadout(Weapon w1, Weapon w2, Module m1, Module m2, Module m3)
+ * @luafunc Ship::setLoadout(Weapon w1, Weapon w2, Weapon w3, Module m2, Module m3)
  * @brief Convenience alias for setLoadout(table)
  *
  * @param w1 The new \ref WeaponEnum for slot 1.
  * @param w2 The new \ref WeaponEnum for slot 2.
+ * @param w3 The new \ref WeaponEnum for slot 3.
  * @param m1 The new \ref ModuleEnum for slot 1.
  * @param m2 The new \ref ModuleEnum for slot 2.
- * @param m3 The new \ref ModuleEnum for slot 3.
  *
  * @luafunc Ship::setLoadout(table loadout)
  *
@@ -2763,10 +2775,10 @@ LoadoutTracker Ship::checkAndBuildLoadout(lua_State *L, S32 profile)
  * loadout, e.g. moving over a loadout zone.
  *
  * This method will take a table with 5 entries in any order comprised of
- * 2 modules and 3 weapons.
+ * 3 weapons and 2 modules.
  *
  * @note This method will also take 5 parameters as a new loadout, instead
- * of a table. See setLoadout(Weapon, Weapon, Module, Module, Module)
+ * of a table. See setLoadout(Weapon, Weapon, Weapon, Module, Module)
  *
  * @param loadout The new loadout to request.
  *

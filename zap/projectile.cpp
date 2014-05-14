@@ -797,7 +797,7 @@ TNL_IMPLEMENT_NETOBJECT(Mine);
 
 
 const U32 Mine::FuseDelay = 100;
-const S32 Mine::SensorRadius = 50;
+const F32 Mine::SensorRadius = 50;
 
 
 // Constructor -- used when mine is planted
@@ -1015,14 +1015,14 @@ void Mine::renderItem(const Point &pos)
 
    Ship *ship = getGame()->getLocalPlayerShip();
 
-   ClientInfo *clientInfo = getGame()->getLocalRemoteClientInfo();
+   S32 ourTeam = static_cast<ClientGame*>(getGame())->getCurrentTeamIndex();
 
-   if(clientInfo)
+   if(ourTeam != TEAM_NEUTRAL)
    {
       armed = mArmed;
 
       // Can see mine if laid by teammate in team game OR you laid it yourself
-      if( (clientInfo->getTeamIndex() == getTeam() && getGame()->isTeamGame()) ||
+      if( (ourTeam == getTeam() && getGame()->isTeamGame()) ||
             mIsOwnedByLocalClient)
          visible = true;
 
@@ -1041,7 +1041,7 @@ void Mine::renderItem(const Point &pos)
 }
 
 
-void Mine::renderEditor(F32 currentScale, bool snappingToWallCornersEnabled)
+void Mine::renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices)
 {
    renderMine(getActualPos(), true, true);
 }
@@ -1247,14 +1247,13 @@ void SpyBug::renderItem(const Point &pos)
 
    Ship *ship = getGame()->getLocalPlayerShip();
 
-   // Used for getting team, ship can be NULL when idle
-   ClientInfo *clientInfo = getGame()->getLocalRemoteClientInfo();
+   S32 ourTeam = static_cast<ClientGame*>(getGame())->getCurrentTeamIndex();
 
-   if(clientInfo)
+   if(ourTeam != TEAM_NEUTRAL)
    {
       // Can see bug if laid by teammate in team game OR
       // you laid it yourself OR spyBug is neutral
-      if( ((clientInfo->getTeamIndex() == getTeam()) && getGame()->isTeamGame())   ||
+      if( (ourTeam == getTeam() && getGame()->isTeamGame())   ||
             mIsOwnedByLocalClient || getTeam() == TEAM_NEUTRAL)
          visible = true;
 
@@ -1272,7 +1271,7 @@ void SpyBug::renderItem(const Point &pos)
 }
 
 
-void SpyBug::renderEditor(F32 currentScale, bool snappingToWallCornersEnabled)
+void SpyBug::renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices)
 {
    renderSpyBug(getPos(), *getColor(), true, true);
 }

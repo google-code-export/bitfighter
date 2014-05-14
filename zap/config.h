@@ -41,16 +41,9 @@ class GameSettings;
 struct CmdLineSettings;
 
 
-struct FolderManager 
+class FolderManager 
 {
-   // Constructors
-   FolderManager();
-   virtual ~FolderManager();
-
-   FolderManager(const string &levelDir,    const string &robotDir,  const string &sfxDir,        const string &musicDir, 
-                 const string &iniDir,      const string &logDir,    const string &screenshotDir, const string &luaDir,
-                 const string &rootDataDir, const string &pluginDir, const string &fontsDir,      const string &recordDir);
-
+private:
    string levelDir;
    string robotDir;
    string sfxDir;
@@ -63,6 +56,29 @@ struct FolderManager
    string pluginDir;
    string fontsDir;
    string recordDir;
+
+public:
+   // Constructors
+   FolderManager();
+   FolderManager(const string &levelDir,    const string &robotDir,  const string &sfxDir,        const string &musicDir, 
+                 const string &iniDir,      const string &logDir,    const string &screenshotDir, const string &luaDir,
+                 const string &rootDataDir, const string &pluginDir, const string &fontsDir,      const string &recordDir);
+
+   virtual ~FolderManager();     // Destructor
+
+   string getLevelDir() const;
+   string getIniDir() const;
+   string getRecordDir() const;
+   string getFontsDir() const;
+   string getScreenshotDir() const;
+   string getSfxDir() const;
+   string getRobotDir() const;
+   string getMusicDir() const;
+   string getRootDataDir() const;
+   string getLogDir() const;
+   string getPluginDir() const;
+   string getLuaDir() const;
+
 
    void resolveDirs(GameSettings *settings);                                  
    void resolveDirs(const string &root);
@@ -168,6 +184,7 @@ struct UserSettings
 class CIniFile;
 class InputCodeManager;
 
+//template <class T>
 struct IniSettings      // With defaults specified
 {
 private:
@@ -177,7 +194,7 @@ public:
    IniSettings();       // Constructor
    virtual ~IniSettings();
 
-   Settings mSettings;
+   Settings<IniKey::SettingsItem> mSettings;
 
    DisplayMode oldDisplayMode;
    bool joystickLinuxUseOldDeviceSystem;
@@ -185,7 +202,6 @@ public:
 
    F32 sfxVolLevel;                 // SFX volume (0 = silent, 1 = full bore)
    F32 voiceChatVolLevel;           // Ditto
-   F32 alertsVolLevel;              // And again
 
    F32 getMusicVolLevel();
    F32 getRawMusicVolLevel();
@@ -196,12 +212,6 @@ public:
 
    sfxSets sfxSet;                  // Which set of SFX does the user want?
 
-   bool diagnosticKeyDumpMode;      // True if want to dump keystrokes to the screen
-
-   bool allowGetMap;                // allow '/GetMap' command
-   bool allowDataConnections;       // Specify whether data connections are allowed on this computer
-
-   U32 maxDedicatedFPS;
    U32 maxFPS;
 
 
@@ -212,40 +222,7 @@ public:
    string lastPassword;
    string lastEditorName;           // Name of file most recently edited by the user
 
-   string hostname;                 // Server name when in host mode
-   string hostaddr;                 // User-specified address/port of server
-   string hostdescr;                // One-line description of server
-   string serverPassword;
-   string ownerPassword;
-   string adminPassword;
-   string levelChangePassword;      // Password to allow access to level changing functionality on non-local server
-   string levelDir;                 // Folder where levels are stored, by default
-   S32 maxPlayers;                  // Max number of players that can play on local server
-   S32 maxBots;
-   bool playWithBots;               // Should the server add bots
-   S32 minBalancedPlayers;          // If bot auto-balance, make sure there are at least this many players
-   bool enableServerVoiceChat;      // No voice chat allowed in server if disabled
-   bool allowTeamChanging;
-   bool enableGameRecording;
-
    S32 connectionSpeed;
-
-   bool randomLevels;
-   bool skipUploads;
-
-   bool allowMapUpload;
-   bool allowAdminMapUpload;
-   bool allowLevelgenUpload;
-
-   bool voteEnable;
-   U32 voteLength;
-   U32 voteLengthToChangeTeam;
-   U32 voteRetryLength;
-   S32 voteYesStrength;
-   S32 voteNoStrength;
-   S32 voteNothingStrength;
-
-   bool useUpdater;                 // Use updater system (windows only)
 
    // Server display settings in join menu
    S32 queryServerSortColumn;
@@ -260,52 +237,12 @@ public:
 
    bool musicMutedOnCmdLine;
 
-   // Testing values
-   bool neverConnectDirect;
-   Color wallFillColor;
-   Color wallOutlineColor;
-   U16 clientPortNumber;
-   bool disableScreenSaver;
-
-   // Logging options   --   true will enable logging these events, false will disable
-   bool logConnectionProtocol;
-   bool logNetConnection;
-   bool logEventConnection;
-   bool logGhostConnection;
-   bool logNetInterface;
-   bool logPlatform;
-   bool logNetBase;
-   bool logUDP;
-
-   bool logFatalError;        
-   bool logError;             
-   bool logWarning;    
-   bool logConfigurationError;
-   bool logConnection;        
-   bool logLevelLoaded;    
-   bool logLevelError;
-   bool logLuaObjectLifecycle;
-   bool luaLevelGenerator;    
-   bool luaBotMessage;        
-   bool serverFilter;  
-   bool logStats;
-
-   string mySqlStatsDatabaseServer;
-   string mySqlStatsDatabaseName;
-   string mySqlStatsDatabaseUser;
-   string mySqlStatsDatabasePassword;
-
-   string defaultRobotScript;
-   string globalLevelScript;
-
    Vector<StringTableEntry> levelList;
 
    Vector<string> reservedNames;
    Vector<string> reservedPWs;
 
    U32 version;
-
-   bool oldGoalFlash;
 
    Vector<string> prevServerListFromMaster;
    Vector<string> alwaysPingList;
