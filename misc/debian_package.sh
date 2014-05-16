@@ -11,4 +11,4 @@ tar -xf $TARBALL
 cd $DIR
 dh_make -f ../$TARBALL --single --yes
 dpkg-buildpackage -uc -us
-cd ../..
+lintian --info --display-level '+>=pedantic' *.deb
