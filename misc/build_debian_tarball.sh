@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 
 ###
-# You may need to edits these periodically
+# You may need to edit these periodically
 ###
 
-# TODO: parse this
 VERSION=019c
 
 # everything that goes into a debian tar.gz
@@ -53,7 +52,11 @@ do
 	stage $path
 done
 
-# gets output to the root directory
+# clean up any exceptions
+rm -r $BASENAME/resource/fonts/
+rm -r $BASENAME/resource/screenshots/
+
+# create the tarball, which gets output to the root directory
 tar -czf $ROOT/$BASENAME.tar.gz $BASENAME/
 
 # cleanup workspace
