@@ -6,6 +6,7 @@
 #ifndef _UITEAMDEFMENU_H_
 #define _UITEAMDEFMENU_H_
 
+#include "game.h"    // For Game::MAX_TEAMS
 #include "UI.h"
 #include "InputModeEnum.h"
 #include "ConfigEnum.h"
@@ -39,9 +40,15 @@ private:
    
    S32 selectedIndex;          // Highlighted menu item
 
-   bool mEditingTeam;         
+   bool mEditingName;         
    bool mEditingColor;
+
+   Vector<TeamInfo> *mTeamInfos;
+
    ColorEntryMode mColorEntryMode;
+
+   LineEditor mHexColorEditors[Game::MAX_TEAMS];
+   LineEditor mTeamNameEditors[Game::MAX_TEAMS];
 
    F32 getColorBase() const;
    F32 getAmount() const;
@@ -50,6 +57,10 @@ private:
    void startEditing();
 
    const char *getEntryMessage() const;
+
+   bool onKeyDown_editingName(InputCode inputCode);
+   bool onKeyDown_editingColor(InputCode inputCode);
+
 
 public:
    explicit TeamDefUserInterface(ClientGame *game);     // Constructor
