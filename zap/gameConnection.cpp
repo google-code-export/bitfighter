@@ -25,6 +25,7 @@
 #endif
 
 #include "Colors.h"
+#include "Md5Utils.h"
 #include "stringUtils.h"         // For strictjoindir()
 
 
@@ -40,7 +41,10 @@ GameConnection::GameConnection()
 {
    initialize();
 
-   mSettings = NULL; // mServerGame->getSettings();      // will be set on ReadConnectRequest
+   mSettings = NULL;  // Will be set on ReadConnectRequest
+
+   mVote = 0;
+   mVoteTime = 0;
 
    // Might be a tad more efficient to put this in the initializer, but the (legitimate, in this case) use of this
    // in the arguments makes VC++ nervous, which in turn makes me nervous.
@@ -87,18 +91,12 @@ void GameConnection::initialize()
    mSendableFlags = 0;
    mDataBuffer = NULL;
    mDataBufferLevelGen = NULL;
-   mUploadIndex = -1;
 
    mWrongPasswordCount = 0;
 
    mVoiceChatEnabled = true;
 
    mPackUnpackShipEnergyMeter = false;
-
-   mVote = 0;
-   mVoteTime = 0;
-   mLevelSource = NULL;
-   mLevelUploadIndex = -1;
 
    resetConnectionStatus();
 }
@@ -129,7 +127,6 @@ GameConnection::~GameConnection()
       }
    }
 
-   delete mLevelSource;
    delete mDataBuffer;
 }
 
@@ -283,7 +280,7 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sPlayerRequestSpawnDelayed, (bool incursPena
 // 4. server send CommandComplete
 TNL_IMPLEMENT_RPC(GameConnection, c2sRequestCurrentLevel, (), (), NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirClientToServer, 0)
 {
-   if(!mSettings->getIniSettings()->allowGetMap)
+   if(!mSettings->getSetting<YesNo>(IniKey::AllowGetMap))
    {
       s2cDisplayErrorMessage("!!! Getmap command is disabled on this server");
       return;
@@ -291,7 +288,7 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sRequestCurrentLevel, (), (), NetClassGroupG
 
 
    string filename = mServerGame->getCurrentLevelFileName();
-   filename = strictjoindir(mSettings->getFolderManager()->levelDir, filename);
+   filename = strictjoindir(mSettings->getFolderManager()->getLevelDir(), filename);
    if(!TransferLevelFile(filename.c_str()))
       s2cDisplayErrorMessage("!!! Server Error, unable to download");
    return;
@@ -304,7 +301,7 @@ const U32 maxDataBufferSize = 1024*1024*8;  // 8 MB
 
 void GameConnection::submitPassword(const char *password)
 {
-   string encrypted = Game::md5.getSaltedHashFromString(password);
+   string encrypted = Md5::getSaltedHashFromString(password);
    c2sSubmitPassword(encrypted.c_str());
 
    mLastEnteredPassword = password;
@@ -418,7 +415,7 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSubmitPassword, (StringPtr pass), (pass),
 
    GameType *gameType = mServerGame->getGameType();
 
-   if(!mClientInfo->isOwner() && ownerPW != "" && !strcmp(Game::md5.getSaltedHashFromString(ownerPW).c_str(), pass))
+   if(!mClientInfo->isOwner() && ownerPW != "" && !strcmp(Md5::getSaltedHashFromString(ownerPW).c_str(), pass))
    {
       logprintf(LogConsumer::ServerFilter, "User [%s] granted owner permissions", mClientInfo->getName().getString());
       mWrongPasswordCount = 0;
@@ -430,7 +427,7 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSubmitPassword, (StringPtr pass), (pass),
       mClientInfo->setRole(ClientInfo::RoleOwner);
       s2cSetRole(ClientInfo::RoleOwner, true);                    // Tell client they have been granted access
 
-      if(mSettings->getIniSettings()->allowAdminMapUpload)
+      if(mSettings->getSetting<YesNo>(IniKey::AllowAdminMapUpload))
       {
          mSendableFlags |= ServerFlagAllowUpload;                 // Enable level uploads
          s2rSendableFlags(mSendableFlags);
@@ -444,7 +441,7 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSubmitPassword, (StringPtr pass), (pass),
    }
 
    // If admin password is blank, no one can get admin permissions except the local host, if there is one...
-   else if(!mClientInfo->isAdmin() && adminPW != "" && !strcmp(Game::md5.getSaltedHashFromString(adminPW).c_str(), pass))
+   else if(!mClientInfo->isAdmin() && adminPW != "" && !strcmp(Md5::getSaltedHashFromString(adminPW).c_str(), pass))
    {
       logprintf(LogConsumer::ServerFilter, "User [%s] granted admin permissions", mClientInfo->getName().getString());
       mWrongPasswordCount = 0;
@@ -455,7 +452,7 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSubmitPassword, (StringPtr pass), (pass),
       mClientInfo->setRole(ClientInfo::RoleAdmin);               // Enter admin PW and...
       s2cSetRole(ClientInfo::RoleAdmin, true);                   // Tell client they have been granted access
 
-      if(mSettings->getIniSettings()->allowAdminMapUpload)
+      if(mSettings->getSetting<YesNo>(IniKey::AllowAdminMapUpload))
       {
          mSendableFlags |= ServerFlagAllowUpload;                 // Enable level uploads
          s2rSendableFlags(mSendableFlags);
@@ -467,7 +464,7 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSubmitPassword, (StringPtr pass), (pass),
    }
 
    // If level change password is blank, it should already been granted to all clients
-   else if(!mClientInfo->isLevelChanger() && !strcmp(Game::md5.getSaltedHashFromString(levChangePW).c_str(), pass)) 
+   else if(!mClientInfo->isLevelChanger() && !strcmp(Md5::getSaltedHashFromString(levChangePW).c_str(), pass)) 
    {
       logprintf(LogConsumer::ServerFilter, "User [%s] granted level change permissions", mClientInfo->getName().getString());
       mWrongPasswordCount = 0;
@@ -493,29 +490,6 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSubmitPassword, (StringPtr pass), (pass),
    }
 }
 
-
-TNL_IMPLEMENT_RPC(GameConnection, c2sSetVoteMapParam,
-                  (U8 voteLength, U8 voteLengthToChangeTeam, U8 voteRetryLength, S32 voteYesStrength, S32 voteNoStrength, S32 voteNothingStrength,
-                  bool voteEnable, bool allowGetMap, bool allowMapUpload, bool randomLevels),
-                  (voteLength, voteLengthToChangeTeam, voteRetryLength, voteYesStrength, voteNoStrength, voteNothingStrength,
-                  voteEnable, allowGetMap, allowMapUpload, randomLevels),
-                  NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirClientToServer, 3)
-{
-   if(!mClientInfo->isAdmin())
-      return;
-   mSettings->getIniSettings()->voteLength = voteLength;
-   mSettings->getIniSettings()->voteLengthToChangeTeam = voteLengthToChangeTeam;
-   mSettings->getIniSettings()->voteRetryLength = voteRetryLength;
-   mSettings->getIniSettings()->voteYesStrength = voteYesStrength;
-   mSettings->getIniSettings()->voteNoStrength = voteNoStrength;
-   mSettings->getIniSettings()->voteNothingStrength = voteNothingStrength;
-   mSettings->getIniSettings()->voteEnable = voteEnable;
-   mSettings->getIniSettings()->allowGetMap = allowGetMap;
-   mSettings->getIniSettings()->allowMapUpload = allowMapUpload;
-   mSettings->getIniSettings()->randomLevels = randomLevels;
-   mSettings->getIniSettings()->allowAdminMapUpload = true; // must be True, for host on server to work
-   mSettings->getIniSettings()->allowLevelgenUpload = true;
-}
 
 // Allow admins to change the passwords and other parameters on their systems
 TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam, 
@@ -594,14 +568,7 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam,
       FolderManager *folderManager = mSettings->getFolderManager();
       string folder = folderManager->resolveLevelDir(param.getString());
 
-      if(mServerGame->mHostOnServer)
-      {
-         // Levels comes from hosting client, this probably should be handled client side?
-         s2cDisplayErrorMessage("!!! This setting can't be used server side when host mode is enabled");
-         return;
-      }
-
-      if(folderManager->levelDir == folder)
+      if(folderManager->getLevelDir() == folder)
       {
          s2cDisplayErrorMessage("!!! Specified folder is already the current level folder");
          return;
@@ -635,7 +602,7 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sSetParam,
       LevelSourcePtr levelSource = LevelSourcePtr(newLevelSource);
 
       // Folder contains some valid levels -- save it!
-      folderManager->levelDir = folder;
+      folderManager->getLevelDir() = folder;
 
       // Send the new list of levels to all levelchangers
       for(S32 i = 0; i < mServerGame->getClientCount(); i++)
@@ -837,7 +804,7 @@ TNL_IMPLEMENT_RPC(GameConnection, s2cSetServerName, (StringTableEntry name), (na
       string levelChangePassword = GameSettings::iniFile.GetValue("SavedLevelChangePasswords", getServerName());
       if(levelChangePassword != "")
       {
-         c2sSubmitPassword(Game::md5.getSaltedHashFromString(levelChangePassword).c_str());
+         c2sSubmitPassword(Md5::getSaltedHashFromString(levelChangePassword).c_str());
          setWaitingForPermissionsReply(false);     // Want to return silently
       }
    }
@@ -848,7 +815,7 @@ TNL_IMPLEMENT_RPC(GameConnection, s2cSetServerName, (StringTableEntry name), (na
       string adminPassword = GameSettings::iniFile.GetValue("SavedAdminPasswords", getServerName());
       if(adminPassword != "")
       {
-         c2sSubmitPassword(Game::md5.getSaltedHashFromString(adminPassword).c_str());
+         c2sSubmitPassword(Md5::getSaltedHashFromString(adminPassword).c_str());
          setWaitingForPermissionsReply(false);     // Want to return silently
       }
    }
@@ -859,7 +826,7 @@ TNL_IMPLEMENT_RPC(GameConnection, s2cSetServerName, (StringTableEntry name), (na
       string ownerPassword = GameSettings::iniFile.GetValue("SavedOwnerPasswords", getServerName());
       if(ownerPassword != "")
       {
-         c2sSubmitPassword(Game::md5.getSaltedHashFromString(ownerPassword).c_str());
+         c2sSubmitPassword(Md5::getSaltedHashFromString(ownerPassword).c_str());
          setWaitingForPermissionsReply(false);     // Want to return silently
       }
    }
@@ -1085,7 +1052,7 @@ TNL_IMPLEMENT_RPC(GameConnection, s2cTouchdownScored,
    if(gt)
    {
       gt->majorScoringEventOcurred(team);
-      mClientGame->emitTextEffect("Touchdown!", *gt->getTeamColor(team), scorePos);
+      mClientGame->emitTextEffect("Touchdown!", gt->getTeamColor(team), scorePos, true);
    }
 #endif
 }
@@ -1197,50 +1164,6 @@ TNL_IMPLEMENT_RPC(GameConnection, s2cRemoveLevel, (S32 index), (index),
       mLevelInfos.clear();
    else if(index < mLevelInfos.size())
       mLevelInfos.erase(index);
-}
-
-// Server sends the name and type of a level to the client (gets run repeatedly when client connects to the server). 
-// Sending a blank name and type will clear the list.
-TNL_IMPLEMENT_RPC(GameConnection, c2sAddLevel, (StringTableEntry name, RangedU32<0, GameTypesCount> type, S32 minPlayers, S32 maxPlayers, S32 index), (name, type, minPlayers, maxPlayers, index),
-                  NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirClientToServer, 3)
-{
-   TNLAssert((mSendableFlags & ServerFlagHostingLevels), "Shouldn't be used when not in host mode");
-   if(!(mSendableFlags | ServerFlagHostingLevels))
-      return;
-
-   LevelInfo levelInfo(name, (GameTypeId)type.value);
-   levelInfo.minRecPlayers = minPlayers;
-   levelInfo.maxRecPlayers = maxPlayers;
-   levelInfo.mHosterLevelIndex = index;
-   levelInfo.folder = mSettings->getFolderManager()->levelDir;
-   getServerGame()->addNewLevel(levelInfo);
-}
-
-
-// Server sends the level that got removed, or removes all levels from list when index is -1
-// Unused??
-TNL_IMPLEMENT_RPC(GameConnection, c2sRemoveLevel, (S32 index), (index),
-                  NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirClientToServer, 3)
-{
-   TNLAssert((mSendableFlags & ServerFlagHostingLevels), "Shouldn't be used when not in host mode");
-   if(!(mSendableFlags | ServerFlagHostingLevels))
-      return;
-
-   getServerGame()->removeLevel(index);
-}
-
-TNL_IMPLEMENT_RPC(GameConnection, s2cRequestLevel, (S32 index), (index),
-                  NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirAny, 3)
-{
-   if(!isInitiator())
-      mLevelUploadIndex = index; // for c2s, just set the index to know which one is uploaded
-   else
-   {
-      TNLAssert((mSendableFlags & ServerFlagHostingLevels), "Shouldn't be used when not in host mode");
-      s2cRequestLevel(index); // c2s, tells the server which one we are uploading, this is done in case of lag and delays on uploading.
-      if(mLevelSource != NULL && U32(index) < U32(mLevelSource->getLevelCount()))
-         TransferLevelFile(strictjoindir(mLevelSource->getLevelInfo(index).folder, mLevelSource->getLevelFileName(index)).c_str());
-   }
 }
 
 
@@ -1426,54 +1349,10 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sRenameClient, (StringTableEntry newName), (
 }
 
 
-TNL_IMPLEMENT_RPC(GameConnection, s2rSendableFlags, (U8 flags), (flags), NetClassGroupGameMask, RPCGuaranteed, RPCDirServerToClient, 0)
+TNL_IMPLEMENT_RPC(GameConnection, s2rSendableFlags, (U8 flags), (flags), NetClassGroupGameMask, RPCGuaranteed, RPCDirAny, 0)
 {
-#ifndef ZAP_DEDICATED
-   if(isInitiator() && ((flags & ~mSendableFlags) & HostModeFlag))
-   {
-      c2sSetParam(mSettings->getLevelChangePassword(), LevelChangePassword);
-      c2sSetParam(mSettings->getAdminPassword(), AdminPassword);
-      c2sSetParam(mSettings->getOwnerPassword(), OwnerPassword);
-      c2sSetParam(mSettings->getServerPassword(), ServerPassword);
-      c2sSetParam(mSettings->getHostName(), ServerName);
-      c2sSetParam(mSettings->getHostDescr(), ServerDescr);
-
-      c2sSetVoteMapParam(
-         (U8)mSettings->getIniSettings()->voteLength,
-         (U8)mSettings->getIniSettings()->voteLengthToChangeTeam,
-         (U8)mSettings->getIniSettings()->voteRetryLength,
-         mSettings->getIniSettings()->voteYesStrength,
-         mSettings->getIniSettings()->voteNoStrength,
-         mSettings->getIniSettings()->voteNothingStrength,
-         mSettings->getIniSettings()->voteEnable,
-         mSettings->getIniSettings()->allowGetMap,
-         mSettings->getIniSettings()->allowMapUpload,
-         mSettings->getIniSettings()->randomLevels );
-   
-      LevelSource * levelSource = mSettings->chooseLevelSource(NULL);
-      delete mLevelSource;
-      mLevelSource = levelSource;
-
-      c2sRemoveLevel(-1); // clears all levels
-      for(S32 i = 0; i < levelSource->getLevelCount(); i++)
-      {
-         string filename = mSettings->getFolderManager()->findLevelFile(levelSource->getLevelFileName(i));
-         levelSource->populateLevelInfoFromSource(filename, i);
-         c2sAddLevel(
-            levelSource->getLevelName(i),
-            levelSource->getLevelType(i),
-            levelSource->getLevelInfo(i).minRecPlayers,
-            levelSource->getLevelInfo(i).maxRecPlayers,
-            i); // index
-      }
-
-      s2cRequestLevel(0);
-      TransferLevelFile(strictjoindir(mLevelSource->getLevelInfo(0).folder, mLevelSource->getLevelFileName(0)).c_str());
-   }
-#endif
    mSendableFlags = flags;
 }
-
 
 
 void GameConnection::ReceivedLevelFile(const U8 *leveldata, U32 levelsize, const U8 *levelgendata, U32 levelgensize)
@@ -1483,20 +1362,21 @@ void GameConnection::ReceivedLevelFile(const U8 *leveldata, U32 levelsize, const
    // Only server runs this part of code
    FolderManager *folderManager = mSettings->getFolderManager();
 
-   if(isServer && levelgensize != 0 && !mSettings->getIniSettings()->allowLevelgenUpload)
+   if(isServer && levelgensize != 0 && 
+      !mSettings->getSetting<YesNo>(IniKey::AllowLevelgenUpload))
    {
-      s2cDisplayErrorMessage("!!! Server does not allow levelgen upload");
+      s2cDisplayErrorMessage("!!! Server does not allow levelgen uploads");
       return;
    }
 
    LevelInfo levelInfo;
-   LevelSource::getLevelInfoFromCodeChunk((char *)leveldata, levelsize, levelInfo);
+   LevelSource::getLevelInfoFromCodeChunk(string((char *)leveldata, levelsize), levelInfo);
 
    if(isServer && levelgensize == 0 && levelInfo.mScriptFileName.length() != 0)
    {
       if(isServer)
       {
-         s2cDisplayErrorMessage("!!! LevelGen not uploaded, does Script name end with .levelgen ?"); // for old 019 clients
+         s2cDisplayErrorMessage("!!! Levelgen not uploaded, does script name end with .levelgen?"); // for existing client release 019
          return;
       }
       else
@@ -1507,9 +1387,9 @@ void GameConnection::ReceivedLevelFile(const U8 *leveldata, U32 levelsize, const
    string filename = (isServer ? UploadPrefix : DownloadPrefix) + titleName + ".level";
    string filenameLevelgen = (isServer ? UploadPrefix : DownloadPrefix) + titleName + ".levelgen";
 
-   string fullFilename = strictjoindir(folderManager->levelDir, filename);
-   levelInfo.filename = filename;
-   levelInfo.folder   = folderManager->levelDir;
+   string fullFilename = strictjoindir(folderManager->getLevelDir(), filename);
+   levelInfo.filename  = filename;
+   levelInfo.folder    = folderManager->getLevelDir();
 
    FILE *f = fopen(fullFilename.c_str(), "wb");
    if(f)
@@ -1517,7 +1397,7 @@ void GameConnection::ReceivedLevelFile(const U8 *leveldata, U32 levelsize, const
       if(levelgensize != 0)
       {
          // Modify the "Script" line so it points to new uploaded script filename
-         U32 c=0;
+         U32 c = 0;
          bool foundscript = false;
          // First, find a line that says "Script"
          while(c < levelsize - 10)
@@ -1548,9 +1428,9 @@ void GameConnection::ReceivedLevelFile(const U8 *leveldata, U32 levelsize, const
             }
          }
          else
-            c=0;
+            c = 0;
          if(c < levelsize)
-            fwrite(&leveldata[c], 1, levelsize-c, f); // Write the rest of level
+            fwrite(&leveldata[c], 1, levelsize - c, f); // Write the rest of level
       }
       else
          fwrite(leveldata, 1, levelsize, f);
@@ -1564,7 +1444,7 @@ void GameConnection::ReceivedLevelFile(const U8 *leveldata, U32 levelsize, const
 
       if(levelgensize != 0)  // next, write levelgen if we have one.
       {
-         string str1 = strictjoindir(folderManager->levelDir, filenameLevelgen);
+         string str1 = strictjoindir(folderManager->getLevelDir(), filenameLevelgen);
          f = fopen(str1.c_str(), "wb");
          if(f)
          {
@@ -1572,30 +1452,23 @@ void GameConnection::ReceivedLevelFile(const U8 *leveldata, U32 levelsize, const
             fclose(f);
          }
          else if(isServer)
-            s2cDisplayErrorMessage("!!! Levelgen Upload failed -- server can't write file");
+            s2cDisplayErrorMessage("!!! Levelgen upload failed -- server can't write file");
          else
             s2cDisplayErrorMessage_remote("!!! Unable to save levelgen");
       }
 
       if(isServer)
       {
-         if((mSendableFlags & ServerFlagHostingLevels) != 0 && mLevelUploadIndex >= 0)
-         {
-            mServerGame->receivedLevelFromHoster(mLevelUploadIndex, filename);
-         }
-         else
-         {
-            S32 index = mServerGame->addLevel(levelInfo);
-            c2sRequestLevelChange_remote(index, false);  // Might as well switch to it after done with upload
-         }
+         S32 index = mServerGame->addLevel(levelInfo);
+         c2sRequestLevelChange_remote(index, false);  // Might as well switch to it after done with upload
       }
    }
    else if(isServer)
       s2cDisplayErrorMessage("!!! Upload failed -- server can't write file");
    else
       s2cDisplayErrorMessage_remote("!!! Unable to save level");
-
 }
+
 
 void GameConnection::ReceivedRecordedGameplay(const U8 *filedata, U32 filedatasize)
 {
@@ -1607,17 +1480,19 @@ void GameConnection::ReceivedRecordedGameplay(const U8 *filedata, U32 filedatasi
 
 #ifndef ZAP_DEDICATED
 
-   const string &dir = mClientGame->getSettings()->getFolderManager()->recordDir;
+   const string &dir = mClientGame->getSettings()->getFolderManager()->getRecordDir();
    string filename = string(mServerName.getString()) + "_" + mFileName;
    filename = joindir(dir, makeFilenameFromString(filename.c_str(), true));
+
    FILE *f = fopen(filename.c_str(), "wb");
+
    if(f)
    {
       fwrite(filedata, 1, filedatasize, f);
       fclose(f);
    }
    else
-      s2cDisplayErrorMessage_remote("!!! Unable to save");
+      s2cDisplayErrorMessage_remote("!!! Unable to save file");
 
 #endif
 }
@@ -1627,7 +1502,8 @@ TNL_IMPLEMENT_RPC(GameConnection, s2rSendDataParts, (U8 type, ByteBufferPtr data
                   NetClassGroupGameMask, RPCGuaranteedOrdered, RPCDirAny, 0)
 {
    // Abort early if user can't upload
-   if(!isInitiator() && !(mSettings->getIniSettings()->allowMapUpload || (mSettings->getIniSettings()->allowAdminMapUpload && mClientInfo->isAdmin())))
+   if(!isInitiator() && !(mSettings->getSetting<YesNo>(IniKey::AllowMapUpload) || 
+                         (mSettings->getSetting<YesNo>(IniKey::AllowAdminMapUpload) && mClientInfo->isAdmin())))
       return;
 
    ByteBuffer *&dataBuffer = (type & 2 ? mDataBufferLevelGen : mDataBuffer);
@@ -1648,7 +1524,8 @@ TNL_IMPLEMENT_RPC(GameConnection, s2rSendDataParts, (U8 type, ByteBufferPtr data
       if(type & TransmissionRecordedGame)
          ReceivedRecordedGameplay(mDataBuffer->getBuffer(), mDataBuffer->getBufferSize());
       else if(mDataBufferLevelGen)
-         ReceivedLevelFile(mDataBuffer->getBuffer(), mDataBuffer->getBufferSize(), mDataBufferLevelGen->getBuffer(), mDataBufferLevelGen->getBufferSize());
+         ReceivedLevelFile(mDataBuffer->getBuffer(), mDataBuffer->getBufferSize(), 
+                           mDataBufferLevelGen->getBuffer(), mDataBufferLevelGen->getBufferSize());
       else
          ReceivedLevelFile(mDataBuffer->getBuffer(), mDataBuffer->getBufferSize(), NULL, 0);
    }
@@ -1656,11 +1533,16 @@ TNL_IMPLEMENT_RPC(GameConnection, s2rSendDataParts, (U8 type, ByteBufferPtr data
    if(type & TransmissionDone)
    {
       if(mDataBuffer)
+      {
          delete mDataBuffer;
-      mDataBuffer = NULL;
+         mDataBuffer = NULL;
+      }
+
       if(mDataBufferLevelGen)
+      {
          delete mDataBufferLevelGen;
-      mDataBufferLevelGen = NULL;
+         mDataBufferLevelGen = NULL;
+      }
    }
 }
 
@@ -1687,26 +1569,26 @@ TNL_IMPLEMENT_RPC(GameConnection, c2sRequestRecordedGameplay, (StringPtr file), 
 {
    if(file.getString()[0] != 0)
    {
-      string filePath = joindir(mServerGame->getSettings()->getFolderManager()->recordDir, file.getString());
+      string filePath = joindir(mServerGame->getSettings()->getFolderManager()->getRecordDir(), file.getString());
       TransferRecordedGameplay(filePath.c_str());
    }
    else
    {
       Vector<string> levels;
-      const string &dir = mServerGame->getSettings()->getFolderManager()->recordDir;
+      const string &dir = mServerGame->getSettings()->getFolderManager()->getRecordDir();
       getFilesFromFolder(dir, levels);
-      GameRecorderServer *g = mServerGame->getGameRecorder();
-      if(g)
-      {
-         for(S32 i = 0; i < levels.size(); i++)
-            if(levels[i] == g->mFileName)
-            {
-               levels.erase(i);
-               break;
-            }
-      }
-      if(levels.size())
-         levels.sort(numberAlphaSort);
+		GameRecorderServer *g = mServerGame->getGameRecorder();
+		if(g)
+		{
+			for(S32 i = 0; i < levels.size(); i++)
+				if(levels[i] == g->mFileName)
+				{
+					levels.erase(i);
+					break;
+				}
+		}
+		if(levels.size())
+			levels.sort(numberAlphaSort);
       s2cListRecordedGameplays(levels);
    }
 }
@@ -1749,12 +1631,11 @@ bool GameConnection::TransferLevelFile(const char *filename)
       }
 
       LevelInfo levelInfo;
-      LevelSource::getLevelInfoFromCodeChunk((char*)data, size, levelInfo);
+      LevelSource::getLevelInfoFromCodeChunk(string((char*)data, size), levelInfo);
 
-
-      for(U32 i=0; i<size; i+=partsSize)
+      for(U32 i = 0; i < size; i += partsSize)
       {
-         ByteBuffer *bytebuffer = new ByteBuffer(&data[i], min(partsSize, size-i));
+         ByteBuffer *bytebuffer = new ByteBuffer(&data[i], min(partsSize, size - i));
          bytebuffer->takeOwnership();
          mPendingTransferData.push_back(bytebuffer);
          totalTransferSize += bytebuffer->getBufferSize();
@@ -1781,7 +1662,7 @@ bool GameConnection::TransferLevelFile(const char *filename)
       if(levelInfo.mScriptFileName.c_str()[0] != 0)
       {
          FolderManager *folderManager = mSettings->getFolderManager();
-         string filename1 = strictjoindir(folderManager->levelDir, levelInfo.mScriptFileName);
+         string filename1 = strictjoindir(folderManager->getLevelDir(), levelInfo.mScriptFileName);
          f = fopen(filename1.c_str(), "rb");
 
          if(!f)
@@ -1948,7 +1829,7 @@ void GameConnection::writeConnectRequest(BitStream *stream)
       serverPW = mClientGame->getEnteredServerAccessPassword();
 
    // Write some info about the client... name, id, and verification status
-   stream->writeString(Game::md5.getSaltedHashFromString(serverPW).c_str());
+   stream->writeString(Md5::getSaltedHashFromString(serverPW).c_str());
    stream->writeString(mClientInfo->getName().getString());
 
     mClientInfo->getId()->write(stream);
@@ -1986,7 +1867,7 @@ bool GameConnection::readConnectRequest(BitStream *stream, NetConnection::Termin
    stream->readString(buf);
    string serverPassword = mServerGame->getSettings()->getServerPassword();
 
-   if(serverPassword != "" && stricmp(buf, Game::md5.getSaltedHashFromString(serverPassword).c_str()))
+   if(serverPassword != "" && stricmp(buf, Md5::getSaltedHashFromString(serverPassword).c_str()))
    {
       reason = ReasonNeedServerPassword;
       return false;
@@ -2051,12 +1932,6 @@ bool GameConnection::readConnectRequest(BitStream *stream, NetConnection::Termin
       }
    }
 
-   if(mServerGame->mInfoFlags & HostModeFlag)
-   {
-      if(mConnectionVersion == 0) // old client can't host from server
-         return false;
-   }
-
    requestAuthenticationVerificationFromMaster();    
 
    return true;
@@ -2069,7 +1944,7 @@ void GameConnection::writeConnectAccept(BitStream *stream)
    Parent::writeConnectAccept(stream);
    stream->write(CONNECT_VERSION);
 
-   stream->writeFlag(mServerGame->getSettings()->getIniSettings()->enableServerVoiceChat);
+   stream->writeFlag(mServerGame->getSettings()->getSetting<YesNo>(IniKey::EnableServerVoiceChat));
 }
 
 
@@ -2185,7 +2060,8 @@ void GameConnection::onLocalConnection()
 
 bool GameConnection::lostContact()
 {
-   return getTimeSinceLastPacketReceived() > (U32)TWO_SECONDS && mLastPacketRecvTime != 0;   // No contact for 2 secs?  That's bad!
+   return isMovesFull() ||
+      (getTimeSinceLastPacketReceived() > (U32)TWO_SECONDS && mLastPacketRecvTime != 0);   // No contact for 2 secs?  That's bad!
 }
 
 
@@ -2265,7 +2141,7 @@ void GameConnection::onConnectionEstablished()
 void GameConnection::onConnectionEstablished_client()
 {
 #ifndef ZAP_DEDICATED
-   setConnectionSpeed(mClientGame->getSettings()->getIniSettings()->connectionSpeed);  // set speed depending on client
+   setConnectionSpeed(mClientGame->getSettings()->getSetting<S32>(IniKey::ConnectionSpeed));  // set speed depending on client
    setGhostFrom(false);
    setGhostTo(true);
    logprintf(LogConsumer::LogConnection, "%s - connected to server.", getNetAddressString());
@@ -2296,7 +2172,7 @@ void GameConnection::onConnectionEstablished_client()
          mSettings->getIniSettings()->prevServerListFromMaster.push_back(addr);
    }
 
-   if(mSettings->getIniSettings()->voiceChatVolLevel == 0)
+   if(mSettings->getSetting<F32>(IniKey::VoiceChatVolume) == 0)
       s2rVoiceChatEnable(false);
 #endif
 }
@@ -2311,14 +2187,23 @@ void GameConnection::onConnectionEstablished_server()
    activateGhosting();
    //setFixedRateParameters(minPacketSendPeriod, minPacketRecvPeriod, maxSendBandwidth, maxRecvBandwidth);  // make this client only?
 
+   GameSettings *settings = mServerGame->getSettings();
+
    // Ideally, the server name would be part of the connection handshake, but this will work as well
-   s2cSetServerName(mServerGame->getSettings()->getHostName());   // Note: mSettings is NULL here
+   s2cSetServerName(settings->getHostName());   // Note: mSettings is NULL here
 
    time(&joinTime);
    mAcheivedConnection = true;
       
    // Notify the bots that a new player has joined
    EventManager::get()->fireEvent(NULL, EventManager::PlayerJoinedEvent, getClientInfo()->getPlayerInfo());
+
+   if(settings->getLevelChangePassword() == "")   // Grant level change permissions if level change PW is blank
+   {
+      mClientInfo->setRole(ClientInfo::RoleLevelChanger);
+      s2cSetRole(ClientInfo::RoleLevelChanger, false);          // Tell client, but don't display notification
+      sendLevelList();
+   }
 
    const char *name =  mClientInfo->getName().getString();
 
@@ -2327,32 +2212,15 @@ void GameConnection::onConnectionEstablished_server()
                                           isLocalConnection() ? "Local Connection" : getNetAddressString(), getTimeStamp().c_str());
 
    mSendableFlags = 0;
-   if(mServerGame->getSettings()->getIniSettings()->allowMapUpload)
+   if(mSettings->getSetting<YesNo>(IniKey::AllowMapUpload))
       mSendableFlags |= ServerFlagAllowUpload;
-   if(mServerGame->getSettings()->getIniSettings()->enableGameRecording)
+   if(settings->getSetting<YesNo>(IniKey::GameRecordingDownload) && mConnectionVersion >= 1)  // 019c and earliear have broken file saving
       mSendableFlags |= ServerFlagHasRecordedGameplayDownloads;
-
-   if(mServerGame->mInfoFlags & HostModeFlag)
-   {
-      mSendableFlags &= ~ServerFlagAllowUpload;
-      mSendableFlags |= ServerFlagHostingLevels;
-      mClientInfo->setRole(ClientInfo::RoleOwner);
-      s2cSetRole(ClientInfo::RoleOwner, false);
-      mServerGame->mHoster = this;
-      mServerGame->mInfoFlags &= ~HostModeFlag;
-   }
-   else if(mServerGame->getSettings()->getLevelChangePassword() == "")   // Grant level change permissions if level change PW is blank
-   {
-      mClientInfo->setRole(ClientInfo::RoleLevelChanger);
-      s2cSetRole(ClientInfo::RoleLevelChanger, false);          // Tell client, but don't display notification
-      sendLevelList();
-   }
-
 
    s2rSendableFlags(mSendableFlags);
 
    // No team changing allowed
-   if(!mServerGame->getSettings()->getIniSettings()->allowTeamChanging)
+   if(!settings->getSetting<YesNo>(IniKey::AllowTeamChanging))
    {
       // Forever!
       mSwitchTimer.reset(U32_MAX, U32_MAX);

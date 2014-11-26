@@ -34,12 +34,12 @@ public:
    virtual ~LineItem();                      // Destructor
    LineItem *clone() const;
 
-   virtual void render();
+   virtual void render() const;
    bool shouldRender() const;
 
    S32 getRenderSortValue();
 
-   bool processArguments(S32 argc, const char **argv, Game *game);   // Create objects from parameters stored in level file
+   bool processArguments(S32 argc, const char **argv, Level *level); // Create objects from parameters stored in level file
    void onAddedToGame(Game *theGame);
    virtual void onGhostAvailable(GhostConnection *connection);
    virtual void onGhostAddBeforeUpdate(GhostConnection *connection);
@@ -59,8 +59,8 @@ public:
    /////
    // Editor methods
    string toLevelCode() const;
-   virtual void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices = false);
-   virtual const Color *getEditorRenderColor();
+   virtual void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices = false) const;
+   virtual const Color &getEditorRenderColor() const;
 
 
    // Thickness-related
@@ -79,10 +79,11 @@ public:
 #endif
 
    // Some properties about the item that will be needed in the editor
-   const char *getEditorHelpString();
-   const char *getPrettyNamePlural();
-   const char *getOnDockName();
-   const char *getOnScreenName();
+   const char *getEditorHelpString() const;
+   const char *getPrettyNamePlural() const;
+   const char *getOnDockName() const;
+   const char *getOnScreenName() const;
+
    bool hasTeam();
    bool canBeHostile();
    bool canBeNeutral();

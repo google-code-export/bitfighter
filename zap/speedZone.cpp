@@ -4,21 +4,24 @@
 //------------------------------------------------------------------------------
 
 #include "speedZone.h"
-#include "game.h"
+
 #include "BfObject.h"
-#include "gameType.h"
+#include "game.h"
+#include "gameConnection.h"
 #include "gameNetInterface.h"
 #include "gameObjectRender.h"
+#include "gameType.h"
+#include "Level.h"
 #include "ship.h"
 #include "SoundSystem.h"
+
 #include "stringUtils.h"
-#include "gameConnection.h"
 #include "Colors.h"
 
 #ifndef ZAP_DEDICATED
 #  include "ClientGame.h"
-#  include "UIEditorMenus.h"    // For GoFastEditorAttributeMenuUI def
 #  include "UI.h"
+#  include "UIQuickMenu.h"    // For GoFastEditorAttributeMenuUI def
 #endif
 
 
@@ -181,19 +184,19 @@ void SpeedZone::generatePoints(const Point &start, const Point &end, Vector<Poin
 }
 
 
-void SpeedZone::render()
+void SpeedZone::render() const
 {
-   renderSpeedZone(mPolyBounds, getGame()->getCurrentTime());
+   renderSpeedZone(mPolyBounds);
 }
 
 
-Color SpeedZone::getEditorRenderColor()
+const Color &SpeedZone::getEditorRenderColor() const
 {
    return Colors::red;
 }
 
 
-void SpeedZone::renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices)
+void SpeedZone::renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices) const
 {
    Parent::renderEditor(currentScale, snappingToWallCornersEnabled);
    render();
@@ -262,7 +265,7 @@ const Vector<Point> *SpeedZone::getCollisionPoly() const
 
 
 // Create objects from parameters stored in level file
-bool SpeedZone::processArguments(S32 argc2, const char **argv2, Game *game)
+bool SpeedZone::processArguments(S32 argc2, const char **argv2, Level *level)
 {
    S32 argc = 0;
    const char *argv[8];                // 8 is ok, SpeedZone only supports 4 numbered args
@@ -298,10 +301,10 @@ bool SpeedZone::processArguments(S32 argc2, const char **argv2, Game *game)
    Point start, end;
 
    start.read(argv);
-   start *= game->getLegacyGridSize();
+   start *= level->getLegacyGridSize();
 
    end.read(argv + 2);
-   end *= game->getLegacyGridSize();
+   end *= level->getLegacyGridSize();
 
    // Save the points we read into our geometry
    setVert(start, 0);
@@ -552,10 +555,10 @@ void SpeedZone::unpackUpdate(GhostConnection *connection, BitStream *stream)
 
 
 // Some properties about the item that will be needed in the editor
-const char *SpeedZone::getOnScreenName()     { return "GoFast";  }
-const char *SpeedZone::getOnDockName()       { return "GoFast";  }
-const char *SpeedZone::getPrettyNamePlural() { return "GoFasts"; }
-const char *SpeedZone::getEditorHelpString() { return "Makes ships go fast in direction of arrow. [P]"; }
+const char *SpeedZone::getOnScreenName()     const  { return "GoFast";  }
+const char *SpeedZone::getOnDockName()       const  { return "GoFast";  }
+const char *SpeedZone::getPrettyNamePlural() const  { return "GoFasts"; }
+const char *SpeedZone::getEditorHelpString() const  { return "Makes ships go fast in direction of arrow. [P]"; }
 
 bool SpeedZone::hasTeam()      { return false; }
 bool SpeedZone::canBeHostile() { return false; }
