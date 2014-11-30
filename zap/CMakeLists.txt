@@ -95,8 +95,8 @@ set(SHARED_SOURCES
 	Teleporter.cpp
 	TextItem.cpp
 	Timer.cpp
+	WallEdgeManager.cpp
 	WallItem.cpp
-	WallSegmentManager.cpp
 	WeaponInfo.cpp
 	Zone.cpp
 	zoneControlGame.cpp

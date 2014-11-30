@@ -9,7 +9,7 @@
 #include "gameObjectRender.h"
 #include "GeomUtils.h"
 #include "Level.h"
-#include "WallSegmentManager.h"
+#include "WallItem.h"      // For WallSegment def
 
 #include "tnlLog.h"
 
@@ -24,6 +24,87 @@ using namespace LuaArgs;
 
 // Statics
 Vector<Point> Barrier::mRenderLineSegments;
+
+
+
+// Constructor
+BarrierX::BarrierX()
+{
+   // Do nothing
+}
+
+
+// Destructor
+BarrierX::~BarrierX()
+{
+   mSegments.deleteAndClear();
+}
+
+
+void BarrierX::setSegments(const Vector<WallSegment *> &segments)
+{
+   mSegments.deleteAndClear();
+
+   for(S32 i = 0; i < segments.size(); i++)   
+   {
+      mSegments.push_back(segments[i]);
+      if(i == 0)
+         mSegmentExtent.set(mSegments[i]->getExtent());
+      else
+         mSegmentExtent.unionRect(mSegments[i]->getExtent());
+   }
+}
+
+
+const Vector<WallSegment *> &BarrierX::getSegments() const
+{
+   return mSegments;
+}
+
+
+const Rect &BarrierX::getSegmentExtent() const
+{
+   return mSegmentExtent;
+}
+
+
+S32 BarrierX::getSegmentCount() const
+{
+   return mSegments.size();   
+}
+
+
+const WallSegment *BarrierX::getSegment(S32 index) const
+{
+   return mSegments[index];
+}
+
+
+bool BarrierX::isPointOnWall(const Point &point) const
+{
+   for(S32 i = 0; i < mSegments.size(); i++)
+      if(triangulatedFillContains(mSegments[i]->getTriangulatedFillPoints(), point))
+         return true;
+
+   return false;
+}
+
+
+void BarrierX::cloneSegments(const BarrierX *source)
+{
+   // First clear out (but do not delete) any existing segments.  These will be copies of the pointers
+   // of the segments from source, and we don't want to delete those, as they're needed by source.
+   mSegments.clear();
+
+   for(S32 i = 0; i < source->getSegmentCount(); i++)
+      mSegments.push_back(new WallSegment(source->getSegment(i), this));
+
+}
+
+
+
+////////////////////////////////////////
+////////////////////////////////////////
 
 
 // Constructor --> gets called from constructBarriers above
