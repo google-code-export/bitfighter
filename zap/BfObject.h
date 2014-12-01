@@ -133,6 +133,7 @@ enum DamageType
    DamageTypeArea,
 };
 
+
 struct DamageInfo
 {
    Point collisionPoint;
@@ -161,12 +162,14 @@ public:
    EditorObject();            // Constructor
    virtual ~EditorObject();   // Destructor
 
+   virtual void onAddedToEditor();
+
    // Messages and such for the editor
-   virtual const char *getOnScreenName();
-   virtual const char *getPrettyNamePlural();
-   virtual const char *getOnDockName();
-   virtual const char *getEditorHelpString();
-   virtual const char *getInstructionMsg(S32 attributeCount);        // Message printed below item when it is selected
+   virtual const char *getOnScreenName() const;
+   virtual const char *getPrettyNamePlural() const;
+   virtual const char *getOnDockName() const;
+   virtual const char *getEditorHelpString() const;
+   virtual const char *getInstructionMsg(S32 attributeCount) const;     // Message printed below item when it is selected
    
    // For displaying object attributes in lower-left of editor:
    virtual void fillAttributesVectors(Vector<string> &keys, Vector<string> &values);   
@@ -174,9 +177,8 @@ public:
    // Objects can be different sizes on the dock and in the editor.  We need to draw selection boxes in both locations,
    // and these functions specify how big those boxes should be.  Override if implementing a non-standard sized item.
    // (strictly speaking, only getEditorRadius needs to be public, but it make sense to keep these together organizationally.)
-   virtual S32 getDockRadius();                    // Size of object on dock
-   virtual F32 getEditorRadius(F32 currentScale);  // Size of object in editor
-
+   virtual S32 getDockRadius() const;                    // Size of object on dock
+   virtual F32 getEditorRadius(F32 currentScale) const;  // Size of object in editor
 
    //////
    // Things are happening in the editor; the object must respond!
@@ -189,14 +191,14 @@ public:
 
    // Track some items used in the editor
    void setSelected(bool selected);
-   bool isSelected();
+   bool isSelected() const;
    U32 getSelectedTime();
 
-   bool isLitUp();
+   bool isLitUp() const;
    void setLitUp(bool litUp);
 
    // Keep track which vertex, if any is lit up in the currently selected item
-   bool isVertexLitUp(S32 vertexIndex);
+   bool isVertexLitUp(S32 vertexIndex) const;
    void setVertexLitUp(S32 vertexIndex);
 };
 
@@ -205,8 +207,10 @@ public:
 
 class ClientGame;
 class EditorAttributeMenuUI;
+class GameSettings;
 class WallSegment;
 class ClientInfo;
+class Level;
 
 class BfObject : public DatabaseObject, public NetObject, public EditorObject
 {
@@ -233,11 +237,11 @@ private:
    S32 mUserAssignedId;       // Id assigned to some objects in the editor
    U8 mOriginalTypeNumber;    // Used during final delete to help database remove the item
 
-
 protected:
    Move mPrevMove;      // The move for the previous update
    Move mCurrentMove;   // The move for the current update
    StringTableEntry mKillString;     // Alternate descr of what shot projectile (e.g. "Red turret"), used when shooter is not a ship or robot
+   GameSettings *mGameSettings;
    Game *mGame;
 
 public:
@@ -252,7 +256,7 @@ public:
    virtual bool isMoveObject();
    virtual Point getVel() const;
 
-   U32 getCreationTime();
+   U32 getCreationTime() const;
    void setCreationTime(U32 creationTime);
 
    void deleteObject(U32 deleteTimeInterval = 0);
@@ -299,6 +303,8 @@ public:
    void setCurrentMove(const Move &move);
    void setPrevMove(const Move &move);
 
+   virtual bool overlapsPoint(const Point &point) const;
+
    // renderLayer() is called three times for every object that is in the
    // render list, at layers -1, 0, 1.  By default renderLayer() call the render()
    // method one time (when layerIndex == 0).
@@ -307,7 +313,7 @@ public:
    // Although you'd have to get around the issue of alpha blended objects - they
    // are usually rendered in a different order when sent to OpenGL
    virtual void renderLayer(S32 layerIndex);
-   virtual void render();
+   virtual void render() const;
 
    virtual void idle(IdleCallPath path);              
 
@@ -349,7 +355,7 @@ public:
 
    // Team related
    S32 getTeam() const;
-   void setTeam(S32 team);
+   virtual void setTeam(S32 team);
 
    // Lua-based attribute setters
    virtual void setTeam(lua_State *L, S32 stackIndex);
@@ -358,7 +364,7 @@ public:
 
    virtual void setPos(const Point &point);
 
-   const Color *getColor() const;      // Get object's team's color
+   const Color &getColor() const;      // Get object's team's color
 
    // These methods used to be in EditorObject, but we'll need to know about them as we add
    // the ability to manipulate objects more using Lua
@@ -372,20 +378,18 @@ public:
    BfObject *newCopy();    // Creates a brand new object based on the current one (see method for explanation)
    virtual BfObject *clone() const;
 
-
    Game *getGame() const;
 
    // Manage serial numbers -- every object gets a unique number to help identify it
    void assignNewSerialNumber();
-   S32 getSerialNumber();
+   S32 getSerialNumber() const;
 
    virtual void removeFromGame(bool deleteObject);
 
-   virtual bool processArguments(S32 argc, const char**argv, Game *game);
+   virtual bool processArguments(S32 argc, const char **argv, Level *level);
    virtual string toLevelCode() const;    // Generates levelcode line for object
    string appendId(const string &objName) const;
 
-   void onPointsChanged();
    void updateExtentInDatabase();
    virtual void onGeomChanged();    // Item changed geometry (or moved), do any internal updating that might be required
    virtual void onItemDragging();   // Item is being dragged around in the editor; make any updates necessary
@@ -403,21 +407,24 @@ public:
 #ifndef ZAP_DEDICATED
    void renderAndLabelHighlightedVertices(F32 currentScale);      // Render selected and highlighted vertices, called from renderEditor
 #endif
-   virtual void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices = false);
+   virtual void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices = false) const;
 
 
    virtual void setSnapped(bool snapped);                  // Overridden in EngineeredItem 
 
+   //// Geometry manipulation
+   void moveTo(const Point &pos, S32 snapVertex = 0);
+
    ///// Dock related
 #ifndef ZAP_DEDICATED
-   virtual void prepareForDock(ClientGame *game, const Point &point, S32 teamIndex);
+   virtual void prepareForDock(const Point &point, S32 teamIndex);
 #endif
    virtual void newObjectFromDock(F32 gridSize);   // Called when item dragged from dock to editor -- overridden by several objects
 
    ///// Dock item rendering methods
-   virtual void renderDock();   
-   virtual Point getDockLabelPos();
-   virtual void highlightDockItem();
+   virtual void renderDock(const Color &color) const;   
+   virtual Point getDockLabelPos() const;
+   virtual void highlightDockItem() const;
 
    virtual void initializeEditor();
 

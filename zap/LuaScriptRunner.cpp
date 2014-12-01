@@ -3,22 +3,25 @@
 // See LICENSE.txt for full copyright information
 //------------------------------------------------------------------------------
 
-#include "LuaScriptRunner.h"   // Header
-#include "LuaModule.h"
+#include "LuaScriptRunner.h"  
+
 #include "BfObject.h"
-#include "ship.h"
 #include "BotNavMeshZone.h"
 #include "Engineerable.h"
 #include "game.h"
-#include "ServerGame.h"
 #include "GeomUtils.h"
+#include "Level.h"
+#include "LuaModule.h"
+#include "ServerGame.h"
+#include "ship.h"
+#include "WallItem.h"
 
 #include "GameTypesEnum.h"
 #include "TeamConstants.h"
 
 #include "config.h"
-#include "GameSettings.h"
 #include "Console.h"           // For gConsole
+#include "GameSettings.h"
 
 #include "stringUtils.h"
 
@@ -57,9 +60,9 @@ void LuaScriptRunner::clearScriptCache()
 // Constructor
 LuaScriptRunner::LuaScriptRunner()
 {
-   // These MUST be overriden in child classes
+   // These MUST be set in child classes
    mLuaGame = NULL;
-   mLuaGridDatabase = NULL;
+   mLevel = NULL;
 
    static U32 mNextScriptId = 0;
 
@@ -100,6 +103,12 @@ lua_State *LuaScriptRunner::getL()
 {
    TNLAssert(L, "L not yet instantiated!");
    return L;
+}
+
+
+Game *LuaScriptRunner::getLuaGame() const
+{
+   return mLuaGame;
 }
 
 
@@ -1031,9 +1040,9 @@ S32 LuaScriptRunner::lua_pointCanSeePoint(lua_State *L)
    Point p1 = getPointOrXY(L, 1);
    Point p2 = getPointOrXY(L, 2);
 
-   TNLAssert(mLuaGridDatabase != NULL, "Grid Database must not be NULL!");
+   TNLAssert(mLevel != NULL, "Grid Database must not be NULL!");
 
-   return returnBool(L, mLuaGridDatabase->pointCanSeePoint(p1, p2));
+   return returnBool(L, mLevel->pointCanSeePoint(p1, p2));
 }
 
 
@@ -1059,9 +1068,9 @@ S32 LuaScriptRunner::lua_findObjectById(lua_State *L)
 {
    checkArgList(L, functionArgs, luaClassName, "findObjectById");
 
-   TNLAssert(mLuaGridDatabase != NULL, "Grid Database must not be NULL!");
+   TNLAssert(mLevel != NULL, "Grid Database must not be NULL!");
 
-   return findObjectById(L, mLuaGridDatabase->findObjects_fast());
+   return findObjectById(L, mLevel->findObjects_fast());
 }
 
 
@@ -1119,7 +1128,7 @@ S32 LuaScriptRunner::lua_findAllObjects(lua_State *L)
 {
    checkArgList(L, functionArgs, luaClassName, "findAllObjects");
 
-   TNLAssert(mLuaGridDatabase != NULL, "Grid Database must not be NULL!");
+   TNLAssert(mLevel != NULL, "Grid Database must not be NULL!");
 
    fillVector.clear();
    static Vector<U8> types;
@@ -1140,7 +1149,7 @@ S32 LuaScriptRunner::lua_findAllObjects(lua_State *L)
       if(typenum != BotNavMeshZoneTypeNumber)
          types.push_back(typenum);
       else
-         mLuaGame->getBotZoneDatabase()->findObjects(BotNavMeshZoneTypeNumber, fillVector);
+         getLuaGame()->getBotZoneDatabase().findObjects(BotNavMeshZoneTypeNumber, fillVector);
 
       lua_pop(L, 1);
    }
@@ -1148,10 +1157,10 @@ S32 LuaScriptRunner::lua_findAllObjects(lua_State *L)
    const Vector<DatabaseObject *> * results;
 
    if(types.size() == 0)
-      results = mLuaGridDatabase->findObjects_fast();
+      results = mLevel->findObjects_fast();
    else
    {
-      mLuaGridDatabase->findObjects(types, fillVector);
+      mLevel->findObjects(types, fillVector);
       results = &fillVector;
    }
 
@@ -1198,7 +1207,7 @@ S32 LuaScriptRunner::lua_findAllObjectsInArea(lua_State *L)
 {
    checkArgList(L, functionArgs, luaClassName, "findAllObjectsInArea");
 
-   TNLAssert(mLuaGridDatabase != NULL, "Grid Database must not be NULL!");
+   TNLAssert(mLevel != NULL, "Grid Database must not be NULL!");
 
    static Vector<U8> types;
 
@@ -1230,9 +1239,9 @@ S32 LuaScriptRunner::lua_findAllObjectsInArea(lua_State *L)
    Rect searchArea = Rect(p1, p2);
 
    if(hasBotZoneType)
-      mLuaGame->getBotZoneDatabase()->findObjects(BotNavMeshZoneTypeNumber, fillVector, searchArea);
+      getLuaGame()->getBotZoneDatabase().findObjects(BotNavMeshZoneTypeNumber, fillVector, searchArea);
 
-   mLuaGridDatabase->findObjects(types, fillVector, searchArea);
+   mLevel->findObjects(types, fillVector, searchArea);
 
    // This will guarantee a table at the top of the stack
    checkFillTable(L, fillVector.size());
@@ -1266,8 +1275,8 @@ S32 LuaScriptRunner::lua_addItem(lua_State *L)
 {
    checkArgList(L, functionArgs, luaClassName, "addItem");
 
-   TNLAssert(mLuaGame != NULL, "Game must not be NULL!");
-   TNLAssert(mLuaGridDatabase != NULL, "Grid Database must not be NULL!");
+   TNLAssert(getLuaGame() != NULL, "Game must not be NULL!");
+   TNLAssert(mLevel != NULL, "Grid Database must not be NULL!");
 
    // First check to see if item is a BfObject
    BfObject *obj = luaW_check<BfObject>(L, 1);
@@ -1277,15 +1286,20 @@ S32 LuaScriptRunner::lua_addItem(lua_State *L)
    {
       // Silently ignore illegal items when being run from the editor.  For the moment, if mGame is not a server, then
       // we are running from the editor.  This could conceivably change, but for the moment it seems to hold true.
-      if(mLuaGame->isServer() || obj->canAddToEditor())
+      if(getLuaGame()->isServer() || obj->canAddToEditor())
       {
          // Some objects require special handling
          if(obj->getObjectTypeNumber() == PolyWallTypeNumber)
-            mLuaGame->addPolyWall(obj, mLuaGridDatabase);
+            if(mLuaGame)
+            {
+               obj->addToGame(mLuaGame, mLevel);
+               obj->onGeomChanged();
+            }
+
          else if(obj->getObjectTypeNumber() == WallItemTypeNumber)
-            mLuaGame->addWallItem(obj, mLuaGridDatabase);
+            mLevel->addWallItem(static_cast<WallItem *>(obj), mLuaGame);
          else
-            obj->addToGame(mLuaGame, mLuaGridDatabase);
+            obj->addToGame(getLuaGame(), mLevel);
       }
    }
 
@@ -1306,16 +1320,16 @@ S32 LuaScriptRunner::lua_addItem(lua_State *L)
  */
 S32 LuaScriptRunner::lua_getGameInfo(lua_State *L)
 {
-   TNLAssert(mLuaGame != NULL, "Game must not be NULL!");
-   TNLAssert(dynamic_cast<ServerGame*>(mLuaGame), "Not ServerGame??");
+   TNLAssert(getLuaGame() != NULL, "Game must not be NULL!");
+   TNLAssert(dynamic_cast<ServerGame*>(getLuaGame()), "Not ServerGame??");
 
-   if(!mLuaGame->isServer())
+   if(!getLuaGame()->isServer())
    {
       logprintf(LogConsumer::LuaBotMessage, "'getGameInfo' can only be called in-game");
       returnNil(L);
    }
 
-   return returnGameInfo(L, static_cast<ServerGame*>(mLuaGame));
+   return returnGameInfo(L, static_cast<ServerGame*>(getLuaGame()));
 }
 
 
@@ -1326,9 +1340,9 @@ S32 LuaScriptRunner::lua_getGameInfo(lua_State *L)
  */
 S32 LuaScriptRunner::lua_getPlayerCount(lua_State *L)
 {
-   TNLAssert(mLuaGame != NULL, "Game must not be NULL!");
+   TNLAssert(getLuaGame() != NULL, "Game must not be NULL!");
 
-   return returnInt(L, mLuaGame ? mLuaGame->getPlayerCount() : 1);
+   return returnInt(L, getLuaGame() ? getLuaGame()->getPlayerCount() : 1);
 }
 
 

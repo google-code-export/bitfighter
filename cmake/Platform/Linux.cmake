@@ -14,7 +14,6 @@ set(CMAKE_EXE_LINKER_FLAGS ${BF_LINK_FLAGS})
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Wall")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall")
 
-
 # Define the Linux data dir if not defined in a packaging build script already
 if(NOT CMAKE_DATA_PATH)
 	set(CMAKE_DATA_PATH "${CMAKE_INSTALL_PREFIX}/share")
@@ -24,6 +23,7 @@ message(STATUS "CMAKE_DATA_PATH: ${CMAKE_DATA_PATH}.  Change this by invoking cm
 
 # Quotes need to be a part of the definition or the compiler won't understand
 add_definitions(-DLINUX_DATA_DIR="${CMAKE_DATA_PATH}")
+
 
 
 #

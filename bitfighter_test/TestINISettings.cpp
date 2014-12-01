@@ -3,9 +3,10 @@
 // See LICENSE.txt for full copyright information
 //------------------------------------------------------------------------------
 
+#include "../zap/config.h"    // There are other config.h's lingering about...
+
 #include "gtest/gtest.h"
 
-#include "../zap/config.h"
 
 namespace Zap
 {

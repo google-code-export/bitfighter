@@ -38,10 +38,10 @@ public:
 
    TextItem *clone() const;
 
-   void render();
+   void render() const;
    S32 getRenderSortValue();
 
-   bool processArguments(S32 argc, const char **argv, Game *game);  // Create objects from parameters stored in level file
+   bool processArguments(S32 argc, const char **argv, Level *level);  // Create objects from parameters stored in level file
    string toLevelCode() const;
    void setGeom(const Vector<Point> &points);
    void setGeom(const Point &pos, const Point &dest);
@@ -62,9 +62,9 @@ public:
 
    ///// Editor Methods
 
-   Color getEditorRenderColor();
+   const Color &getEditorRenderColor() const;
 
-   virtual void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices = false);
+   virtual void renderEditor(F32 currentScale, bool snappingToWallCornersEnabled, bool renderVertices = false) const;
    F32 getSize();
 
    string getText();
@@ -81,11 +81,12 @@ public:
 
 
    // Some properties about the item that will be needed in the editor
-   const char *getEditorHelpString();
-   const char *getPrettyNamePlural();
-   const char *getOnDockName();
-   const char *getOnScreenName();
-   const char *getInstructionMsg(S32 attributeCount);
+   const char *getEditorHelpString() const;
+   const char *getPrettyNamePlural() const;
+   const char *getOnDockName() const;
+   const char *getOnScreenName() const;
+   const char *getInstructionMsg(S32 attributeCount) const;
+
    bool hasTeam();
    bool canBeHostile();
    bool canBeNeutral();

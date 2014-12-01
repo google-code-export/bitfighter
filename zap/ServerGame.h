@@ -41,7 +41,6 @@ class ServerGame : public Game
 private:
    enum {
       UpdateServerStatusTime = TWENTY_SECONDS,    // How often we update our status on the master server (ms)
-      UpdateServerWhenHostGoesEmpty = FOUR_SECONDS, // How many seconds when host on server when server goes empty or not empty
       CheckServerStatusTime = FIVE_SECONDS,       // If it did not send updates, recheck after ms
       BotControlTickInterval = 33,                // Interval for how often should we let bots fire the onTick event (ms)
    };
@@ -69,14 +68,7 @@ private:
    Timer mTimeToSuspend;
 
    GameRecorderServer *mGameRecorderServer;
-
-   string mOriginalName;
-   string mOriginalDescr;
-   string mOriginalServerPassword;
 public:
-   bool mHostOnServer;
-   SafePtr<GameConnection> mHoster;
-
    static const U32 PreSuspendSettlingPeriod = TWO_SECONDS;
 private:
 
@@ -99,7 +91,6 @@ private:
 
    string getLevelFileNameFromIndex(S32 indx);
 
-
    void resetAllClientTeams();                        // Resets all player team assignments
 
    bool onlyClientIs(GameConnection *client);
@@ -117,12 +108,14 @@ private:
 
    LuaGameInfo *mGameInfo;
 
-   GridDatabase *mBotZoneDatabase;
-   Vector<BotNavMeshZone *> mAllZones;
-   
+   bool mHostOnServer;
+   SafePtr<GameConnection> mHoster;
+
 public:
-   ServerGame(const Address &address, GameSettingsPtr settings, LevelSourcePtr levelSource, bool testMode, bool dedicated, bool hostOnServer = false);    // Constructor
-   virtual ~ServerGame();   // Destructor
+   // Constructor/Destructors
+   ServerGame(const Address &address, GameSettingsPtr settings, LevelSourcePtr levelSource, 
+              bool testMode, bool dedicated, bool hostOnServer = false);    
+   virtual ~ServerGame();   
 
    U32 mInfoFlags;           // Not used for much at the moment, but who knows? --> propagates to master
 
@@ -172,13 +165,6 @@ public:
    void deleteLevelGen(LuaLevelGenerator *levelgen);     // Add misbehaved levelgen to the kill list
    Vector<Vector<S32> > getCategorizedPlayerCountsByTeam() const;
 
-   bool processPseudoItem(S32 argc, const char **argv, const string &levelFileName, GridDatabase *database, S32 id);
-
-   void addPolyWall(BfObject *polyWall, GridDatabase *database);
-   void addWallItem(BfObject *wallItem, GridDatabase *database);
-
-   void receivedLevelFromHoster(S32 levelIndex, const string &filename);
-   void makeEmptyLevelIfNoGameType();
    void cycleLevel(S32 newLevelIndex = NEXT_LEVEL);
    void sendLevelStatsToMaster();
 
@@ -193,12 +179,11 @@ public:
    void balanceTeams();
 
    Robot *getBot(S32 index);
-   string addBot(const Vector<const char *> &args, ClientInfo::ClientClass clientClass);
+   string addBot(const Vector<string> &args, ClientInfo::ClientClass clientClass);
    void addBot(Robot *robot);
    void removeBot(Robot *robot);
    void deleteBot(const StringTableEntry &name);
    void deleteBot(S32 i);
-   //void deleteBotFromTeam(S32 teamIndex);
    void deleteAllBots();
    Robot *findBot(const char *id);
    void moreBots();
@@ -245,11 +230,7 @@ public:
 
    Ship *getLocalPlayerShip() const;
 
-private:
-   void levelAddedNotifyClients(const LevelInfo &levelInfo);
-public:
    S32 addLevel(const LevelInfo &info);
-   void addNewLevel(const LevelInfo &info);
    void removeLevel(S32 index);
 
    // SFX Related -- these will just generate an error, as they should never be called
@@ -262,8 +243,9 @@ public:
 
    /////
    // BotNavMeshZone management
-   GridDatabase *getBotZoneDatabase() const;
-   const Vector<BotNavMeshZone *> *getBotZones() const;
+   const Vector<BotNavMeshZone *> &getBotZoneList() const;
+   GridDatabase &getBotZoneDatabase() const;
+
    U16 findZoneContaining(const Point &p) const;
 
    void setGameType(GameType *gameType);
