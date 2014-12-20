@@ -72,7 +72,7 @@ public:
    explicit EditorAttributeMenuUI(ClientGame *game);    // Constructor
    virtual ~EditorAttributeMenuUI();                    // Destructor
 
-   virtual void startEditingAttrs(BfObject *object);
+   virtual bool startEditingAttrs(BfObject *object);
    virtual void doneEditing();
    virtual void doneEditingAttrs(BfObject *object);
 };

@@ -10,6 +10,12 @@
 #include "DisplayManager.h"   // For canvasHeight
 #include "ClientGame.h"       // For UIManager and callback
 
+#include "Spawn.h"
+#include "CoreGame.h"
+#include "TextItem.h"
+#include "PickupItem.h"
+#include "EngineeredItem.h"
+
 #include "Colors.h"
 
 #include "stringUtils.h"
@@ -333,16 +339,31 @@ string EditorAttributeMenuUI::getTitle() const
 }
 
 
-void EditorAttributeMenuUI::startEditingAttrs(BfObject *object) 
+bool EditorAttributeMenuUI::startEditingAttrs(BfObject *object) 
 { 
    mAssociatedObject = object; 
 
    EditorUserInterface *ui = getUIManager()->getUI<EditorUserInterface>();
 
-   Point center = (mAssociatedObject->getVert(0) + mAssociatedObject->getVert(1)) * ui->getCurrentScale() / 2 + ui->getCurrentOffset();
-   setMenuCenterPoint(center);  
+ 
 
-   EditorAttributeMenuItemBuilder::startEditingAttrs(this, object);
+   EditorAttributeMenuUI *attributeMenu = getUIManager()->getUI<EditorAttributeMenuUI>();
+   attributeMenu->clearMenuItems();
+
+   bool ok = object->startEditingAttrs(attributeMenu);
+
+   if(!ok)
+      return false;
+
+   Point center = (mAssociatedObject->getVert(0) + 
+                   mAssociatedObject->getVert(1)) * ui->getCurrentScale() / 2 + 
+                   ui->getCurrentOffset();
+
+   setMenuCenterPoint(center);
+
+   attributeMenu->addSaveAndQuitMenuItem();
+
+   return true;
 }
 
 
@@ -356,7 +377,8 @@ void EditorAttributeMenuUI::doneEditingAttrs(BfObject *object)
 {
    // Has to be object, not mAssociatedObject... this gets run once for every selected item of same type as mAssociatedObject, 
    // and we need to make sure that those objects (passed in as object), get updated
-   EditorAttributeMenuItemBuilder::doneEditingAttrs(this, object);     
+   EditorAttributeMenuUI *attributeMenu = getUIManager()->getUI<EditorAttributeMenuUI>();
+   object->doneEditingAttrs(attributeMenu);
 
    // Only run on object that is the subject of this editor.  See TextItemEditorAttributeMenuUI::doneEditingAttrs() for explanation
    // of why this may be run on objects that are not actually the ones being edited (hence the need for passing an object in).
@@ -372,7 +394,7 @@ void EditorAttributeMenuUI::doneEditingAttrs(BfObject *object)
 PluginMenuUI::PluginMenuUI(ClientGame *game, const string &title) :
       Parent(game, title)
 {
-   /* Do nothing */
+   // Do nothing 
 }
 
 
