@@ -3,10 +3,16 @@
 // See LICENSE.txt for full copyright information
 //------------------------------------------------------------------------------
 
-#include "barrier.h"
-#include "gameLoader.h"
+//#include "barrier.h"
 #include "gameType.h"
 #include "ServerGame.h"
+#include "Level.h"
+#include "GameManager.h"
+#include "WallItem.h"
+
+
+#include "TestUtils.h"
+#include "LevelFilesForTesting.h"
 
 #include "gtest/gtest.h"
 
@@ -18,36 +24,42 @@ class LevelLoaderTest: public testing::Test
 
 };
 
-TEST_F(LevelLoaderTest, longLine)
+TEST(LevelLoaderTest, longLine)
 {
-   U32 TEST_POINTS = 0xFFF;            //0xFFFF takes a wicked long time to run
-
-   Address addr;
-   GameSettingsPtr settings = GameSettingsPtr(new GameSettings());
-   LevelSourcePtr levelSource = LevelSourcePtr(new StringLevelSource(""));
-
-   ServerGame serverGame(addr, settings, levelSource, false, false);
-   GridDatabase *db = serverGame.getGameObjDatabase();
-
-   GameType gt;
-   gt.addToGame(&serverGame, serverGame.getGameObjDatabase());
+   U32 TEST_POINTS = 0xFFF;      //0xFFFF takes a wicked long time to run
 
    Vector<Point> geom;    
    geom.resize(TEST_POINTS);     // Preallocate for speed
    for(U32 i = 0; i < TEST_POINTS; i++)
-      geom[i].set(i, i % 2);
+      geom[i].set(i, i % 2);     // Creates a list of points: 0 0   1 1   2 0   3 1   4 0   5 1   6 0   7 1   8 0   9 1...
 
    WallItem wall;
    wall.GeomObject::setGeom(geom);
 
-   serverGame.unsuspendGame(false);
+   string code = getGenericHeader() + wall.toLevelCode();
 
-   EXPECT_EQ(0, serverGame.getGameObjDatabase()->findObjects_fast()->size());
-   string code = serverGame.toLevelCode() + wall.toLevelCode();
-   serverGame.loadLevelFromString(code, db);
+   // Create a level, with our giant wall object; test to ensure the wall is created and has the right number of vertices
+   Level level(code);
+   
+   const Vector<DatabaseObject *> *walls = level.findObjects_fast(WallItemTypeNumber);
+   ASSERT_EQ(1, walls->size());
+   EXPECT_EQ(TEST_POINTS, walls->get(0)->getVertCount());
+}
 
-   const Vector<DatabaseObject*> *objects = db->findObjects_fast();
-   EXPECT_EQ(TEST_POINTS - 1, objects->size());
+
+// Test to make sure our engineered items are mounting on walls properly when the level loads
+TEST(LevelLoaderTest, EngineeredItemMounting)
+{
+   //string code = getLevelCodeForEngineeredItemSnapping();
+
+   GamePair gamePair(getLevelCodeForEngineeredItemSnapping(), 0);    // No clients, only create a server here
+   ServerGame *serverGame = GameManager::getServerGame();
+
+   Vector<DatabaseObject *> fillItems;
+   serverGame->getLevel()->findObjects(TurretTypeNumber, fillItems);
+   ASSERT_EQ(1, fillItems.size());
+   EXPECT_FLOAT_EQ(fillItems[0]->getPos().x, 30) << "Turret did not mount! (x-coord)";
+   EXPECT_FLOAT_EQ(fillItems[0]->getPos().y, 10) << "Turret did not mount! (y-coord)";
 }
 
 };

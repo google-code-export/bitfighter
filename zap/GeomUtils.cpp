@@ -371,7 +371,7 @@ bool polygonIntersectsSegmentDetailed(const Point *poly, U32 vertexCount, bool f
 
    S32 inc = format ? 1 : 2;
 
-   F32 currentCollisionTime = 100;
+   F32 currentCollisionTime = F32_MAX;
 
    for(U32 i = 0; i < vertexCount - (inc - 1); i += inc)    // Count by 1s when format is true, 2 when false
    {
@@ -413,9 +413,10 @@ bool polygonIntersectsSegmentDetailed(const Point *poly, U32 vertexCount, bool f
    return false;
 }
 
-bool circleIntersectsSegment(Point center, float radius, Point start, Point end, float &collisionTime)
+
+bool circleIntersectsSegment(Point center, F32 radius, Point start, Point end, F32 &collisionTime)
 {
-   // if the point is in the circle, it's a collision at the start
+   // If the point is in the circle, it's a collision at the start
    Point d = center - start;
    Point v = end - start;
 
@@ -425,7 +426,7 @@ bool circleIntersectsSegment(Point center, float radius, Point start, Point end,
       return true;
    }
 
-   // otherwise, solve the following equation for t
+   // Otherwise, solve the following equation for t
    // (d - vt)^2 = radius^2
 
    float a = v.dot(v);
@@ -894,7 +895,8 @@ Paths upscaleClipperPoints(const Vector<const Vector<Point> *> &inputPolygons)
       outputPolygons[i].resize(inputPolygons[i]->size());
 
       for(S32 j = 0; j < inputPolygons[i]->size(); j++)
-         outputPolygons[i][j] = IntPoint(S64(inputPolygons[i]->get(j).x * CLIPPER_SCALE_FACT), S64(inputPolygons[i]->get(j).y * CLIPPER_SCALE_FACT));
+         outputPolygons[i][j] = IntPoint(S64(inputPolygons[i]->get(j).x * CLIPPER_SCALE_FACT), 
+                                         S64(inputPolygons[i]->get(j).y * CLIPPER_SCALE_FACT));
    }
 
    return outputPolygons;
@@ -2084,7 +2086,7 @@ S32 lua_offsetPolygons(lua_State *L)
 {
    checkArgList(L, "Geom", "offsetPolygons");
 
-   F32 amount = lua_tonumber(L, 1);
+   F32 amount = (F32)lua_tonumber(L, 1);     // lua_tonumber returns a double
    Vector<Vector<Point> > input = getPolygons(L, 2);
 
    lua_pop(L, 2);
