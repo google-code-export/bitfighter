@@ -46,8 +46,6 @@ public:
 
    virtual F32 getEditorRadius(F32 currentScale) const;
 
-   virtual F32 getEditorRadius(F32 currentScale);
-
    TNL_DECLARE_CLASS(Zone);
 
    //// Lua interface
