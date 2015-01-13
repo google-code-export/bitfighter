@@ -84,8 +84,6 @@ public:
 
    F32 getEditorRadius(F32 currentScale) const;
 
-   F32 getEditorRadius(F32 currentScale);
-
    static const S32 MIN_LINE_WIDTH;
    static const S32 MAX_LINE_WIDTH;
 

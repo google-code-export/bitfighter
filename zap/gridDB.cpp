@@ -791,6 +791,7 @@ void GridDatabase::updateExtents(DatabaseObject *object, const Rect &newExtents)
          object->mBucketList = b->nextInBucketForThisObject;
          mChunker->free(b);
       }
+
       // ...and re-add for the new extent
       for(S32 x = minx; maxx - x >= 0; x++)
          for(S32 y = miny; maxy - y >= 0; y++)
