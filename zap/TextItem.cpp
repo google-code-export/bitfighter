@@ -145,7 +145,6 @@ void TextItem::doneEditingAttrs(EditorAttributeMenuUI *attributeMenu)
 #endif
 
 
-
 bool TextItem::hasTeam()      { return true; }
 bool TextItem::canBeHostile() { return true; }
 bool TextItem::canBeNeutral() { return true; }
@@ -282,8 +281,15 @@ void TextItem::onAddedToGame(Game *theGame)
 {
    Parent::onAddedToGame(theGame);
 
-   if(!isGhost())
+   if(isServer())
       setScopeAlways();
+}
+
+
+bool TextItem::isVisibleToTeam(S32 teamIndex) const
+{
+   // TextItems are only visible to those on the same team
+   return getTeam() == teamIndex;
 }
 
 
@@ -363,7 +369,10 @@ U32 TextItem::packUpdate(GhostConnection *connection, U32 updateMask, BitStream 
    stream->writeRangedU32((U32)mSize, 0, MAX_TEXT_SIZE);
    writeThisTeam(stream);
 
-   stream->writeString(mText.c_str(), (U8) mText.length());      // Safe to cast text.length to U8 because we've limited it's length to MAX_TEXTITEM_LEN
+   TNLAssert(MAX_TEXTITEM_LEN <= U8_MAX, "Here, we will cast the length of a string limited by MAX_TEXTITEM_LEN to a U8, "\
+                                         "so it had better fit!");
+
+   stream->writeString(mText.c_str(), (U8) mText.length());      
 
    return 0;
 }
