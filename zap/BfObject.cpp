@@ -890,6 +890,12 @@ void BfObject::setScopeAlways()
 }
 
 
+bool BfObject::isVisibleToTeam(S32 teamIndex) const
+{
+   return true;      // By default, all teams can see all objects
+}
+
+
 F32 BfObject::getUpdatePriority(GhostConnection *connection, U32 updateMask, S32 updateSkips)
 {
    GameConnection *gc = dynamic_cast<GameConnection *>(connection);
@@ -1366,7 +1372,7 @@ const Vector<Point> *BfObject::getEditorHitPoly() const
 }
 
 
-static const U8 TeamBits = 4;
+static const U8 TeamBits = 4;       // 4 bits = 16, we have 9 + 2 teams... so it fits!
 static const U8 TeamOffset = 2;     // To account for Neutral and Hostile teams
 
 void BfObject::readThisTeam(BitStream *stream)
@@ -1379,7 +1385,6 @@ void BfObject::writeThisTeam(BitStream *stream)
 {
    stream->writeInt(mTeam + TeamOffset, TeamBits);
 }
-
 
 
 /////
